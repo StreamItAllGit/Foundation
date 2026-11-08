@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Foundation.Core\Foundation.Core.csproj" />
+    <ProjectReference Include="..\..\src\Foundation.Retro\Foundation.Retro.csproj" />
+    <ProjectReference Include="..\..\src\Foundation.Sidecars\Foundation.Sidecars.csproj" />
+    <ProjectReference Include="..\..\src\Foundation.Server\Foundation.Server.csproj" />
+    <ProjectReference Include="..\..\src\Foundation.Launcher\Foundation.Launcher.csproj" />
+    <ProjectReference Include="..\..\src\Foundation.Installer\Foundation.Installer.csproj" />
+    <ProjectReference Include="..\..\src\Foundation.UI\Foundation.UI.csproj" />
+  </ItemGroup>
+</Project>

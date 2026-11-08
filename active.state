@@ -1,0 +1,13 @@
+{
+    "state": "active",
+    "project": "Foundation",
+    "group": "Personal",
+    "relative_path": "Personal/Foundation",
+    "tier": "Tier A (Shared SDK & Framework)",
+    "version": "0.3.0",
+    "state_changed_at": "2026-11-04",
+    "last_version_at": "2026-11-08",
+    "production_subpath": "<PROJECTS_ROOT>\\SharedLibs\\Foundation",
+    "superseded_by": null,
+    "notes": "Shared ecosystem SDK (Foundation.Core.dll v0.3.0, Foundation.Retro.dll v0.1.0, Foundation.Sidecars.dll v0.1.0, Foundation.Server.dll v0.1.0, Foundation.Launcher.dll v0.1.1, Foundation.UI.dll v0.2.0, Foundation.Installer.dll v0.2.1 with StandardInstallerHost/InstallerEngine/InstallerWizardForm, @foundation/ui v0.2.0, foundation-terminal.js/css, foundation_core v0.3.0, sync_foundation_sdk.py) pinned in each project's Dev\\lib\\."
+}

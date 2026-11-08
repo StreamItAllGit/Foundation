@@ -1,0 +1,259 @@
+// @module: Foundation.Installer.InstallerEngine.UninstallAndShortcuts
+// @purpose: Clean uninstallation and Windows Desktop/Start Menu/Startup .lnk shortcut generation via WindowsShortcutWriter.
+// @depends-on: System, System.Collections.Generic, System.IO, System.Linq, System.Text, System.Text.Json, System.Threading, System.Threading.Tasks
+// @exports: InstallerEngine (partial: UninstallAsync, CreateApplicationShortcuts)
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Foundation.Installer;
+
+public sealed partial class InstallerEngine
+{
+    public async Task<InstallerOperationResult> UninstallAsync(
+        string? explicitInstallDir = null,
+        bool purgeData = false,
+        CancellationToken ct = default,
+        IProgress<string>? progress = null)
+    {
+        string defaultBase;
+        if (!string.IsNullOrWhiteSpace(explicitInstallDir))
+        {
+            defaultBase = explicitInstallDir;
+        }
+        else
+        {
+            string baseDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (File.Exists(Path.Combine(baseDir, InstallManifestFileName)))
+            {
+                string? parent = Path.GetDirectoryName(baseDir);
+                defaultBase = (string.Equals(Path.GetFileName(baseDir), "app", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(parent))
+                    ? parent
+                    : baseDir;
+            }
+            else
+            {
+                defaultBase = ResolveDefaultInstallDirectory();
+            }
+        }
+
+        string installDir = ValidateAndNormalizeInstallDirectory(defaultBase);
+
+        if (_ctx.DryRun)
+        {
+            return new InstallerOperationResult(
+                true,
+                installDir,
+                string.Empty,
+                0,
+                $"[DRY-RUN] Would uninstall {Descriptor.DisplayName} from '{installDir}' (PurgeData={purgeData}).");
+        }
+
+        if (!Directory.Exists(installDir))
+        {
+            return new InstallerOperationResult(false, installDir, string.Empty, 0, $"Install directory does not exist: '{installDir}'.");
+        }
+
+        progress?.Report($"Stopping running {Descriptor.DisplayName} instances...");
+        StopRunningInstanceInDirectory(installDir);
+
+        string appManifestPath = Path.Combine(installDir, "app", InstallManifestFileName);
+        string rootManifestPath = Path.Combine(installDir, InstallManifestFileName);
+        string manifestPath = File.Exists(appManifestPath) ? appManifestPath : rootManifestPath;
+        InstallManifest? manifest = null;
+        if (File.Exists(manifestPath))
+        {
+            string raw = await File.ReadAllTextAsync(manifestPath, Encoding.UTF8, ct);
+            manifest = JsonSerializer.Deserialize<InstallManifest>(raw, JsonOpts);
+        }
+
+        int removedFiles = 0;
+
+        progress?.Report("Removing installed application binaries and scripts...");
+        if (manifest?.InstalledRelativeFiles is { Count: > 0 } relFiles)
+        {
+            foreach (string rel in relFiles)
+            {
+                string safeTarget = EnsureWithinDirectory(installDir, Path.Combine(installDir, rel.Replace('/', Path.DirectorySeparatorChar)));
+                if (File.Exists(safeTarget))
+                {
+                    File.Delete(safeTarget);
+                    removedFiles++;
+                }
+            }
+        }
+
+        if (File.Exists(appManifestPath)) { File.Delete(appManifestPath); removedFiles++; }
+        if (File.Exists(rootManifestPath)) { File.Delete(rootManifestPath); removedFiles++; }
+
+        string? selfExe = Environment.ProcessPath;
+        foreach (string uninstallerPath in new[]
+        {
+            Path.Combine(installDir, "app", UninstallerExeName),
+            Path.Combine(installDir, UninstallerExeName)
+        })
+        {
+            if (!File.Exists(uninstallerPath))
+                continue;
+
+            bool isRunningSelf = !string.IsNullOrWhiteSpace(selfExe) &&
+                                 string.Equals(Path.GetFullPath(selfExe), Path.GetFullPath(uninstallerPath), StringComparison.OrdinalIgnoreCase);
+
+            if (!isRunningSelf)
+            {
+                File.Delete(uninstallerPath);
+                removedFiles++;
+            }
+            else if (!_ctx.IsContainedMode && OperatingSystem.IsWindows())
+            {
+                ScheduleDeferredSelfDelete(uninstallerPath, installDir);
+            }
+        }
+
+        if (manifest?.InstalledTopDirectories is { Count: > 0 } topDirs)
+        {
+            foreach (string dirName in topDirs)
+            {
+                if (ProtectedRuntimeNames.Contains(dirName))
+                    continue;
+                string safeDir = EnsureWithinDirectory(installDir, Path.Combine(installDir, dirName));
+                if (Directory.Exists(safeDir))
+                {
+                    try { Directory.Delete(safeDir, recursive: true); } catch { }
+                }
+            }
+        }
+
+        if (purgeData)
+        {
+            progress?.Report("Purging user saves, settings, logs, and backups...");
+            foreach (string item in ProtectedRuntimeNames)
+            {
+                string target = EnsureWithinDirectory(installDir, Path.Combine(installDir, item));
+                if (File.Exists(target))
+                {
+                    File.Delete(target);
+                    removedFiles++;
+                }
+                else if (Directory.Exists(target))
+                {
+                    removedFiles += Directory.GetFiles(target, "*", SearchOption.AllDirectories).Length;
+                    Directory.Delete(target, recursive: true);
+                }
+            }
+        }
+
+        if (manifest?.CreatedShortcuts != null)
+        {
+            foreach (string lnk in manifest.CreatedShortcuts)
+            {
+                if (!string.IsNullOrWhiteSpace(lnk) && File.Exists(lnk))
+                {
+                    try
+                    {
+                        if (!_ctx.IsContainedMode || IsWithinDirectory(_ctx.DataDirectory!, lnk))
+                        {
+                            File.Delete(lnk);
+                            removedFiles++;
+                            string? lnkDir = Path.GetDirectoryName(lnk);
+                            if (!string.IsNullOrEmpty(lnkDir) &&
+                                Directory.Exists(lnkDir) &&
+                                string.Equals(Path.GetFileName(lnkDir), Descriptor.ProductName, StringComparison.OrdinalIgnoreCase) &&
+                                !Directory.EnumerateFileSystemEntries(lnkDir).Any())
+                            {
+                                Directory.Delete(lnkDir, recursive: false);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        RemoveUninstallerMetadata(manifest?.UninstallRegistryRecord);
+
+        if (Directory.Exists(installDir) && !Directory.EnumerateFileSystemEntries(installDir).Any())
+        {
+            try { Directory.Delete(installDir, recursive: false); } catch { }
+        }
+
+        string msg = $"Uninstalled {Descriptor.DisplayName} from '{installDir}' ({removedFiles:N0} files removed, PurgeData={purgeData}).";
+        _ctx.WriteLog("INFO", msg);
+        progress?.Report(msg);
+        return new InstallerOperationResult(true, installDir, string.Empty, removedFiles, msg);
+    }
+
+    private List<string> CreateApplicationShortcuts(string installDir, bool includeStartupShortcut)
+    {
+        var created = new List<string>();
+        string mainExe = ResolveInstalledExecutablePath(installDir);
+        if (!File.Exists(mainExe))
+        {
+            return created;
+        }
+
+        string desktopDir;
+        string startMenuDir;
+        string startupDir;
+
+        if (_ctx.IsContainedMode)
+        {
+            string root = _ctx.DataDirectory ?? installDir;
+            desktopDir = Path.Combine(root, "shortcuts", "desktop");
+            startMenuDir = Path.Combine(root, "shortcuts", "startmenu", Descriptor.ProductName);
+            startupDir = Path.Combine(root, "shortcuts", "startup");
+        }
+        else
+        {
+            desktopDir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), Descriptor.ProductName);
+            startupDir = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+        }
+
+        Directory.CreateDirectory(desktopDir);
+        Directory.CreateDirectory(startMenuDir);
+
+        string lnkFileName = $"{Descriptor.DisplayName}.lnk";
+        string desktopLnk = Path.Combine(desktopDir, lnkFileName);
+        WindowsShortcutWriter.WriteShortcut(
+            outputLnkPath: desktopLnk,
+            targetExecutablePath: mainExe,
+            arguments: string.Empty,
+            workingDirectory: installDir,
+            description: $"Launch {Descriptor.DisplayName}",
+            iconFilePath: mainExe);
+        created.Add(desktopLnk);
+
+        string startLnk = Path.Combine(startMenuDir, lnkFileName);
+        WindowsShortcutWriter.WriteShortcut(
+            outputLnkPath: startLnk,
+            targetExecutablePath: mainExe,
+            arguments: string.Empty,
+            workingDirectory: installDir,
+            description: $"Launch {Descriptor.DisplayName}",
+            iconFilePath: mainExe);
+        created.Add(startLnk);
+
+        if (includeStartupShortcut)
+        {
+            Directory.CreateDirectory(startupDir);
+            string autoStartLnk = Path.Combine(startupDir, lnkFileName);
+            WindowsShortcutWriter.WriteShortcut(
+                outputLnkPath: autoStartLnk,
+                targetExecutablePath: mainExe,
+                arguments: string.Empty,
+                workingDirectory: installDir,
+                description: $"Launch {Descriptor.DisplayName} at Sign-In",
+                iconFilePath: mainExe);
+            created.Add(autoStartLnk);
+        }
+
+        return created;
+    }
+}
