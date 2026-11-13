@@ -91,7 +91,7 @@ public sealed class FoundationTerminalDrawerTests
         Assert.Contains("\"version\": \"0.2.0\"", pkgText);
 
         var branding = new ShellBrandingOptions { AppId = "test", DisplayName = "Test" };
-        Assert.Equal("0.3.0", branding.SdkVersion);
+        Assert.Equal("0.3.1", branding.SdkVersion);
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public sealed class FoundationTerminalDrawerTests
     }
 
     [Fact]
-    public void SyncFoundationSdkScript_PublishesCompleteV030AndLatest_And_SyncsConsumerDirectory()
+    public void SyncFoundationSdkScript_PublishesCompleteV031AndLatest_And_SyncsConsumerDirectory()
     {
         string root = ResolveFoundationRoot();
         string scriptPath = Path.Combine(root, "Dev", "tools", "sync_foundation_sdk.py");
@@ -150,7 +150,7 @@ public sealed class FoundationTerminalDrawerTests
                 ArgumentList =
                 {
                     scriptPath,
-                    "--version", "0.3.0",
+                    "--version", "0.3.1",
                     "--ui-version", "0.2.0",
                     "--publish",
                     "--sync-consumer", tempConsumer
@@ -169,7 +169,7 @@ public sealed class FoundationTerminalDrawerTests
 
             foreach (string sharedDir in new[]
             {
-                @"<PROJECTS_ROOT>\SharedLibs\Foundation\v0.3.0",
+                @"<PROJECTS_ROOT>\SharedLibs\Foundation\v0.3.1",
                 @"<PROJECTS_ROOT>\SharedLibs\Foundation\Latest"
             })
             {
@@ -183,7 +183,7 @@ public sealed class FoundationTerminalDrawerTests
                 Assert.True(File.Exists(Path.Combine(sharedDir, "sdk-manifest.json")));
 
                 using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(sharedDir, "sdk-manifest.json")));
-                Assert.Equal("0.3.0", doc.RootElement.GetProperty("version").GetString());
+                Assert.Equal("0.3.1", doc.RootElement.GetProperty("version").GetString());
                 Assert.Equal("0.2.0", doc.RootElement.GetProperty("uiVersion").GetString());
             }
 

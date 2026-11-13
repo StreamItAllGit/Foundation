@@ -125,7 +125,7 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
         Assert.Equal(544, wizard.ClientSize.Height);
 
         var branding = new ShellBrandingOptions { AppId = "shadowlibrary", DisplayName = "ShadowLibrary" };
-        Assert.Equal("0.3.0", branding.SdkVersion);
+        Assert.Equal("0.3.1", branding.SdkVersion);
 
         FoundationInstallResult uninstallRes = engine.Uninstall(purgeUserData: false);
         Assert.True(uninstallRes.Success);

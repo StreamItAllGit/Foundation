@@ -28,7 +28,12 @@ public sealed partial class InstallerEngine
         string installDir = ValidateAndNormalizeInstallDirectory(explicitInstallDir);
         _ctx.EnsureDefaultLogDirectory(installDir);
         bool effectiveShortcuts = _ctx.ConfigOverride?.CreateShortcuts ?? createShortcuts;
-        bool effectiveAutoStart = _ctx.ConfigOverride?.AutoStart ?? registerAutoStart;
+        bool requestedAutoStart = _ctx.ConfigOverride?.AutoStart ?? registerAutoStart;
+        bool effectiveAutoStart = Descriptor.AllowAutoStart && requestedAutoStart;
+        if (requestedAutoStart && !Descriptor.AllowAutoStart)
+        {
+            _ctx.WriteLog("WARN", $"AutoStart requested for {Descriptor.ProductName}, but AllowAutoStart is false; skipping Startup shortcut.");
+        }
 
         progress?.Report("Verifying embedded payload SHA-256 & archive integrity...");
         var verify = await VerifyPayloadAsync(externalPayloadPath, ct);
@@ -136,7 +141,7 @@ public sealed partial class InstallerEngine
                     {
                         await entryStream.CopyToAsync(outFs, ct);
                     }
-                    File.Move(tempDest, destPath, overwrite: true);
+                    FileLockRetryHelper.MoveWithOverwrite(tempDest, destPath, onRetryLog: msg => _ctx.WriteLog("WARN", msg), ct: ct);
                     installedRelFiles.Add(normalizedRel);
                 }
                 finally
@@ -169,8 +174,7 @@ public sealed partial class InstallerEngine
                 try
                 {
                     string obsoletePath = EnsureWithinDirectory(installDir, Path.Combine(installDir, oldRel.Replace('/', Path.DirectorySeparatorChar)));
-                    if (File.Exists(obsoletePath))
-                        File.Delete(obsoletePath);
+                    FileLockRetryHelper.DeleteIfExists(obsoletePath, onRetryLog: msg => _ctx.WriteLog("WARN", msg), ct: ct);
                 }
                 catch { }
             }
@@ -190,7 +194,7 @@ public sealed partial class InstallerEngine
             !Path.GetFileName(selfExe).Equals("testhost.exe", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(Path.GetFullPath(selfExe), Path.GetFullPath(uninstallerPath), StringComparison.OrdinalIgnoreCase))
         {
-            File.Copy(selfExe, uninstallerPath, overwrite: true);
+            FileLockRetryHelper.CopyWithOverwrite(selfExe, uninstallerPath, onRetryLog: msg => _ctx.WriteLog("WARN", msg), ct: ct);
         }
 
         var createdShortcuts = new List<string>();

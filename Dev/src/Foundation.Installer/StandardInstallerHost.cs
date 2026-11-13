@@ -54,6 +54,7 @@ public static class StandardInstallerHost
         bool testMode = false;
         bool dryRun = false;
         bool headless = false;
+        bool visibleTest = false;
         bool showHelp = false;
         bool showVersion = false;
 
@@ -121,6 +122,9 @@ public static class StandardInstallerHost
                     case "--headless":
                         headless = true;
                         break;
+                    case "--visible-test":
+                        visibleTest = true;
+                        break;
                     case "--version":
                     case "-v":
                         showVersion = true;
@@ -162,9 +166,47 @@ public static class StandardInstallerHost
             testMode: testMode,
             dryRun: dryRun,
             headless: headless,
-            envPrefix: descriptor.EnvPrefix);
+            envPrefix: descriptor.EnvPrefix,
+            fallbackTestInstallDir: installDir,
+            visibleTest: visibleTest);
 
-        bool isNonInteractive = silent || headless || ctx.TestMode;
+        bool effectiveAutoStart = descriptor.AllowAutoStart && autoStart;
+        if (autoStart && !descriptor.AllowAutoStart)
+        {
+            ctx.WriteLog("WARN", $"--autostart ignored for {descriptor.ProductName} because AllowAutoStart is false.");
+            if (!silent)
+            {
+                Console.WriteLine($"Warning: --autostart ignored because {descriptor.DisplayName} disallows Startup registration.");
+            }
+        }
+
+        if (ctx.VisibleTest && !silent && !ctx.Headless && OperatingSystem.IsWindows())
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+            var showcaseEngine = new InstallerEngine(descriptor, ctx, resolvedAssembly);
+            string showcaseDir = !string.IsNullOrWhiteSpace(installDir)
+                ? installDir
+                : (ctx.IsContainedMode && !string.IsNullOrWhiteSpace(ctx.DataDirectory)
+                    ? Path.Combine(ctx.DataDirectory, "installed-app")
+                    : showcaseEngine.ResolveDefaultInstallDirectory());
+            using var showcaseWizard = new InstallerWizardForm(
+                engine: showcaseEngine,
+                ctx: ctx,
+                initialInstallDir: showcaseDir,
+                externalPayloadPath: payloadPath,
+                isUninstallMode: uninstall,
+                initialCreateShortcuts: !noShortcuts,
+                initialAutoStart: effectiveAutoStart,
+                initialLaunchAfter: !noLaunch,
+                initialPurgeData: purgeData,
+                showShowcaseAutoCloseMs: 3000);
+            Application.Run(showcaseWizard);
+            return showcaseWizard.ExitCode;
+        }
+
+        bool isNonInteractive = silent || ctx.Headless || ctx.TestMode;
 
         if (!isNonInteractive && !dryRun && !verifyOnly && string.IsNullOrWhiteSpace(installDir) && OperatingSystem.IsWindows())
         {
@@ -179,7 +221,7 @@ public static class StandardInstallerHost
                 externalPayloadPath: payloadPath,
                 isUninstallMode: uninstall,
                 initialCreateShortcuts: !noShortcuts,
-                initialAutoStart: autoStart,
+                initialAutoStart: effectiveAutoStart,
                 initialLaunchAfter: !noLaunch,
                 initialPurgeData: purgeData);
             Application.Run(wizard);
@@ -196,7 +238,7 @@ public static class StandardInstallerHost
             purgeData,
             verifyOnly,
             noShortcuts,
-            autoStart,
+            effectiveAutoStart,
             launchAfter,
             noLaunch,
             silent,
@@ -298,6 +340,6 @@ public static class StandardInstallerHost
 
     private static void PrintUsage(InstallerAppDescriptor descriptor)
     {
-        Console.WriteLine($"Usage: {descriptor.ProductName}-Setup.exe [--install-dir <dir>] [--silent] [--verify] [--uninstall] [--purge-data] [--test-mode] [--data-dir <dir>] [--log-dir <dir>] [--config <path>]");
+        Console.WriteLine($"Usage: {descriptor.ProductName}-Setup.exe [--install-dir <dir>] [--silent] [--verify] [--uninstall] [--purge-data] [--test-mode] [--visible-test] [--data-dir <dir>] [--log-dir <dir>] [--config <path>]");
     }
 }

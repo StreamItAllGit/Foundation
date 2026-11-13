@@ -168,7 +168,7 @@ public sealed partial class InstallerEngineCore
             {
                 string? parent = Path.GetDirectoryName(destPath);
                 if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
-                entry.ExtractToFile(destPath, overwrite: true);
+                FileLockRetryHelper.ExecuteWithRetry(() => entry.ExtractToFile(destPath, overwrite: true), ct: cancellationToken);
             }
 
             installedFiles.Add(relPath.Replace('\\', '/'));

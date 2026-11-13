@@ -114,7 +114,7 @@ def _populate_sdk_target(
     return manifest
 
 
-def publish_sdk(version: str = "0.3.0", ui_version: str = "0.2.0", configuration: str = "Release") -> dict[str, object]:
+def publish_sdk(version: str = "0.3.1", ui_version: str = "0.2.0", configuration: str = "Release") -> dict[str, object]:
     clean_ver = version.lstrip("v")
     ver_tag = f"v{clean_ver}"
     web_assets = sync_web_into_webassets()
@@ -174,7 +174,7 @@ def sync_consumer(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Foundation SDK Publisher & Consumer Sync Tool")
-    parser.add_argument("--version", default="0.3.0", help="Foundation SDK SemVer (default: 0.3.0)")
+    parser.add_argument("--version", default="0.3.1", help="Foundation SDK SemVer (default: 0.3.1)")
     parser.add_argument("--ui-version", default="0.2.0", help="Foundation.UI SemVer (default: 0.2.0)")
     parser.add_argument("--configuration", default="Release", help="Build configuration (Release/Debug)")
     parser.add_argument("--publish", action="store_true", help="Publish SDK to SharedLibs and Builds")

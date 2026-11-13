@@ -34,6 +34,7 @@ public sealed class SandboxEnvironment
     public bool TestMode { get; }
     public bool DryRun { get; }
     public bool Headless { get; }
+    public bool VisibleTest { get; }
     public bool TrayOnly { get; }
     public bool ManagedByMother { get; }
     public bool SuiteTab { get; }
@@ -64,6 +65,7 @@ public sealed class SandboxEnvironment
         TestMode = HasFlag(cli, "--test-mode") || IsTruthyEnv($"{envPrefix}_TEST_MODE") || IsTruthyEnv("TEST_MODE");
         DryRun = HasFlag(cli, "--dry-run") || IsTruthyEnv($"{envPrefix}_DRY_RUN");
         Headless = HasFlag(cli, "--headless") || IsTruthyEnv($"{envPrefix}_HEADLESS");
+        VisibleTest = HasFlag(cli, "--visible-test") || IsTruthyEnv($"{envPrefix}_VISIBLE_TEST") || IsTruthyEnv("VISIBLE_TEST");
         TrayOnly = HasFlag(cli, "--tray-only");
         ManagedByMother = HasFlag(cli, "--managed-by-mother") || IsTruthyEnv("MANAGED_BY_MOTHER");
         SuiteTab = HasFlag(cli, "--suite-tab");
@@ -77,6 +79,10 @@ public sealed class SandboxEnvironment
         else if (Headless || TrayOnly || ManagedByMother)
         {
             PresentationMode = UiPresentationMode.HeadlessOrTrayOnly;
+        }
+        else if (VisibleTest)
+        {
+            PresentationMode = UiPresentationMode.DesktopWindow;
         }
         else if (forceBrowser)
         {

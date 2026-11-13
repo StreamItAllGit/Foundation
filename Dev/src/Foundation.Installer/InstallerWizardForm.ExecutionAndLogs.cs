@@ -17,6 +17,14 @@ public sealed partial class InstallerWizardForm
 {
     private void UpdateUpgradeDetectionBadge()
     {
+        if (_showcaseAutoCloseMs > 0)
+        {
+            _lblModeBadge.Text = "VISIBLE TEST";
+            _lblModeBadge.ForeColor = _accentColor;
+            UpdateLayoutBounds();
+            return;
+        }
+
         if (_isUninstallMode)
         {
             _lblModeBadge.Text = "UNINSTALL MODE";
@@ -126,7 +134,7 @@ public sealed partial class InstallerWizardForm
                 else
                 {
                     bool shortcuts = _chkShortcuts.Checked;
-                    bool autoStart = _chkAutoStart.Checked;
+                    bool autoStart = _allowAutoStart && _chkAutoStart.Checked;
                     result = await Task.Run(() => _fullEngine.InstallAsync(
                         explicitInstallDir: targetDir,
                         createShortcuts: shortcuts,
@@ -217,8 +225,8 @@ public sealed partial class InstallerWizardForm
     {
         _txtInstallDir.Enabled = true;
         _btnBrowse.Enabled = true;
-        _chkShortcuts.Enabled = true;
-        _chkAutoStart.Enabled = true;
+        _chkShortcuts.Enabled = !_isUninstallMode;
+        _chkAutoStart.Enabled = _allowAutoStart && !_isUninstallMode;
         _chkPurgeData.Enabled = true;
         _btnPrimary.Enabled = true;
     }

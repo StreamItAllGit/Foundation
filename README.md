@@ -1,73 +1,60 @@
-# Foundation
+# Foundation (`v0.3.1`)
 
-- **Active Version:** `v0.3.0` (Introducing `Foundation.UI.dll v0.2.0` & `@foundation/ui v0.2.0` Canonical ShadowLibrary Strict Standard Docked Terminal Drawer across React 19 + Vanilla ES Module `foundation-terminal.js` + `foundation-terminal.css`, `sync_foundation_sdk.py` Auto-Sync Pipeline, `Foundation.Launcher.dll v0.1.1`, and `v0.1.0` of `Foundation.Retro.dll`, `Foundation.Sidecars.dll`, `Foundation.Server.dll`, and `foundation_core` — Full SemVer `MAJOR.MINOR.PATCH`)
-- **Lifecycle State:** `active` ([`active.state`](file:///<PROJECTS_ROOT>/Foundation/active.state))
-- **Tech Stack:** .NET 8 (C# 12 Class Libraries, ASP.NET Core & WinForms) / React 19 + TypeScript (`@foundation/ui v0.2.0`) + Vanilla ES Module (`foundation-terminal.js`) / Python 3.12+ (`foundation_core`)
-- **Canonical Shared Output Path:** [`<PROJECTS_ROOT>\SharedLibs\Foundation\v0.3.0\`](file:///<PROJECTS_ROOT>/SharedLibs/Foundation/v0.3.0/) & [`<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`](file:///<PROJECTS_ROOT>/SharedLibs/Foundation/Latest/)
+**Shared SDK & Zero-Duplication Infrastructure Core** (`Foundation.Core`, `Foundation.Retro v0.1.1`, `Foundation.Sidecars`, `Foundation.Server`, `Foundation.Launcher`, `Foundation.UI v0.2.0` + `@foundation/ui v0.2.0`, `Foundation.Installer v0.2.2`, Python `foundation_core v0.1.2`, and `Dev\tools\*.py`).
 
 ---
 
-## 1. What It Is & Core Goal
-**Foundation** is the shared, customizable SDK and framework library underneath our entire ecosystem of sister apps (`Mother`, `Housekeeping`, `ShadowLibrary`, `Redroom`, `Greenroom`, `StreamEngine`, `uStation`), standalone tools, and games.
+## 1. Agent Quick-Routing Matrix ("Find What You Need Without Digging")
 
-Instead of copy-pasting thousands of lines of identical installer wizards, sandbox guards, crash dumpers, SQLite WAL helpers, retro DAT parsers, single-pass stream hashers, `.hash` sidecar serializers, Kestrel tiered auth middlewares, and React 19 / Vanilla JS UI shells across every repository, `Foundation` compiles them once into versioned `.dll`, `.whl`, and TS/JS/CSS packages stored in `<PROJECTS_ROOT>\SharedLibs\Foundation\v<Version>\` (and mirrored to `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`). Individual projects pin the exact version they need inside their own `Dev\lib\` folder (or pull the latest snapshot on build via `sync_foundation_sdk.py --sync-consumer`)—eliminating boilerplate while keeping every project 100% self-contained.
+| Task / Question | Go Directly Here | What You Get in 1 Read |
+|---|---|---|
+| Looking up a C# class, method, React prop, Python helper, CLI flag, or JSON schema | [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md) | 1-Stop API Dictionary + `@foundation/ui` barrel vs submodule import warning |
+| Copy-paste integration recipes (Tier 1 Installer, Web UI, Python, C# Core) | [`Dev\docs\USER_GUIDE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/USER_GUIDE.md) | Minimal working quickstart snippets for all 8 subprojects |
+| Locating a file by path/LOC (`<= 400 LOC`), assembly graph, SQLite pragmas, or ADRs | [`Dev\docs\ARCHITECTURE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/ARCHITECTURE.md) | Complete module registry, `26` test inventory, `ADR-001`..`008` |
+| Building, running `Foundation.Tests`, publishing `SharedLibs`, or calling `Dev\tools\*.py` | [`Dev\docs\OPERATIONS.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/OPERATIONS.md) | Exact build/sync/verify commands & installer exit codes |
+| Checking implemented capabilities vs remaining upstream backlog | [`FEATURES.md`](file:///<PROJECTS_ROOT>/Foundation/FEATURES.md) & [`ROADMAP.md`](file:///<PROJECTS_ROOT>/Foundation/ROADMAP.md) | Verified module inventory + queued upstream consumer fixes |
+
+> **Workspace vs. Pinned Binary Hub:** Consumer projects (`Housekeeping`, `ShadowLibrary`, `reStation`, `KingsFieldRecomp`, `MediaSync`) treat both `<PROJECTS_ROOT>\Foundation\` and `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` (`63` published files via [`sync_foundation_sdk.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sync_foundation_sdk.py)) as **strictly read-only**. Log consumer SDK gaps in [`Dev\docs\reports\`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/).
 
 ---
 
-## 2. Quickstart & Cross-Workspace Update Commands
+## 2. Subproject Inventory (`v0.3.1`)
 
-### Build & Auto-Publish Versioned Packages to `SharedLibs\Foundation\v0.3.0` & `Latest`
+- **C# Core & Runtime (`Dev\src\Foundation.Core\` — 18 files):** [`SandboxEnvironment`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SandboxEnvironment.cs) (`VisibleTest` / `--visible-test`), [`HighResFramePacer`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/HighResFramePacer.cs), [`AudioRingBuffer`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/AudioRingBuffer.cs), [`WavCaptureWriter`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/WavCaptureWriter.cs), [`RgbaPngWriter`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/RgbaPngWriter.cs), [`PixelOverlayCanvas`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/PixelOverlayCanvas.cs), [`CliArgumentHelper` / `BoundedTailStream` / `CappedSharedLogSink`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/CliAndProcessPrimitives.cs), [`GranularSettingsManager`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/GranularSettingsManager.cs), [`DpapiSecretStore`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/DpapiSecretStore.cs), [`SqliteWalPool`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SqliteWalPool.cs), [`PidSafeLockfile`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/PidSafeLockfile.cs), [`HeartbeatLogger`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/HeartbeatLogger.cs), [`CrashBundleService`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/CrashBundleService.cs), [`DualJobCancellationCoordinator` / `JobObjectGuard`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/JobObjectGuard.cs), [`SafeNetworkTransfer`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SafeNetworkTransfer.cs), [`ToolResolver`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/ToolResolver.cs), [`HybridModuleLoader` / `IFoundationModule`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/HybridModuleLoader.cs).
+- **Retro & Sidecar Engines (`Foundation.Retro v0.1.1` [8 files] + `Foundation.Sidecars`):** 41-platform catalog, No-Intro/Redump/RA/CMP DAT parser, filename normalizer, headerless stripper + 20-magic sniffer, in-memory IPS/BPS/UPS patcher, BYO `.iso`/`.bin`+`.cue`/`.chd`/`.7z`/`.zip` [`MediaContainerExtractor`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Retro/MediaContainerExtractor.cs), static recomp [`RecompContracts`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Retro/RecompContracts.cs), [`SaveStateFixtureRunner`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Retro/SaveStateFixtureRunner.cs), single-pass `ArrayPool<byte>` stream hasher, ZIP/7z `-slt` + TorrentZip builder, `.hash` v1 sidecars, and `.hklock` / `.coexistence.json` v2 coordination.
+- **Server, Launcher, UI & Installer (`Foundation.Server`, `Launcher`, `UI v0.2.0` [`SdkVersion = "0.3.1"`], `Installer v0.2.2` [15 files]):** Tiered Kestrel localhost/Tailscale/PBKDF2/HMAC auth, `/api/v1/suite/manifest`, `RootLauncherHost` (`AttachConsole(-1)`), WebView2 host + STA dialogs + tray badges, 10 React components + Vanilla terminal drawer, and Tier 1 `StandardInstallerHost` (`AllowAutoStart = false` opt-out, `FileLockRetryHelper`, safe `--test-mode` containment, `--visible-test` auto-closing showcase).
+- **Python & Universal Tooling:** Zero-dependency Python `foundation_core` (`v0.1.2` in [`Dev\src\foundation_core\`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/)) and 4 universal scripts in [`Dev\tools\`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/).
+
+---
+
+## 3. Quick Start & Build Verification
+
 ```powershell
-cd <PROJECTS_ROOT>\Foundation\Dev
-dotnet build Foundation.sln -c Release
-# Or invoke the publisher / consumer sync script directly:
-python <PROJECTS_ROOT>\SharedLibs\Foundation\Latest\tools\sync_foundation_sdk.py --sync-consumer <PROJECTS_ROOT>\<SisterApp>
+# Run full unit test suite (26 [Fact] tests across 5 files)
+dotnet test <PROJECTS_ROOT>\Foundation\Dev\Foundation.sln -c Release /warnaserror
+
+# Publish compiled DLLs, @foundation/ui, and foundation_core into <PROJECTS_ROOT>\SharedLibs\Foundation\Latest
+python <PROJECTS_ROOT>\Foundation\Dev\tools\sync_foundation_sdk.py --publish --version 0.3.1 --ui-version 0.2.0 --configuration Release
+
+# Sync pinned SDK into a consumer project
+python <PROJECTS_ROOT>\Foundation\Dev\tools\sync_foundation_sdk.py --sync-consumer <PROJECTS_ROOT>\<Project>
 ```
 
-### Isolated Sandbox Verification (`Sandbox\`)
-```powershell
-cd <PROJECTS_ROOT>\Foundation\Sandbox
-dotnet test ..\Dev\tests\Foundation.Tests\Foundation.Tests.csproj -c Release --logger "console;verbosity=normal"
-```
-
-| Package / Artifact | Version | Target Stack | Purpose & Customization |
-| :--- | :---: | :--- | :--- |
-| **`Foundation.Core.dll`** | `v0.3.0` | .NET 8 / C# 12 | `SandboxEnvironment`, `CrashBundleService`, `SqliteWalPool` (`64 MB` page cache), `PidSafeLockfile`, `ToolResolver`, `HeartbeatLogger`, `JobObjectGuard`, `SafeNetworkTransfer`, `GranularSettingsManager`, `DpapiSecretStore`, `IFoundationModule` Hybrid Loader, `CliSchema`, `BoundedTailStream`, and `CappedSharedLogSink`. |
-| **`Foundation.Retro.dll`** | `v0.1.0` | .NET 8 / C# 12 | `ConsoleSystemCatalog` (64 platforms, 50+ BIOS MD5/SHA-1/Size rules, header-skip rules, provenance tiers), `DatTitleNormalizer`, `NoIntroRedumpDatParser` (Logiqx/No-Intro/Redump/MAME/RA XML + ClrMamePro + SFV/MD5), `HeaderlessRomStripper` & `MagicBytePlatformDetector`, and `SoftPatchEngine` (in-memory IPS/BPS1/UPS1). |
-| **`Foundation.Sidecars.dll`** | `v0.1.0` | .NET 8 / C# 12 | `SinglePassStreamHasher` (`ArrayPool` single-pass CRC32/MD5/SHA-1/SHA-256 + headerless ROM stream hasher), `SevenZipAndZipInspector` (`.zip` central directory, `7z l -slt`, TorrentZip), `HashSidecarService` (Standard 17 `.hash` v1 + wrapper-path normalizer + `COMPOSITE_SHA1` + archive CRC32 index validator), and `HkLockSentinel` / `SisterAppCoexistenceClient`. |
-| **`Foundation.Server.dll`** | `v0.1.0` | .NET 8 ASP.NET Core | `TieredAuthEngine` & `FoundationTieredAuthMiddleware` (7-step Kestrel auth ladder: API Token, Tailscale Serve, Loopback, PBKDF2-SHA256, HMAC session cookie, Tailscale `100.64.0.0/10`) and `SisterAppStandardEndpoints` (`/suite.manifest.json`, `/api/v1/suite/manifest`). |
-| **`Foundation.Launcher.dll`** | `v0.1.1` | .NET 8 Windows | `RootLauncherHost` (`AttachConsole(-1)` root `.exe` shim with `ResolveTargetExecutable` clean-root `app\<exe>` auto-resolution & fail-closed self-spawn guard). |
-| **`Foundation.Installer.dll`** | `v0.2.0` | .NET 8 WinForms | Customizable `650×434` $\rightarrow$ `650×544` Dark Setup, Upgrade, Repair & Uninstall Wizard (`InstallerWizardForm`, `InstallerEngineCore`), fast `<1.5s` `NoCompression` `CreatePreUpgradeBackupAsync`, and `WindowsShortcutWriter`. |
-| **`Foundation.UI.dll`, `@foundation/ui` & Vanilla WebAssets** | `v0.2.0` | WinForms / React 19 / Vanilla ESM | `Foundation.UI.Desktop` (`StaNativeDialogBridgeBase`, `DisposableWebViewHostForm`, `TrayIconBadgeHelper`) + `@foundation/ui v0.2.0` (10 shared React 19 components including the Canonical ShadowLibrary Strict Standard `GlobalTerminalDrawer`, `TerminalToolbarAndFilters`, and `terminalDrawerCore.ts`) + self-contained Vanilla ES Module [`foundation-terminal.js`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.UI/WebAssets/foundation-terminal.js) & [`foundation-terminal.css`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.UI/WebAssets/foundation-terminal.css). |
-| **`foundation_core` & `Dev\tools\`** | `v0.3.0` | Python 3.12+ | Multi-module Python companion SDK (`settings.py`, `logging.py`, `crash_dumper.py`, `locks.py`, `db.py`, `cli.py`) + [`sync_foundation_sdk.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sync_foundation_sdk.py) auto-sync publisher/consumer pipeline & universal verification/packaging/Notion helpers (`verify_sandbox_universal.py`, `build_release_universal.py`, `notion_task_helper.py`). |
+> ⚠️ **Post-Build Side Effect Note:** Building `Foundation.UI.csproj` triggers MSBuild target `SyncFoundationWebAndSharedLibs`, which updates `WebAssets\` and `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`.
 
 ---
 
-## 3. Architecture At a Glance
-- **Application Archetype:** Versioned Multi-Language Shared SDK (`Standard 08 §8`, `Standard 17 §1.6`)
-- **Core Entry Points:**
-  - [`Foundation.Core`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/)
-  - [`Foundation.Retro`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Retro/)
-  - [`Foundation.Sidecars`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Sidecars/)
-  - [`Foundation.Server`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Server/)
-  - [`Foundation.Launcher`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Launcher/)
-  - [`Foundation.Installer`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/)
-  - [`Foundation.UI` & `@foundation/ui`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.UI/)
-  - [`foundation_core` (Python)](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/)
-- **Backward-Compatibility Invariant:** All cross-workspace updates to `Foundation` must be **strictly additive and backward-compatible** (optional parameters with defaults, new properties, zero breaking signature changes) with full side-by-side version retention in `<PROJECTS_ROOT>\SharedLibs\Foundation\v<Version>\`.
+## 4. Governance & Lifecycle Status
+
+- **Lifecycle State:** [`active.state`](file:///<PROJECTS_ROOT>/Foundation/active.state) (`v0.3.1`)
+- **Project Anchor & Roadmap:** [`AGENTS.md`](file:///<PROJECTS_ROOT>/Foundation/AGENTS.md) · [`FEATURES.md`](file:///<PROJECTS_ROOT>/Foundation/FEATURES.md) · [`ROADMAP.md`](file:///<PROJECTS_ROOT>/Foundation/ROADMAP.md) · [`CHANGELOG.md`](file:///<PROJECTS_ROOT>/Foundation/CHANGELOG.md)
+- **Dev Bible Compliance:** Strictly adheres to [`00_CORE_INVARIANTS_AND_GLOSSARY.md`](file:///<PROJECTS_ROOT>/_DevBible/00_CORE_INVARIANTS_AND_GLOSSARY.md) (`<= 400 LOC` cap across `Dev\` sources and docs).
 
 ---
 
-## 4. Project Navigation, Root Quartet & 4-Doc Manual Shelf
-- **Root Documentation Quartet:**
-  - **Feature Inventory & Code Map:** [`FEATURES.md`](file:///<PROJECTS_ROOT>/Foundation/FEATURES.md)
-  - **Milestones & Strategic Horizon:** [`ROADMAP.md`](file:///<PROJECTS_ROOT>/Foundation/ROADMAP.md)
-  - **Version History Ledger:** [`CHANGELOG.md`](file:///<PROJECTS_ROOT>/Foundation/CHANGELOG.md)
-- **4-Document Manual Shelf (`Dev\docs\` — Standard 16 §3.5):**
-  - **📐 Architecture & Engineering:** [`Dev\docs\ARCHITECTURE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/ARCHITECTURE.md)
-  - **📘 User & Integration Guide:** [`Dev\docs\USER_GUIDE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/USER_GUIDE.md)
-  - **🛠️ Operations Runbook:** [`Dev\docs\OPERATIONS.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/OPERATIONS.md)
-  - **🔌 Interfaces & API Reference:** [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md)
-- **Blueprints & Diagnostic Reports:**
-  - **Implementation Plans (`@pland`):** [`Dev\docs\plans\`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/plans/)
-  - **Diagnostic Reports (`@inspecter`):** [`Dev\docs\reports\`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/)
+## 5. 📘 Manuals
+
+- [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md) — **1-Stop Agent API Dictionary** (all C# classes/signatures, `@foundation/ui` props + submodule import rules, Vanilla JS/CSS, `foundation_core`, `Dev\tools\*.py` CLIs, JSON schemas)
+- [`Dev\docs\USER_GUIDE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/USER_GUIDE.md) — Consumer Integration Recipes & Tier 1 `StandardInstallerHost` Quickstart
+- [`Dev\docs\ARCHITECTURE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/ARCHITECTURE.md) — System Topology, Runtime Pipelines, Complete Module Registry, SQLite Pragmas, `26` Tests, and ADRs
+- [`Dev\docs\OPERATIONS.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/OPERATIONS.md) — Build, Hub Sync, Installer & `Dev\tools\*.py` CLI Flags, Exit Codes, and Troubleshooting

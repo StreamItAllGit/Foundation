@@ -22,7 +22,8 @@ public sealed record InstallerAppDescriptor(
     string MainExecutableRelativePath = "",
     string? Subtitle = null,
     string? EmbeddedPayloadResourceName = null,
-    string? BrandAccentHex = null)
+    string? BrandAccentHex = null,
+    bool AllowAutoStart = true)
 {
     public string EffectiveMainExecutableRelativePath =>
         !string.IsNullOrWhiteSpace(MainExecutableRelativePath)
@@ -111,12 +112,13 @@ public sealed record InstallerOperationResult(
 public sealed class InstallerSandboxContext
 {
     public string EnvPrefix { get; }
-    public string? DataDirectory { get; }
+    public string? DataDirectory { get; private set; }
     public string? ConfigFilePath { get; }
     public string? LogDirectory { get; private set; }
     public bool TestMode { get; }
     public bool DryRun { get; }
     public bool Headless { get; }
+    public bool VisibleTest { get; }
     public InstallerConfigOverride? ConfigOverride { get; }
 
     public bool IsContainedMode => TestMode || !string.IsNullOrWhiteSpace(DataDirectory);
@@ -128,7 +130,9 @@ public sealed class InstallerSandboxContext
         bool testMode = false,
         bool dryRun = false,
         bool headless = false,
-        string envPrefix = "APP")
+        string envPrefix = "APP",
+        string? fallbackTestInstallDir = null,
+        bool visibleTest = false)
     {
         EnvPrefix = string.IsNullOrWhiteSpace(envPrefix) ? "APP" : envPrefix.Trim().ToUpperInvariant();
 
@@ -159,6 +163,12 @@ public sealed class InstallerSandboxContext
         TestMode = testMode || IsTruthyEnv($"{EnvPrefix}_TEST_MODE") || IsTruthyEnv("TEST_MODE");
         DryRun = dryRun || IsTruthyEnv($"{EnvPrefix}_DRY_RUN");
         Headless = headless || IsTruthyEnv($"{EnvPrefix}_HEADLESS");
+        VisibleTest = visibleTest || IsTruthyEnv($"{EnvPrefix}_VISIBLE_TEST") || IsTruthyEnv("VISIBLE_TEST");
+
+        if (TestMode && string.IsNullOrWhiteSpace(DataDirectory) && IsSafeTestInstallDirectory(fallbackTestInstallDir))
+        {
+            TryAdoptSafeTestDataDirectory(fallbackTestInstallDir!);
+        }
 
         if (!string.IsNullOrWhiteSpace(ConfigFilePath) && File.Exists(ConfigFilePath))
         {
@@ -168,6 +178,20 @@ public sealed class InstallerSandboxContext
                 PropertyNameCaseInsensitive = true
             });
         }
+    }
+
+    public static bool IsSafeTestInstallDirectory(string? candidateDir) =>
+        FileLockRetryHelper.IsSafeTestInstallDirectory(candidateDir);
+
+    public bool TryAdoptSafeTestDataDirectory(string candidateInstallDir)
+    {
+        if (!TestMode || !string.IsNullOrWhiteSpace(DataDirectory) || !IsSafeTestInstallDirectory(candidateInstallDir))
+            return false;
+
+        DataDirectory = Path.GetFullPath(candidateInstallDir);
+        if (string.IsNullOrWhiteSpace(LogDirectory))
+            LogDirectory = Path.Combine(DataDirectory, "logs");
+        return true;
     }
 
     public void EnsureDefaultLogDirectory(string installDir)
@@ -332,10 +356,15 @@ public sealed partial class InstallerEngine
 
         if (_ctx.IsContainedMode)
         {
+            if (string.IsNullOrWhiteSpace(_ctx.DataDirectory) && !string.IsNullOrWhiteSpace(explicitInstallDir))
+            {
+                _ctx.TryAdoptSafeTestDataDirectory(resolved);
+            }
+
             if (string.IsNullOrWhiteSpace(_ctx.DataDirectory))
             {
                 throw new InvalidOperationException(
-                    $"Fail-closed sandbox violation: --test-mode requires --data-dir, {Descriptor.EnvPrefix}_DATA_DIR, DATA_DIR, or APP_HOME to establish a containment boundary.");
+                    $"Fail-closed sandbox violation: --test-mode requires --data-dir, {Descriptor.EnvPrefix}_DATA_DIR, DATA_DIR, APP_HOME, or an explicit --install-dir inside Sandbox\\ or Temp.");
             }
 
             EnsureWithinDirectory(_ctx.DataDirectory, resolved);

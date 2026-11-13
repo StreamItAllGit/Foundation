@@ -135,7 +135,7 @@ public sealed partial class InstallerEngineCore
                 }
             }
 
-            File.Move(tempZipPath, backupZipPath, overwrite: true);
+            FileLockRetryHelper.MoveWithOverwrite(tempZipPath, backupZipPath, onRetryLog: msg => logCallback?.Invoke("WARN", msg), ct: ct);
 
             var oldBackups = new DirectoryInfo(backupsDir)
                 .GetFiles("upgrade_pre_*.zip")
@@ -144,7 +144,7 @@ public sealed partial class InstallerEngineCore
                 .ToList();
             foreach (var old in oldBackups)
             {
-                try { old.Delete(); } catch { }
+                try { FileLockRetryHelper.DeleteIfExists(old.FullName, onRetryLog: msg => logCallback?.Invoke("WARN", msg), ct: ct); } catch { }
             }
 
             logCallback?.Invoke("INFO", $"Created pre-upgrade backup '{backupZipPath}' ({totalFiles} files, {totalBytes / (1024.0 * 1024.0):F1} MB).");

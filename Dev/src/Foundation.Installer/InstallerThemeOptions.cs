@@ -63,6 +63,9 @@ public sealed record InstallerThemeOptions
     /// <summary>Whether to bundle and bootstrap the Shared Suite Daemon during install.</summary>
     public bool BootstrapSharedSuiteDaemon { get; init; } = true;
 
+    /// <summary>Whether the application supports launching automatically at Windows sign-in.</summary>
+    public bool AllowAutoStart { get; init; } = true;
+
     /// <summary>Customizable optional toggles presented to the user before installation starts.</summary>
     public IReadOnlyList<InstallerCustomToggle> CustomToggles { get; init; } = Array.Empty<InstallerCustomToggle>();
 }

@@ -40,18 +40,19 @@ public sealed partial class InstallerWizardForm
             Checked = initialCreateShortcuts,
             AutoSize = true,
             ForeColor = TextPrimary,
-            Location = new Point(16, 36),
+            Location = new Point(16, _allowAutoStart ? 36 : 42),
             Visible = !_isUninstallMode
         };
 
         _chkAutoStart = new CheckBox
         {
             Text = $"Add {_displayName} shortcut to Windows Startup folder",
-            Checked = initialAutoStart,
+            Checked = _allowAutoStart && initialAutoStart,
+            Enabled = !_isUninstallMode && _allowAutoStart,
             AutoSize = true,
             ForeColor = TextPrimary,
             Location = new Point(16, 64),
-            Visible = !_isUninstallMode
+            Visible = !_isUninstallMode && _allowAutoStart
         };
 
         _chkLaunchAfter = new CheckBox
@@ -60,7 +61,7 @@ public sealed partial class InstallerWizardForm
             Checked = initialLaunchAfter,
             AutoSize = true,
             ForeColor = TextPrimary,
-            Location = new Point(16, 92),
+            Location = new Point(16, _allowAutoStart ? 92 : 74),
             Visible = !_isUninstallMode
         };
 
@@ -201,6 +202,19 @@ public sealed partial class InstallerWizardForm
 
         base.AcceptButton = _btnPrimary;
         base.CancelButton = _btnCancel;
+
+        if (_showcaseAutoCloseMs > 0)
+        {
+            ExitCode = 0;
+            _txtInstallDir.Enabled = false;
+            _btnBrowse.Enabled = false;
+            _chkShortcuts.Enabled = false;
+            _chkAutoStart.Enabled = false;
+            _chkLaunchAfter.Enabled = false;
+            _chkPurgeData.Enabled = false;
+            _btnPrimary.Enabled = false;
+            _lblStatus.Text = $"Visible test showcase (dry preview — auto-closing in {_showcaseAutoCloseMs / 1000.0:F1}s)...";
+        }
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -220,6 +234,19 @@ public sealed partial class InstallerWizardForm
     {
         base.OnShown(e);
         UpdateLayoutBounds();
+
+        if (_showcaseAutoCloseMs > 0 && _showcaseTimer is null)
+        {
+            Activate();
+            _showcaseTimer = new System.Windows.Forms.Timer { Interval = Math.Max(200, _showcaseAutoCloseMs) };
+            _showcaseTimer.Tick += (_, _) =>
+            {
+                _showcaseTimer?.Stop();
+                ExitCode = 0;
+                Close();
+            };
+            _showcaseTimer.Start();
+        }
     }
 
     protected override void OnResize(EventArgs e)

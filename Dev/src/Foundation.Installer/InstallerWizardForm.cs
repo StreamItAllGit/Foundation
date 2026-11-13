@@ -36,6 +36,9 @@ public sealed partial class InstallerWizardForm : Form
     private readonly Color _accentColor;
     private readonly Color _bgPrimary;
     private readonly Color _bgCard;
+    private readonly bool _allowAutoStart;
+    private readonly int _showcaseAutoCloseMs;
+    private System.Windows.Forms.Timer? _showcaseTimer;
 
     private Panel _headerPanel = null!;
     private Panel _bodyPanel = null!;
@@ -85,6 +88,10 @@ public sealed partial class InstallerWizardForm : Form
     public TextBox LogTextBox => _txtLog;
     public ProgressBar SetupProgressBar => _progressBar;
     public Label StatusLabel => _lblStatus;
+    public CheckBox ShortcutsCheckBox => _chkShortcuts;
+    public CheckBox AutoStartCheckBox => _chkAutoStart;
+    public CheckBox LaunchAfterCheckBox => _chkLaunchAfter;
+    public bool IsAutoStartAllowed => _allowAutoStart;
     public bool IsDetailsExpanded => _isDetailsExpanded;
 
     public InstallerWizardForm(
@@ -96,7 +103,8 @@ public sealed partial class InstallerWizardForm : Form
         bool initialCreateShortcuts = true,
         bool initialAutoStart = false,
         bool initialLaunchAfter = true,
-        bool initialPurgeData = false)
+        bool initialPurgeData = false,
+        int showShowcaseAutoCloseMs = 0)
     {
         _fullEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         _ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
@@ -107,6 +115,8 @@ public sealed partial class InstallerWizardForm : Form
         _displayName = desc.DisplayName;
         _version = desc.Version;
         _subtitle = desc.EffectiveSubtitle;
+        _allowAutoStart = desc.AllowAutoStart;
+        _showcaseAutoCloseMs = Math.Max(0, showShowcaseAutoCloseMs);
         _accentColor = InstallerWizardControls.ParseHexColor(desc.BrandAccentHex, Color.FromArgb(14, 165, 233));
         _bgPrimary = Color.FromArgb(14, 17, 23);
         _bgCard = Color.FromArgb(22, 27, 36);
@@ -118,7 +128,7 @@ public sealed partial class InstallerWizardForm : Form
         InitializeWizardSurface(
             defaultDir,
             initialCreateShortcuts,
-            initialAutoStart,
+            _allowAutoStart && initialAutoStart,
             initialLaunchAfter,
             initialPurgeData);
     }
@@ -127,7 +137,8 @@ public sealed partial class InstallerWizardForm : Form
         InstallerEngineCore engine,
         bool isUninstallMode = false,
         string? initialInstallDir = null,
-        Func<CancellationToken, Action<int, string>, Task<FoundationInstallResult>>? customInstallAction = null)
+        Func<CancellationToken, Action<int, string>, Task<FoundationInstallResult>>? customInstallAction = null,
+        int showShowcaseAutoCloseMs = 0)
     {
         _coreEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         _isUninstallMode = isUninstallMode;
@@ -137,6 +148,8 @@ public sealed partial class InstallerWizardForm : Form
         _displayName = theme.DisplayName;
         _version = theme.Version;
         _subtitle = theme.Subtitle;
+        _allowAutoStart = theme.AllowAutoStart;
+        _showcaseAutoCloseMs = Math.Max(0, showShowcaseAutoCloseMs);
         _accentColor = InstallerWizardControls.ParseHexColor(theme.BrandAccentHex, Color.FromArgb(14, 165, 233));
         _bgPrimary = InstallerWizardControls.ParseHexColor(theme.SurfaceBackdropHex, Color.FromArgb(14, 17, 23));
         _bgCard = InstallerWizardControls.ParseHexColor(theme.SurfaceCardHex, Color.FromArgb(22, 27, 36));
@@ -149,6 +162,19 @@ public sealed partial class InstallerWizardForm : Form
             initialAutoStart: false,
             initialLaunchAfter: true,
             initialPurgeData: false);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _showcaseTimer?.Stop();
+            _showcaseTimer?.Dispose();
+            _showcaseTimer = null;
+            _cts?.Dispose();
+            _cts = null;
+        }
+        base.Dispose(disposing);
     }
 
     private void InitializeWizardSurface(
