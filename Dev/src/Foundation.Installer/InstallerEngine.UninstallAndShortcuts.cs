@@ -93,11 +93,23 @@ public sealed partial class InstallerEngine
         if (File.Exists(rootManifestPath)) { File.Delete(rootManifestPath); removedFiles++; }
 
         string? selfExe = Environment.ProcessPath;
-        foreach (string uninstallerPath in new[]
+        var uninstallerCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             Path.Combine(installDir, "app", UninstallerExeName),
             Path.Combine(installDir, UninstallerExeName)
-        })
+        };
+        foreach (string searchDir in new[] { installDir, Path.Combine(installDir, "app") })
+        {
+            if (Directory.Exists(searchDir))
+            {
+                foreach (string found in Directory.EnumerateFiles(searchDir, "*-Uninstall.exe", SearchOption.TopDirectoryOnly))
+                {
+                    uninstallerCandidates.Add(found);
+                }
+            }
+        }
+
+        foreach (string uninstallerPath in uninstallerCandidates)
         {
             if (!File.Exists(uninstallerPath))
                 continue;

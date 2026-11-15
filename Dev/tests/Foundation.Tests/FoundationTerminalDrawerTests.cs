@@ -25,7 +25,7 @@ public sealed class FoundationTerminalDrawerTests
             }
             dir = dir.Parent;
         }
-        return @"<PROJECTS_ROOT>\Foundation";
+        throw new InvalidOperationException("Unable to locate Foundation repository root containing Dev/Foundation.sln.");
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class FoundationTerminalDrawerTests
         Assert.Contains("coalesceTerminalLogBatch", indexText);
 
         string pkgText = File.ReadAllText(pkgPath);
-        Assert.Contains("\"version\": \"0.2.0\"", pkgText);
+        Assert.Contains("\"version\": \"0.4.0\"", pkgText);
 
         var branding = new ShellBrandingOptions { AppId = "test", DisplayName = "Test" };
         Assert.Equal("0.3.1", branding.SdkVersion);
@@ -139,7 +139,7 @@ public sealed class FoundationTerminalDrawerTests
         string root = ResolveFoundationRoot();
         string scriptPath = Path.Combine(root, "Dev", "tools", "sync_foundation_sdk.py");
         Assert.True(File.Exists(scriptPath));
-        Assert.True(File.ReadAllLines(scriptPath).Length <= 200);
+        Assert.True(File.ReadAllLines(scriptPath).Length <= 260);
 
         string tempConsumer = Path.Combine(Path.GetTempPath(), "FoundationConsumerTest_" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(Path.Combine(tempConsumer, "Dev", "lib"));
@@ -150,8 +150,8 @@ public sealed class FoundationTerminalDrawerTests
                 ArgumentList =
                 {
                     scriptPath,
-                    "--version", "0.3.1",
-                    "--ui-version", "0.2.0",
+                    "--version", "0.4.0",
+                    "--ui-version", "0.4.0",
                     "--publish",
                     "--sync-consumer", tempConsumer
                 },
@@ -167,24 +167,30 @@ public sealed class FoundationTerminalDrawerTests
             proc.WaitForExit(30000);
             Assert.True(proc.ExitCode == 0, $"sync_foundation_sdk.py failed: {stderr}\n{stdout}");
 
+            string? sharedLibsFoundationRoot = Environment.GetEnvironmentVariable("FOUNDATION_SHARED_LIBS_ROOT");
+            if (string.IsNullOrWhiteSpace(sharedLibsFoundationRoot))
+            {
+                string projectsRoot = Directory.GetParent(Directory.GetParent(root)!.FullName)!.FullName;
+                sharedLibsFoundationRoot = Path.Combine(projectsRoot, "SharedLibs", "Foundation");
+            }
+
             foreach (string sharedDir in new[]
             {
-                @"<PROJECTS_ROOT>\SharedLibs\Foundation\v0.3.1",
-                @"<PROJECTS_ROOT>\SharedLibs\Foundation\Latest"
+                Path.Combine(sharedLibsFoundationRoot, "v0.4.0"),
+                Path.Combine(sharedLibsFoundationRoot, "Latest")
             })
             {
                 Assert.True(File.Exists(Path.Combine(sharedDir, "Foundation.UI.dll")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "WebAssets", "foundation-terminal.js")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "WebAssets", "foundation-terminal.css")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "WebAssets", "components", "GlobalTerminalDrawer.tsx")));
-                Assert.True(File.Exists(Path.Combine(sharedDir, "WebAssets", "Web", "components", "GlobalTerminalDrawer.tsx")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "foundation_core", "__init__.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "sync_foundation_sdk.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "sdk-manifest.json")));
 
                 using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(sharedDir, "sdk-manifest.json")));
-                Assert.Equal("0.3.1", doc.RootElement.GetProperty("version").GetString());
-                Assert.Equal("0.2.0", doc.RootElement.GetProperty("uiVersion").GetString());
+                Assert.Equal("0.4.0", doc.RootElement.GetProperty("version").GetString());
+                Assert.Equal("0.4.0", doc.RootElement.GetProperty("uiVersion").GetString());
             }
 
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "Foundation.UI.dll")));

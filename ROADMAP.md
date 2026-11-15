@@ -1,7 +1,7 @@
-# Foundation (`v0.3.1`) — Strategic Roadmap
+# Foundation (`v0.4.0`) — Strategic Roadmap
 
-> **Active Version:** `v0.3.1` (`Foundation.Retro v0.1.1`, `Foundation.Installer v0.2.2`, `@foundation/ui v0.2.0`, `foundation_core v0.1.2`)
-> **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` (`63` published files)
+> **Active Version:** `v0.4.0` (Unified SemVer across all 7 C# assemblies, `@foundation/ui v0.4.0`, and `foundation_core v0.4.0`)
+> **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` (`52` published files)
 
 ---
 
@@ -31,20 +31,21 @@
 - **Installer Hardening (`Foundation.Installer v0.2.2`, +1 file):** Optional `AllowAutoStart = true` opt-out (`false` hides Startup checkbox & clamps `--autostart`), [`FileLockRetryHelper`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/FileLockRetryHelper.cs), safe `--test-mode --install-dir` containment in `\Sandbox\`/`%TEMP%`, and `--visible-test` auto-closing showcase.
 - **Verification & Compliance:** Implemented per [`v0.3.1.2026-11-13.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/plans/v0.3.1.2026-11-13.md) (`@dean` Gate 1/2 `PASS`; `@inspecter` live `Sandbox\` + `--visible-test` `PASS` in [`0.3.1.2026-11-13_1227.-.v031-sandbox-and-visible-test-verify.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/0.3.1.2026-11-13_1227.-.v031-sandbox-and-visible-test-verify.md)); `26/26` `[Fact]` unit tests (`0` warnings); `63` files published to `SharedLibs\Foundation\v0.3.1` & `Latest` and synced to `reStation` & `KingsFieldRecomp`.
 
----
-
-## Remaining Upstream Consumer Backlog (`v0.3.2+`)
-
-- **Remaining Open Reports ([`Dev\docs\reports\`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/)):**
-  1. **Network Stream ID & HTTP 416 Hardening:** [`0.2.1.20261109.0835.-.safe-network-transfer-ads-and-416.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/0.2.1.20261109.0835.-.safe-network-transfer-ads-and-416.md) — Handle NTFS ADS colons (`:Zone.Identifier`) and HTTP `416 Range Not Satisfiable`.
-  2. **Real BIOS Checksum Verification:** [`0.2.1.20261109.0856.-.console-system-catalog-synthetic-bios-hashes.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/0.2.1.20261109.0856.-.console-system-catalog-synthetic-bios-hashes.md) — Replace placeholder BIOS MD5/SHA1 digests on secondary platforms in `ConsoleSystemCatalog.cs`.
-  3. **ZIP LZMA & Nested Archive Extraction:** [`0.2.1.20261109_005500.-.zip-lzma-fallback-and-nested-extract.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/0.2.1.20261109_005500.-.zip-lzma-fallback-and-nested-extract.md) — Add `7z` fallback for LZMA-compressed ZIP entries and nested archive inspection.
-  4. **ShadowLibrary Upstream SDK Gaps:** [`0.2.1.20261110_1603.-.shadowlibrary-upstream-sdk-gaps.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/0.2.1.20261110_1603.-.shadowlibrary-upstream-sdk-gaps.md) — Consolidate barrel exports (`CoexistenceWarningBanner`, `HybridPathPicker`, `SidebarNavRail`) into `@foundation/ui/index.ts`.
-  5. **Deferred Non-Blocking `P3` (`MediaContainerExtractor.cs`):** Add `.ConfigureAwait(false)` on `await using` stream disposals (`L171-L173`, `L289-L296`) logged in [`0.3.1.2026-11-13_1227.-.v031-sandbox-and-visible-test-verify.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/0.3.1.2026-11-13_1227.-.v031-sandbox-and-visible-test-verify.md) to prevent sync-over-async deadlocks if invoked on a UI `SynchronizationContext`.
+### ✅ `v0.4.0` — Wave 1: Studio/Suite Installer, AOT-Primary `.decomp` Contracts & Public-Repo Readiness
+- **Installer & Sandbox (`Foundation.Installer`, `Foundation.Core`):** Studio/Suite default install root (`%LOCALAPPDATA%\Programs\<Studio>\<Suite?>\<App>\`), opt-in `--migrate-legacy`, bounded retry self-delete trampoline, `InstallerProfileOption` (`Lightweight` / `Full`), `SecondaryPathPicker` (`--reengine-dir`, `--suite-dir`), and `ResolveSiblingSandboxRoot` fail-closed sibling containment.
+- **Retro & Recomp Contracts (`Foundation.Retro`):** Added [`RecompTierAndBackendContracts.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Retro/RecompTierAndBackendContracts.cs) (`RecompExecutionTierMode` AOT-primary + `JitBringup` / `ThreadedIr`, `RecompRenderBackendIds`, `IDecompPackageManifest`, `AotCacheLayoutHelper`), replaced synthetic BIOS hashes with `IsVerifiedReferenceHash` metadata, and added `.ConfigureAwait(false)` in `MediaContainerExtractor.cs`.
+- **Network, Sidecars & Launcher (`SafeNetworkTransfer`, `SevenZipAndZipInspector`, `RootLauncherHost`):** Sanitized `JobId` (`:` ADS fix), recovered HTTP `416`, excluded `400/401/403/404/410` from transient retries, enforced `ResponseHeadersTimeout`, added LZMA/Deflate64 `7z.exe` fallback + nested `::` inspection, and fixed `RootLauncherHost` `--wait`/`--open`/`--visible-test` blocking, relative arg rebasing, and Ctrl+C forwarding.
+- **Unified `0.4.0` SemVer & Public-Repo Readiness:** Aligned all 7 `.csproj` assemblies, `@foundation/ui`, and `foundation_core` on `0.4.0`; deduplicated tripled `Foundation.UI` TS/TSX source copies into `Web\`; externalized Notion IDs (`Dev\.env.example`, `Dev\settings.example.json`); purged `14` stale `.pdb`s; verified `33/33` `[Fact]` tests (`0` warnings) and `--visible-test` wizard UI; archived all `12` diagnostic reports (`0` open reports).
 
 ---
 
-## Future Horizon (`v0.4.0+`)
+## Remaining Upstream Consumer Backlog (`v0.4.1+`)
+
+- **Open Diagnostic Reports ([`Dev\docs\reports\`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/)):** `0` open reports (`12` reconciled into `v0.4.0` and archived in `Dev\docs\reports\archive\`).
+
+---
+
+## Future Horizon (`v0.5.0+` / `v1.0.0`)
 
 - Promote `Foundation.Core`, `Foundation.Retro`, and `Foundation.Sidecars` as versioned NuGet `.nupkg` artifacts in a local feed alongside `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest`.
 - Add Python `pytest` parity suite mirroring the `18` C# `[Fact]` invariants for `foundation_core`.

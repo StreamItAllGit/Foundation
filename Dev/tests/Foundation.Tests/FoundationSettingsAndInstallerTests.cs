@@ -70,12 +70,12 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
     public void DpapiSecretStore_EncryptsAndRoundTripsSecretsWithoutPlaintextLeak()
     {
         var store = new DpapiSecretStore(_tempDir);
-        const string webhook = "https://discord.com/api/webhooks/<EXAMPLE_ID>/<EXAMPLE_TOKEN>";
+        const string webhook = "https://example.invalid/api/hooks/000000000/test-placeholder-value";
         store.SetSecret("discord_webhook_url", webhook);
 
         Assert.True(File.Exists(store.SecretsFilePath));
         string rawDiskContent = File.ReadAllText(store.SecretsFilePath, Encoding.UTF8);
-        Assert.DoesNotContain("secretTokenValue", rawDiskContent);
+        Assert.DoesNotContain("test-placeholder-value", rawDiskContent);
 
         Assert.Equal(webhook, store.GetSecret("discord_webhook_url"));
         Assert.True(store.RemoveSecret("discord_webhook_url"));
@@ -117,12 +117,12 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
         WindowsShortcutWriter.WriteShortcut(lnkPath, Path.Combine(installRes.InstallDirectory, "ShadowLibrary.exe"));
         Assert.True(WindowsShortcutWriter.IsValidShellLinkHeader(File.ReadAllBytes(lnkPath)));
 
-        // Verify 650x434 collapsed / 650x544 expanded wizard dimensions & ShellBrandingOptions default SdkVersion
+        // Verify 650x460 collapsed / 650x570 expanded wizard dimensions & ShellBrandingOptions default SdkVersion
         using var wizard = new InstallerWizardForm(engine);
         Assert.Equal(650, wizard.ClientSize.Width);
-        Assert.Equal(434, wizard.ClientSize.Height);
+        Assert.Equal(460, wizard.ClientSize.Height);
         wizard.ToggleDetailsDrawer();
-        Assert.Equal(544, wizard.ClientSize.Height);
+        Assert.Equal(570, wizard.ClientSize.Height);
 
         var branding = new ShellBrandingOptions { AppId = "shadowlibrary", DisplayName = "ShadowLibrary" };
         Assert.Equal("0.3.1", branding.SdkVersion);
@@ -164,9 +164,9 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
 
         using var wizard = new InstallerWizardForm(engine, ctx);
         Assert.Equal(650, wizard.ClientSize.Width);
-        Assert.Equal(434, wizard.ClientSize.Height);
+        Assert.Equal(460, wizard.ClientSize.Height);
         wizard.SetDetailsExpanded(true);
-        Assert.Equal(544, wizard.ClientSize.Height);
+        Assert.Equal(570, wizard.ClientSize.Height);
 
         var uninstallRes = await engine.UninstallAsync(installRes.InstallDirectory, purgeData: true);
         Assert.True(uninstallRes.Success);

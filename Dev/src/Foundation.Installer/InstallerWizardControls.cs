@@ -56,6 +56,49 @@ public static class InstallerWizardControls
         };
     }
 
+    public static RadioButton CreateDarkRadioButton(string text, int x, int y, bool isChecked, Color? foreColor = null)
+    {
+        return new RadioButton
+        {
+            Text = text,
+            Checked = isChecked,
+            AutoSize = true,
+            Location = new Point(x, y),
+            ForeColor = foreColor ?? TextPrimary,
+            BackColor = Color.Transparent,
+            Font = new Font("Segoe UI", 9.0f, FontStyle.Regular),
+            Cursor = Cursors.Hand
+        };
+    }
+
+    public static TextBox CreateDarkPathTextBox(string text, Point location, int width)
+    {
+        return new TextBox
+        {
+            Text = text,
+            Location = location,
+            Width = width,
+            Height = 29,
+            BackColor = BgInput,
+            ForeColor = TextPrimary,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font("Consolas", 9.5f, FontStyle.Regular),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left
+        };
+    }
+
+    public static Label CreateSectionLabel(string text, Point location, Color? foreColor = null)
+    {
+        return new Label
+        {
+            Text = text,
+            Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold),
+            ForeColor = foreColor ?? TextPrimary,
+            AutoSize = true,
+            Location = location
+        };
+    }
+
     public static Button CreateFlatButton(
         string text,
         Point location,

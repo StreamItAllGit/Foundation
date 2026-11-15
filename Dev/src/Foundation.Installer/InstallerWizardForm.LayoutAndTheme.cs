@@ -15,34 +15,53 @@ public sealed partial class InstallerWizardForm
         bool initialCreateShortcuts,
         bool initialAutoStart,
         bool initialLaunchAfter,
-        bool initialPurgeData)
+        bool initialPurgeData,
+        string initialProfileId,
+        bool initialMigrateLegacy)
     {
         _optionsPanel = new Panel
         {
-            Location = new Point(22, 154),
-            Size = new Size(606, 128),
+            Location = new Point(22, _hasSecondaryPicker ? 212 : 154),
+            Size = new Size(606, 152),
             BackColor = _bgCard,
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
 
         var lblOptionsHeader = new Label
         {
-            Text = _isUninstallMode ? "Uninstall Options" : "Advanced Options",
+            Text = _isUninstallMode ? "Uninstall Options" : "Installation Profile & Options",
             Font = new Font("Segoe UI Semibold", 8.75f, FontStyle.Bold),
             ForeColor = TextMuted,
             AutoSize = true,
             Location = new Point(16, 10)
         };
 
+        bool isFullProfile = string.Equals(initialProfileId, "full", StringComparison.OrdinalIgnoreCase);
+        _lblProfileHeader = new Label
+        {
+            Text = "Profile:",
+            Font = new Font("Segoe UI Semibold", 9.0f, FontStyle.Bold),
+            ForeColor = TextPrimary,
+            AutoSize = true,
+            Location = new Point(16, 34),
+            Visible = !_isUninstallMode
+        };
+        _rbProfileLightweight = InstallerWizardControls.CreateDarkRadioButton("Lightweight (Core)", 82, 32, !isFullProfile);
+        _rbProfileLightweight.Visible = !_isUninstallMode;
+        _rbProfileFull = InstallerWizardControls.CreateDarkRadioButton("Full (All Components)", 228, 32, isFullProfile);
+        _rbProfileFull.Visible = !_isUninstallMode;
+
+        int nextY = 62;
         _chkShortcuts = new CheckBox
         {
             Text = $"Create Desktop and Start Menu shortcuts for {_displayName}",
             Checked = initialCreateShortcuts,
             AutoSize = true,
             ForeColor = TextPrimary,
-            Location = new Point(16, _allowAutoStart ? 36 : 42),
+            Location = new Point(16, nextY),
             Visible = !_isUninstallMode
         };
+        if (!_isUninstallMode) nextY += 26;
 
         _chkAutoStart = new CheckBox
         {
@@ -51,9 +70,10 @@ public sealed partial class InstallerWizardForm
             Enabled = !_isUninstallMode && _allowAutoStart,
             AutoSize = true,
             ForeColor = TextPrimary,
-            Location = new Point(16, 64),
+            Location = new Point(16, nextY),
             Visible = !_isUninstallMode && _allowAutoStart
         };
+        if (!_isUninstallMode && _allowAutoStart) nextY += 26;
 
         _chkLaunchAfter = new CheckBox
         {
@@ -61,9 +81,18 @@ public sealed partial class InstallerWizardForm
             Checked = initialLaunchAfter,
             AutoSize = true,
             ForeColor = TextPrimary,
-            Location = new Point(16, _allowAutoStart ? 92 : 74),
+            Location = new Point(16, nextY),
             Visible = !_isUninstallMode
         };
+        if (!_isUninstallMode) nextY += 26;
+
+        _chkMigrateLegacy = InstallerWizardControls.CreateDarkCheckBox(
+            "Migrate legacy <PROGRAMS_ROOT>\\ installation (opt-in)",
+            16,
+            nextY,
+            initialMigrateLegacy);
+        _chkMigrateLegacy.Visible = _showLegacyMigration;
+        if (_showLegacyMigration) nextY += 26;
 
         _chkPurgeData = new CheckBox
         {
@@ -76,10 +105,15 @@ public sealed partial class InstallerWizardForm
             Visible = _isUninstallMode
         };
 
+        _optionsPanel.Height = _isUninstallMode ? 128 : Math.Max(128, nextY + 12);
         _optionsPanel.Controls.Add(lblOptionsHeader);
+        _optionsPanel.Controls.Add(_lblProfileHeader);
+        _optionsPanel.Controls.Add(_rbProfileLightweight);
+        _optionsPanel.Controls.Add(_rbProfileFull);
         _optionsPanel.Controls.Add(_chkShortcuts);
         _optionsPanel.Controls.Add(_chkAutoStart);
         _optionsPanel.Controls.Add(_chkLaunchAfter);
+        _optionsPanel.Controls.Add(_chkMigrateLegacy);
         _optionsPanel.Controls.Add(_chkPurgeData);
 
         _lblStatus = new Label
@@ -183,6 +217,9 @@ public sealed partial class InstallerWizardForm
         Controls.Add(_lblDirHeader);
         Controls.Add(_txtInstallDir);
         Controls.Add(_btnBrowse);
+        Controls.Add(_lblSecondaryDirHeader);
+        Controls.Add(_txtSecondaryDir);
+        Controls.Add(_btnSecondaryBrowse);
         Controls.Add(_optionsPanel);
         Controls.Add(_lblStatus);
         Controls.Add(_progressBar);
@@ -194,6 +231,9 @@ public sealed partial class InstallerWizardForm
         _lblDirHeader.BringToFront();
         _txtInstallDir.BringToFront();
         _btnBrowse.BringToFront();
+        _lblSecondaryDirHeader.BringToFront();
+        _txtSecondaryDir.BringToFront();
+        _btnSecondaryBrowse.BringToFront();
         _optionsPanel.BringToFront();
         _lblStatus.BringToFront();
         _progressBar.BringToFront();
@@ -208,9 +248,14 @@ public sealed partial class InstallerWizardForm
             ExitCode = 0;
             _txtInstallDir.Enabled = false;
             _btnBrowse.Enabled = false;
+            _txtSecondaryDir.Enabled = false;
+            _btnSecondaryBrowse.Enabled = false;
+            _rbProfileLightweight.Enabled = false;
+            _rbProfileFull.Enabled = false;
             _chkShortcuts.Enabled = false;
             _chkAutoStart.Enabled = false;
             _chkLaunchAfter.Enabled = false;
+            _chkMigrateLegacy.Enabled = false;
             _chkPurgeData.Enabled = false;
             _btnPrimary.Enabled = false;
             _lblStatus.Text = $"Visible test showcase (dry preview — auto-closing in {_showcaseAutoCloseMs / 1000.0:F1}s)...";
@@ -276,6 +321,13 @@ public sealed partial class InstallerWizardForm
 
     public void ToggleDetails() => SetDetailsExpanded(!_isDetailsExpanded);
 
+    private int ComputeTargetClientHeight(bool expanded)
+    {
+        int baseBottom = (_hasSecondaryPicker ? 212 : 154) + _optionsPanel.Height + 12 + 78;
+        int collapsed = Math.Max(CollapsedClientHeight, baseBottom + 64);
+        return expanded ? collapsed + 110 : collapsed;
+    }
+
     public void SetDetailsExpanded(bool expanded)
     {
         _isDetailsExpanded = expanded;
@@ -283,7 +335,7 @@ public sealed partial class InstallerWizardForm
         _btnToggleDetails.Text = expanded ? "[v] Hide Details" : "[>] Show Details";
         ClientSize = new Size(
             ClientSize.Width > 0 ? ClientSize.Width : DefaultClientWidth,
-            expanded ? ExpandedClientHeight : CollapsedClientHeight);
+            ComputeTargetClientHeight(expanded));
         UpdateLayoutBounds();
     }
 
@@ -305,19 +357,35 @@ public sealed partial class InstallerWizardForm
         _txtInstallDir.Location = new Point(margin, 114);
         _txtInstallDir.Width = Math.Max(120, _btnBrowse.Left - 8 - margin);
 
-        _optionsPanel.Location = new Point(margin, 154);
+        if (_hasSecondaryPicker)
+        {
+            _lblSecondaryDirHeader.Location = new Point(margin, 150);
+            _btnSecondaryBrowse.Location = new Point(clientW - margin - _btnSecondaryBrowse.Width, 170);
+            _txtSecondaryDir.Location = new Point(margin, 172);
+            _txtSecondaryDir.Width = Math.Max(120, _btnSecondaryBrowse.Left - 8 - margin);
+        }
+
+        int optionsY = _hasSecondaryPicker ? 212 : 154;
+        _optionsPanel.Location = new Point(margin, optionsY);
         _optionsPanel.Width = contentW;
 
-        _lblStatus.Location = new Point(margin, 294);
+        int belowOptionsY = optionsY + _optionsPanel.Height + 12;
+        _lblStatus.Location = new Point(margin, belowOptionsY);
         _lblStatus.Width = contentW;
 
-        _progressBar.Location = new Point(margin, 318);
+        _progressBar.Location = new Point(margin, belowOptionsY + 24);
         _progressBar.Width = contentW;
 
-        _btnToggleDetails.Location = new Point(margin, 342);
+        _btnToggleDetails.Location = new Point(margin, belowOptionsY + 48);
 
-        _txtLog.Location = new Point(margin, 372);
+        _txtLog.Location = new Point(margin, belowOptionsY + 78);
         _txtLog.Size = new Size(contentW, 102);
+
+        int targetH = ComputeTargetClientHeight(_isDetailsExpanded);
+        if (ClientSize.Height != targetH)
+        {
+            ClientSize = new Size(clientW, targetH);
+        }
 
         int footerW = _footerPanel.ClientSize.Width > 0 ? _footerPanel.ClientSize.Width : clientW;
         int footerH = _footerPanel.ClientSize.Height > 0 ? _footerPanel.ClientSize.Height : 56;

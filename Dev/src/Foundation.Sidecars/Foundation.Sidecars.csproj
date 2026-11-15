@@ -4,10 +4,6 @@
     <AssemblyName>Foundation.Sidecars</AssemblyName>
     <RootNamespace>Foundation.Sidecars</RootNamespace>
     <Title>Foundation Single-Pass Stream Hasher, Archive Inspector, .hash Sidecar &amp; .hklock Coexistence SDK</Title>
-    <Version>0.1.0</Version>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
-    <InformationalVersion>0.1.0</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

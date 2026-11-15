@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -23,7 +24,11 @@ public sealed record InstallerAppDescriptor(
     string? Subtitle = null,
     string? EmbeddedPayloadResourceName = null,
     string? BrandAccentHex = null,
-    bool AllowAutoStart = true)
+    bool AllowAutoStart = true,
+    string StudioName = "StreamItAll",
+    string? SuiteName = null,
+    string? UmbrellaSubpath = null,
+    string DefaultProfile = "lightweight")
 {
     public string EffectiveMainExecutableRelativePath =>
         !string.IsNullOrWhiteSpace(MainExecutableRelativePath)
@@ -54,8 +59,38 @@ public sealed record InstallerAppDescriptor(
             ? Subtitle!
             : $"Clean Release Root ({MainExecutableFileName} + app\\, scripts\\, data\\)";
 
-    public string CanonicalDefaultInstallDir =>
-        Path.Combine("D:" + Path.DirectorySeparatorChar, "Programs", ProductName);
+    public string CanonicalDefaultInstallDir => ResolveCanonicalInstallDir();
+
+    private string ResolveCanonicalInstallDir()
+    {
+        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localAppData))
+        {
+            localAppData = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "AppData",
+                "Local");
+        }
+
+        string programsRoot = Path.Combine(localAppData, "Programs");
+        if (!string.IsNullOrWhiteSpace(UmbrellaSubpath))
+        {
+            string trimmed = UmbrellaSubpath.Trim().Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string[] segments = trimmed.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length > 0)
+            {
+                string combined = Path.Combine(new[] { programsRoot }.Concat(segments).ToArray());
+                return string.Equals(segments[^1], ProductName, StringComparison.OrdinalIgnoreCase)
+                    ? combined
+                    : Path.Combine(combined, ProductName);
+            }
+        }
+
+        string effectiveStudio = string.IsNullOrWhiteSpace(StudioName) ? "StreamItAll" : StudioName.Trim();
+        return !string.IsNullOrWhiteSpace(SuiteName)
+            ? Path.Combine(programsRoot, effectiveStudio, SuiteName.Trim(), ProductName)
+            : Path.Combine(programsRoot, effectiveStudio, ProductName);
+    }
 }
 
 public sealed class InstallerConfigOverride
@@ -68,6 +103,18 @@ public sealed class InstallerConfigOverride
 
     [JsonPropertyName("autostart")]
     public bool? AutoStart { get; set; }
+
+    [JsonPropertyName("install_profile")]
+    public string? InstallProfile { get; set; }
+
+    [JsonPropertyName("reengine_install_dir")]
+    public string? ReEngineInstallDir { get; set; }
+
+    [JsonPropertyName("suite_install_dir")]
+    public string? SuiteInstallDir { get; set; }
+
+    [JsonPropertyName("migrate_legacy")]
+    public bool? MigrateLegacy { get; set; }
 }
 
 public sealed class InstallManifest
@@ -98,6 +145,18 @@ public sealed class InstallManifest
 
     [JsonPropertyName("uninstall_registry_record")]
     public string? UninstallRegistryRecord { get; set; }
+
+    [JsonPropertyName("install_profile")]
+    public string? InstallProfile { get; set; }
+
+    [JsonPropertyName("reengine_install_dir")]
+    public string? ReEngineInstallDir { get; set; }
+
+    [JsonPropertyName("suite_install_dir")]
+    public string? SuiteInstallDir { get; set; }
+
+    [JsonPropertyName("umbrella_subpath")]
+    public string? UmbrellaSubpath { get; set; }
 }
 
 public sealed record InstallerOperationResult(
@@ -113,6 +172,7 @@ public sealed class InstallerSandboxContext
 {
     public string EnvPrefix { get; }
     public string? DataDirectory { get; private set; }
+    public string? SandboxRoot { get; private set; }
     public string? ConfigFilePath { get; }
     public string? LogDirectory { get; private set; }
     public bool TestMode { get; }
@@ -132,7 +192,8 @@ public sealed class InstallerSandboxContext
         bool headless = false,
         string envPrefix = "APP",
         string? fallbackTestInstallDir = null,
-        bool visibleTest = false)
+        bool visibleTest = false,
+        string? cliSandboxRoot = null)
     {
         EnvPrefix = string.IsNullOrWhiteSpace(envPrefix) ? "APP" : envPrefix.Trim().ToUpperInvariant();
 
@@ -143,6 +204,15 @@ public sealed class InstallerSandboxContext
             Environment.GetEnvironmentVariable("APP_HOME"));
 
         DataDirectory = !string.IsNullOrWhiteSpace(rawData) ? Path.GetFullPath(rawData) : null;
+
+        string? rawSandboxRoot = FirstNonEmpty(
+            cliSandboxRoot,
+            Environment.GetEnvironmentVariable($"{EnvPrefix}_SANDBOX_ROOT"),
+            Environment.GetEnvironmentVariable("SANDBOX_ROOT"));
+
+        SandboxRoot = !string.IsNullOrWhiteSpace(rawSandboxRoot)
+            ? Path.GetFullPath(rawSandboxRoot)
+            : ResolveSiblingSandboxRoot(DataDirectory);
 
         string? rawConfig = FirstNonEmpty(
             cliConfigPath,
@@ -189,9 +259,31 @@ public sealed class InstallerSandboxContext
             return false;
 
         DataDirectory = Path.GetFullPath(candidateInstallDir);
+        if (string.IsNullOrWhiteSpace(SandboxRoot))
+            SandboxRoot = ResolveSiblingSandboxRoot(DataDirectory);
         if (string.IsNullOrWhiteSpace(LogDirectory))
             LogDirectory = Path.Combine(DataDirectory, "logs");
         return true;
+    }
+
+    private static string? ResolveSiblingSandboxRoot(string? dataDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(dataDirectory))
+            return null;
+
+        string fullData = Path.GetFullPath(dataDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string folderName = Path.GetFileName(fullData);
+        if (string.Equals(folderName, "data", StringComparison.OrdinalIgnoreCase))
+        {
+            string? parent = Path.GetDirectoryName(fullData);
+            if (!string.IsNullOrWhiteSpace(parent) && IsSafeTestInstallDirectory(parent))
+            {
+                return parent;
+            }
+        }
+
+        return fullData;
     }
 
     public void EnsureDefaultLogDirectory(string installDir)
@@ -327,14 +419,7 @@ public sealed partial class InstallerEngine
             catch { }
         }
 
-        string dDriveRoot = "D:" + Path.DirectorySeparatorChar;
-        if (Directory.Exists(dDriveRoot))
-        {
-            return Path.GetFullPath(Descriptor.CanonicalDefaultInstallDir);
-        }
-
-        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.GetFullPath(Path.Combine(localAppData, "Programs", Descriptor.ProductName));
+        return Path.GetFullPath(Descriptor.CanonicalDefaultInstallDir);
     }
 
     public string ValidateAndNormalizeInstallDirectory(string? explicitInstallDir)
@@ -367,7 +452,10 @@ public sealed partial class InstallerEngine
                     $"Fail-closed sandbox violation: --test-mode requires --data-dir, {Descriptor.EnvPrefix}_DATA_DIR, DATA_DIR, APP_HOME, or an explicit --install-dir inside Sandbox\\ or Temp.");
             }
 
-            EnsureWithinDirectory(_ctx.DataDirectory, resolved);
+            string containmentBoundary = !string.IsNullOrWhiteSpace(_ctx.SandboxRoot)
+                ? _ctx.SandboxRoot!
+                : _ctx.DataDirectory!;
+            EnsureWithinDirectory(containmentBoundary, resolved);
         }
 
         _ctx.EnsureDefaultLogDirectory(resolved);

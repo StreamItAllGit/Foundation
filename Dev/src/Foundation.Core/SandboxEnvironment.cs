@@ -166,6 +166,70 @@ public sealed class SandboxEnvironment
         return AssertPathContained(candidatePath, DataDirectory);
     }
 
+    /// <summary>
+    /// Resolves the shared <c>Sandbox\</c> ancestor directory when <paramref name="dataDir"/> sits inside
+    /// a canonical <c>Sandbox\{app,data,logs,installed}</c> tree, returning <see langword="null"/> for host
+    /// or non-sandbox paths so callers fail closed.
+    /// </summary>
+    public static string? ResolveSiblingSandboxRoot(string? dataDir)
+    {
+        if (string.IsNullOrWhiteSpace(dataDir))
+        {
+            return null;
+        }
+
+        string fullData = Path.GetFullPath(StripExtendedPrefix(dataDir))
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        DirectoryInfo? current = new DirectoryInfo(fullData);
+        while (current is not null)
+        {
+            if (current.Parent is not null &&
+                string.Equals(current.Name, "Sandbox", StringComparison.OrdinalIgnoreCase))
+            {
+                string root = current.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (IsHostEscapeRoot(root))
+                {
+                    return null;
+                }
+                return root;
+            }
+            current = current.Parent;
+        }
+
+        return null;
+    }
+
+    private static bool IsHostEscapeRoot(string path)
+    {
+        string normalized = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        if (normalized.IndexOf(@"\Programs\", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return true;
+        }
+
+        string[] protectedRoots =
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+        };
+
+        foreach (string protectedRoot in protectedRoots)
+        {
+            if (string.IsNullOrWhiteSpace(protectedRoot)) continue;
+            string fullProtected = Path.GetFullPath(protectedRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(normalized, fullProtected, StringComparison.OrdinalIgnoreCase) ||
+                normalized.StartsWith(fullProtected + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static string NormalizeLongPath(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);

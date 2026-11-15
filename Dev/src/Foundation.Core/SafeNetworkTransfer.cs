@@ -20,6 +20,7 @@ public sealed record SafeTransferOptions
     public string JobId { get; init; } = "default";
     public TimeSpan ConnectTimeout { get; init; } = TimeSpan.FromSeconds(10);
     public TimeSpan ReadStallTimeout { get; init; } = TimeSpan.FromSeconds(30);
+    public TimeSpan? ResponseHeadersTimeout { get; init; }
     public int MaxRetries { get; init; } = 3;
     public long? ExpectedSizeBytes { get; init; }
     public string? ExpectedSha256Hex { get; init; }
@@ -89,9 +90,10 @@ public static class SafeNetworkTransfer
             AssertSufficientDiskSpace(fullDest, opts.ExpectedSizeBytes.Value, opts.MinFreeSpaceReserveBytes);
         }
 
-        string safeJobId = string.IsNullOrWhiteSpace(opts.JobId) ? "default" : opts.JobId.Trim();
+        string safeJobId = SanitizeJobId(opts.JobId);
         string partialPath = $"{fullDest}.partial_{safeJobId}";
         bool resumed = false;
+        bool retried416 = false;
         int attempt = 0;
 
         using HttpClient client = CreateHttpClient(opts.ConnectTimeout, customHandler);
@@ -105,8 +107,26 @@ public static class SafeNetworkTransfer
                 using var request = new HttpRequestMessage(HttpMethod.Get, sourceUri);
                 if (existingOffset > 0) request.Headers.Range = new RangeHeaderValue(existingOffset, null);
 
+                TimeSpan headerTimeout = opts.ResponseHeadersTimeout ?? opts.ReadStallTimeout;
+                using var headerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                if (headerTimeout > TimeSpan.Zero && headerTimeout != Timeout.InfiniteTimeSpan)
+                {
+                    headerCts.CancelAfter(headerTimeout);
+                }
+
                 using HttpResponseMessage response = await client.SendAsync(
-                    request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    request, HttpCompletionOption.ResponseHeadersRead, headerCts.Token).ConfigureAwait(false);
+
+                if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable && existingOffset > 0)
+                {
+                    try { if (File.Exists(partialPath)) File.Delete(partialPath); } catch { /* ignore */ }
+                    resumed = false;
+                    if (!retried416)
+                    {
+                        retried416 = true;
+                        continue;
+                    }
+                }
 
                 if ((int)response.StatusCode == 429 || (int)response.StatusCode >= 500)
                 {
@@ -240,8 +260,36 @@ public static class SafeNetworkTransfer
         return new HttpClient(handler, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
     }
 
-    private static bool IsTransient(Exception ex, CancellationToken ct) =>
-        !ct.IsCancellationRequested && ex is HttpRequestException or IOException or TaskCanceledException;
+    private static string SanitizeJobId(string? jobId)
+    {
+        if (string.IsNullOrWhiteSpace(jobId)) return "default";
+        char[] invalid = Path.GetInvalidFileNameChars();
+        char[] chars = jobId.Trim().ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+        {
+            char c = chars[i];
+            if (c == ':' || c == '/' || c == '\\' || Array.IndexOf(invalid, c) >= 0)
+            {
+                chars[i] = '_';
+            }
+        }
+        string sanitized = new string(chars).Trim('.');
+        return string.IsNullOrWhiteSpace(sanitized) ? "default" : sanitized;
+    }
+
+    private static bool IsTransient(Exception ex, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested) return false;
+        if (ex is HttpRequestException httpEx && httpEx.StatusCode is HttpStatusCode status)
+        {
+            int code = (int)status;
+            if (code is 400 or 401 or 403 or 404 or 410)
+            {
+                return false;
+            }
+        }
+        return ex is HttpRequestException or IOException or OperationCanceledException;
+    }
 
     private static TimeSpan ComputeBackoffWithFullJitter(int attempt, TimeSpan? retryAfter)
     {

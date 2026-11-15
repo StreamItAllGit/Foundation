@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -168,8 +169,10 @@ public static partial class MediaContainerExtractor
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-                await using Stream srcStream = entry.Open();
-                await using var dstStream = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                Stream srcStream = entry.Open();
+                await using ConfiguredAsyncDisposable srcScope = srcStream.ConfigureAwait(false);
+                var dstStream = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                await using ConfiguredAsyncDisposable dstScope = dstStream.ConfigureAwait(false);
                 await srcStream.CopyToAsync(dstStream, ct).ConfigureAwait(false);
                 extracted.Add(destPath);
             }
@@ -286,14 +289,17 @@ public static partial class MediaContainerExtractor
 
     private static async Task CopyFileAsync(string src, string dst, CancellationToken ct)
     {
-        await using var s = new FileStream(src, FileMode.Open, FileAccess.Read, FileShare.Read);
-        await using var d = new FileStream(dst, FileMode.Create, FileAccess.Write, FileShare.None);
+        var s = new FileStream(src, FileMode.Open, FileAccess.Read, FileShare.Read);
+        await using ConfiguredAsyncDisposable sScope = s.ConfigureAwait(false);
+        var d = new FileStream(dst, FileMode.Create, FileAccess.Write, FileShare.None);
+        await using ConfiguredAsyncDisposable dScope = d.ConfigureAwait(false);
         await s.CopyToAsync(d, ct).ConfigureAwait(false);
     }
 
     private static async Task<string> ComputeFileSha256Async(string filePath, CancellationToken ct)
     {
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, useAsync: true);
+        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, useAsync: true);
+        await using ConfiguredAsyncDisposable streamScope = stream.ConfigureAwait(false);
         return Convert.ToHexString(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false)).ToLowerInvariant();
     }
 

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schemas.local/manifest.v2.json",
+  "schemaVersion": 2,
+  "manifestType": "standalone-app",
+  "appId": "foundation",
+  "version": "0.4.0",
+  "updatedAtUtc": "2026-11-15T09:05:00Z",
+  "displayName": "Foundation Shared SDK",
+  "containerTier": "Tier A (6-Folder)",
+  "ecosystemTier": "Tier1_Infrastructure",
+  "appArchetype": "SDK",
+  "activeMilestone": "0.4.0",
+  "goalMajorVersion": "1.0.0",
+  "sdkVersion": "0.4.0",
+  "upstreamResearchPath": null,
+  "downstreamProjects": [
+    "Mother",
+    "Housekeeping",
+    "Greenroom",
+    "Redroom",
+    "ShadowLibrary",
+    "uStation",
+    "reEngine",
+    "reStation",
+    "KingsFieldRecomp",
+    "StreamEngine"
+  ]
+}

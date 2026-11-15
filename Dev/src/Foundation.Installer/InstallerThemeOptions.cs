@@ -1,12 +1,43 @@
 // @module: Foundation.Installer.Theme
-// @purpose: Provides per-application visual, icon, color, and step customization for the 650x434 Dark WinForms Setup Wizard.
+// @purpose: Provides per-application visual, icon, color, profile, and step customization for the 650x434 Dark WinForms Setup Wizard.
 // @depends-on: System, System.Collections.Generic
-// @exports: InstallerCustomToggle, InstallerThemeOptions
+// @exports: InstallerProfileKind, InstallerProfileOption, SecondaryPathPickerOptions, InstallerCustomToggle, InstallerThemeOptions
 
 using System;
 using System.Collections.Generic;
 
 namespace Foundation.Installer;
+
+/// <summary>
+/// Supported installer bundle footprint profiles (Standard 18: installProfile).
+/// </summary>
+public enum InstallerProfileKind
+{
+    Lightweight,
+    Full
+}
+
+/// <summary>
+/// Selectable installation profile option presented in the setup wizard (e.g., Lightweight vs Full).
+/// </summary>
+public sealed record InstallerProfileOption(
+    string Id,
+    InstallerProfileKind Kind,
+    string Label,
+    string Description,
+    bool IsDefault = false
+);
+
+/// <summary>
+/// Optional secondary directory picker configuration for companion roots (e.g., --reengine-dir or --suite-dir).
+/// </summary>
+public sealed record SecondaryPathPickerOptions(
+    string FlagName,
+    string Label,
+    string? DefaultPath = null,
+    string? Placeholder = null,
+    string? Tooltip = null
+);
 
 /// <summary>
 /// Optional per-app checkbox toggle displayed on the setup wizard surface (e.g., "Register with Mother Suite", "Create Desktop Shortcut").
@@ -68,4 +99,25 @@ public sealed record InstallerThemeOptions
 
     /// <summary>Customizable optional toggles presented to the user before installation starts.</summary>
     public IReadOnlyList<InstallerCustomToggle> CustomToggles { get; init; } = Array.Empty<InstallerCustomToggle>();
+
+    /// <summary>Studio umbrella folder under %LOCALAPPDATA%\Programs\ (defaults to "StreamItAll").</summary>
+    public string StudioName { get; init; } = "StreamItAll";
+
+    /// <summary>Optional suite folder nested under StudioName (e.g., "Mother" or "reEngine").</summary>
+    public string? SuiteName { get; init; }
+
+    /// <summary>Optional explicit umbrella subpath relative to %LOCALAPPDATA%\Programs\ (Standard 18: umbrellaSubpath).</summary>
+    public string? UmbrellaSubpath { get; init; }
+
+    /// <summary>Available installation profiles presented to the user (e.g., Lightweight vs Full).</summary>
+    public IReadOnlyList<InstallerProfileOption> AvailableProfiles { get; init; } = Array.Empty<InstallerProfileOption>();
+
+    /// <summary>Default installation profile identifier (Standard 18: installProfile, defaults to "lightweight").</summary>
+    public string DefaultProfileId { get; init; } = "lightweight";
+
+    /// <summary>Optional secondary directory picker (e.g., --reengine-dir or --suite-dir).</summary>
+    public SecondaryPathPickerOptions? SecondaryPathPicker { get; init; }
+
+    /// <summary>Whether the wizard offers opt-in migration from legacy flat <PROGRAMS_ROOT>\ installations.</summary>
+    public bool AllowLegacyMigration { get; init; } = false;
 }

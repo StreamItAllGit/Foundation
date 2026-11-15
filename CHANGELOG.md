@@ -7,6 +7,30 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-15
+### Added
+- **Studio/Suite Default Install Root, Profiles, Secondary Picker & Opt-In Legacy Migration in `Foundation.Installer` (`v0.4.0`)**:
+  - [`InstallerEngine.Core.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/InstallerEngine.Core.cs) & [`InstallerEngineCore.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/InstallerEngineCore.cs): Added `StudioName` (`"StreamItAll"`), `SuiteName`, `UmbrellaSubpath`, `AvailableProfiles`, `DefaultProfileId`, `SecondaryPathPicker`, and `AllowLegacyMigration` to `InstallerAppDescriptor` / `InstallerThemeOptions`; resolves `%LOCALAPPDATA%\Programs\<Studio>\<Suite?>\<App>\`, adds opt-in `DetectLegacyFlatInstall` / `MigrateLegacyInstallAsync` (`--migrate-legacy`), and replaces hardcoded `<PROGRAMS_ROOT>\` paths.
+  - [`StandardInstallerHost.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/StandardInstallerHost.cs) & [`InstallerWizardForm.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/InstallerWizardForm.cs): Added `InstallerProfileKind` (`Lightweight` / `Full`), `InstallerProfileOption`, `SecondaryPathPickerOptions`, CLI flags (`--profile`, `--reengine-dir`, `--suite-dir`, `--sandbox-root`, `--migrate-legacy`), and dark-theme wizard controls.
+- **AOT-Primary Static Recomp & `.decomp` Contracts in `Foundation.Retro` (`v0.4.0`)**:
+  - [`RecompTierAndBackendContracts.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Retro/RecompTierAndBackendContracts.cs) & [`RecompContracts.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Retro/RecompContracts.cs): Added `RecompExecutionTierMode` (`AotPrimary`, `JitBringup`, `ThreadedIr`), `RecompRenderBackendIds` (`software`, `opengl`), `IDecompPackageManifest`, `RecompRuntimeTelemetrySnapshot`, and `AotCacheLayoutHelper` (`<dataDir>\cache\<ModuleId>\<Version>\`).
+- **Fail-Closed Sibling Sandbox Containment in `Foundation.Core` (`v0.4.0`)**:
+  - [`SandboxEnvironment.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SandboxEnvironment.cs): Added `ResolveSiblingSandboxRoot(string? dataDir)` permitting sibling `Sandbox\{app,data,logs,installed}` containment while rejecting host escapes.
+- **Public-Repo Config Overlays (`Dev\.env.example`, `Dev\settings.example.json`)**:
+  - Added environment and `<dataDir>\notion.config.json` overlay templates for zero-PII public distribution.
+
+### Changed
+- **Unified `0.4.0` SemVer & Single-Source `Foundation.UI` Layout**:
+  - Aligned `Directory.Build.props`, all 7 C# `.csproj` assemblies, `@foundation/ui` (`Web\package.json`), `foundation_core` (`pyproject.toml`), `Dev\app.manifest.json`, `active.state`, and `sync_foundation_sdk.py` on `0.4.0`.
+  - Deduplicated tripled `Foundation.UI` TS/TSX copies (`Web\` is now the single canonical TS/TSX source; `Foundation.UI.csproj` copies `Web\` into `$(OutputPath)\WebAssets\` and gates SDK publishing behind `-p:PublishFoundationSdk=true`).
+  - Externalized Notion IDs in `Dev\tools\notion_task_helper.py` (`FOUNDATION_NOTION_TASK_BACKBONE_ID`, `FOUNDATION_NOTION_PROJECTS_HUB_ID`, `notion.config.json`), scrubbed workstation paths from `Dev\app.manifest.json` and `sync_foundation_sdk.py`, purged `14` stale `.pdb` files from `Builds\`, and reduced `Releases\Latest\` to the canonical 6-file bundle (`LICENSE` + `SHA256SUMS.txt`).
+
+### Fixed
+- **Installer Self-Delete Trampoline (`Foundation.Installer`):** Replaced one-shot `ping -n 2` self-delete in `InstallerEngine.TestModeAndCli.cs` / `InstallerEngine.UninstallAndShortcuts.cs` with a bounded retry `cmd.exe` trampoline.
+- **Retro Catalog & Extractor (`Foundation.Retro`):** Replaced synthetic sequential hex BIOS hashes in `ConsoleSystemCatalog.cs` with `IsVerifiedReferenceHash` metadata and added `.ConfigureAwait(false)` in `MediaContainerExtractor.cs`.
+- **Network Transfer & Archive Extraction (`Foundation.Core`, `Foundation.Sidecars`):** Sanitized `opts.JobId` (`:` ADS fix), recovered HTTP `416`, excluded `400/401/403/404/410` from `IsTransient`, and enforced `ResponseHeadersTimeout` in `SafeNetworkTransfer.cs`; added LZMA/Deflate64 `7z.exe` fallback and nested `::` inspection in `SevenZipAndZipInspector.cs`.
+- **Launcher Wait, Relative Arg Rebase & Signal Forwarding (`Foundation.Launcher`):** Fixed `ShouldWaitForChild` (`--wait`, `--open`, `--check-updates`, `--register-assoc`, `--visible-test`, `--test-mode`), rebased caller-CWD relative path arguments, and forwarded Ctrl+C in `RootLauncherHost.cs`.
+
 ## [0.3.1] - 2026-11-13
 ### Added
 - **Pure-`.NET` Timing, Lock-Free Audio, PNG & Overlay Primitives in `Foundation.Core.dll` (`v0.3.1`, `net8.0`)**:

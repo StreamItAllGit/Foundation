@@ -38,6 +38,10 @@ public sealed partial class InstallerWizardForm : Form
     private readonly Color _bgCard;
     private readonly bool _allowAutoStart;
     private readonly int _showcaseAutoCloseMs;
+    private readonly SecondaryPathPickerOptions? _secondaryPickerOptions;
+    private readonly bool _hasSecondaryPicker;
+    private readonly bool _showLegacyMigration;
+    private readonly string? _legacyDetectedPath;
     private System.Windows.Forms.Timer? _showcaseTimer;
 
     private Panel _headerPanel = null!;
@@ -50,9 +54,16 @@ public sealed partial class InstallerWizardForm : Form
     private Label _lblDirHeader = null!;
     private TextBox _txtInstallDir = null!;
     private Button _btnBrowse = null!;
+    private Label _lblSecondaryDirHeader = null!;
+    private TextBox _txtSecondaryDir = null!;
+    private Button _btnSecondaryBrowse = null!;
+    private Label _lblProfileHeader = null!;
+    private RadioButton _rbProfileLightweight = null!;
+    private RadioButton _rbProfileFull = null!;
     private CheckBox _chkShortcuts = null!;
     private CheckBox _chkAutoStart = null!;
     private CheckBox _chkLaunchAfter = null!;
+    private CheckBox _chkMigrateLegacy = null!;
     private CheckBox _chkPurgeData = null!;
     private Label _lblModeBadge = null!;
     private Label _lblStatus = null!;
@@ -91,6 +102,13 @@ public sealed partial class InstallerWizardForm : Form
     public CheckBox ShortcutsCheckBox => _chkShortcuts;
     public CheckBox AutoStartCheckBox => _chkAutoStart;
     public CheckBox LaunchAfterCheckBox => _chkLaunchAfter;
+    public CheckBox MigrateLegacyCheckBox => _chkMigrateLegacy;
+    public RadioButton LightweightProfileRadioButton => _rbProfileLightweight;
+    public RadioButton FullProfileRadioButton => _rbProfileFull;
+    public TextBox SecondaryDirTextBox => _txtSecondaryDir;
+    public string SelectedProfileId => _rbProfileFull.Checked ? "full" : "lightweight";
+    public string SecondaryInstallDir => _hasSecondaryPicker ? _txtSecondaryDir.Text.Trim() : string.Empty;
+    public bool MigrateLegacyChecked => _showLegacyMigration && _chkMigrateLegacy.Checked;
     public bool IsAutoStartAllowed => _allowAutoStart;
     public bool IsDetailsExpanded => _isDetailsExpanded;
 
@@ -104,7 +122,11 @@ public sealed partial class InstallerWizardForm : Form
         bool initialAutoStart = false,
         bool initialLaunchAfter = true,
         bool initialPurgeData = false,
-        int showShowcaseAutoCloseMs = 0)
+        int showShowcaseAutoCloseMs = 0,
+        string? initialProfileId = null,
+        string? initialSecondaryDir = null,
+        string? secondaryFlagName = null,
+        bool initialMigrateLegacy = false)
     {
         _fullEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         _ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
@@ -121,6 +143,21 @@ public sealed partial class InstallerWizardForm : Form
         _bgPrimary = Color.FromArgb(14, 17, 23);
         _bgCard = Color.FromArgb(22, 27, 36);
 
+        string effectiveProfile = initialProfileId ?? ctx.ConfigOverride?.InstallProfile ?? desc.DefaultProfile;
+        string? effectiveSecondary = initialSecondaryDir
+            ?? ctx.ConfigOverride?.ReEngineInstallDir
+            ?? ctx.ConfigOverride?.SuiteInstallDir;
+        if (!string.IsNullOrWhiteSpace(effectiveSecondary))
+        {
+            string flag = secondaryFlagName ?? (string.IsNullOrWhiteSpace(ctx.ConfigOverride?.ReEngineInstallDir) ? "--suite-dir" : "--reengine-dir");
+            string label = flag.Equals("--reengine-dir", StringComparison.OrdinalIgnoreCase)
+                ? "Companion reEngine Directory:"
+                : "Companion Suite Directory:";
+            _secondaryPickerOptions = new SecondaryPathPickerOptions(flag, label, effectiveSecondary);
+        }
+        _hasSecondaryPicker = !_isUninstallMode && _secondaryPickerOptions != null;
+        _showLegacyMigration = !_isUninstallMode && (initialMigrateLegacy || (ctx.ConfigOverride?.MigrateLegacy ?? false));
+
         string defaultDir = !string.IsNullOrWhiteSpace(initialInstallDir)
             ? initialInstallDir
             : _fullEngine.ResolveDefaultInstallDirectory();
@@ -130,7 +167,10 @@ public sealed partial class InstallerWizardForm : Form
             initialCreateShortcuts,
             _allowAutoStart && initialAutoStart,
             initialLaunchAfter,
-            initialPurgeData);
+            initialPurgeData,
+            effectiveProfile,
+            effectiveSecondary,
+            initialMigrateLegacy);
     }
 
     public InstallerWizardForm(
@@ -138,7 +178,10 @@ public sealed partial class InstallerWizardForm : Form
         bool isUninstallMode = false,
         string? initialInstallDir = null,
         Func<CancellationToken, Action<int, string>, Task<FoundationInstallResult>>? customInstallAction = null,
-        int showShowcaseAutoCloseMs = 0)
+        int showShowcaseAutoCloseMs = 0,
+        string? initialProfileId = null,
+        string? initialSecondaryDir = null,
+        bool initialMigrateLegacy = false)
     {
         _coreEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         _isUninstallMode = isUninstallMode;
@@ -154,14 +197,26 @@ public sealed partial class InstallerWizardForm : Form
         _bgPrimary = InstallerWizardControls.ParseHexColor(theme.SurfaceBackdropHex, Color.FromArgb(14, 17, 23));
         _bgCard = InstallerWizardControls.ParseHexColor(theme.SurfaceCardHex, Color.FromArgb(22, 27, 36));
 
+        _secondaryPickerOptions = theme.SecondaryPathPicker;
+        string? effectiveSecondary = !string.IsNullOrWhiteSpace(initialSecondaryDir)
+            ? initialSecondaryDir
+            : _secondaryPickerOptions?.DefaultPath;
+        _hasSecondaryPicker = !_isUninstallMode && (_secondaryPickerOptions != null || !string.IsNullOrWhiteSpace(effectiveSecondary));
+        _legacyDetectedPath = !_isUninstallMode ? _coreEngine.DetectLegacyFlatInstall() : null;
+        _showLegacyMigration = !_isUninstallMode && (theme.AllowLegacyMigration || initialMigrateLegacy || _legacyDetectedPath != null);
+
         string defaultDir = _coreEngine.ResolveTargetInstallDir(initialInstallDir);
+        string effectiveProfile = initialProfileId ?? theme.DefaultProfileId;
 
         InitializeWizardSurface(
             defaultDir,
             initialCreateShortcuts: true,
             initialAutoStart: false,
             initialLaunchAfter: true,
-            initialPurgeData: false);
+            initialPurgeData: false,
+            effectiveProfile,
+            effectiveSecondary,
+            initialMigrateLegacy);
     }
 
     protected override void Dispose(bool disposing)
@@ -182,7 +237,10 @@ public sealed partial class InstallerWizardForm : Form
         bool initialCreateShortcuts,
         bool initialAutoStart,
         bool initialLaunchAfter,
-        bool initialPurgeData)
+        bool initialPurgeData,
+        string initialProfileId,
+        string? initialSecondaryDir,
+        bool initialMigrateLegacy)
     {
         Text = _isUninstallMode
             ? $"{_displayName} Uninstall (v{_version})"
@@ -210,12 +268,14 @@ public sealed partial class InstallerWizardForm : Form
         }
         catch { }
 
-        InitializeHeaderAndDestinationControls(defaultDir, extractedIcon);
+        InitializeHeaderAndDestinationControls(defaultDir, initialSecondaryDir, extractedIcon);
         InitializeOptionsAndFooterControls(
             initialCreateShortcuts,
             initialAutoStart,
             initialLaunchAfter,
-            initialPurgeData);
+            initialPurgeData,
+            initialProfileId,
+            initialMigrateLegacy);
 
         _controlsInitialized = true;
         UpdateUpgradeDetectionBadge();
@@ -223,9 +283,13 @@ public sealed partial class InstallerWizardForm : Form
 
         AppendLogLine($"{_displayName} Setup v{_version} initialized.");
         AppendLogLine($"Target directory: {_txtInstallDir.Text}");
+        if (_hasSecondaryPicker)
+        {
+            AppendLogLine($"Secondary directory ({_secondaryPickerOptions?.FlagName}): {_txtSecondaryDir.Text}");
+        }
     }
 
-    private void InitializeHeaderAndDestinationControls(string defaultDir, Icon? extractedIcon)
+    private void InitializeHeaderAndDestinationControls(string defaultDir, string? initialSecondaryDir, Icon? extractedIcon)
     {
         _headerPanel = new Panel
         {
@@ -330,5 +394,24 @@ public sealed partial class InstallerWizardForm : Form
         };
         _btnBrowse.FlatAppearance.BorderColor = BorderSubtle;
         _btnBrowse.Click += OnBrowseClicked;
+
+        string secLabel = _secondaryPickerOptions?.Label ?? "Companion Directory:";
+        string secDefault = initialSecondaryDir ?? _secondaryPickerOptions?.DefaultPath ?? string.Empty;
+        _lblSecondaryDirHeader = InstallerWizardControls.CreateSectionLabel(secLabel, new Point(22, 150));
+        _lblSecondaryDirHeader.Visible = _hasSecondaryPicker;
+
+        _txtSecondaryDir = InstallerWizardControls.CreateDarkPathTextBox(secDefault, new Point(22, 172), 502);
+        _txtSecondaryDir.PlaceholderText = _secondaryPickerOptions?.Placeholder ?? string.Empty;
+        _txtSecondaryDir.Visible = _hasSecondaryPicker;
+
+        _btnSecondaryBrowse = InstallerWizardControls.CreateFlatButton(
+            "Browse...",
+            new Point(532, 170),
+            new Size(96, 29),
+            _bgCard,
+            TextPrimary,
+            BorderSubtle);
+        _btnSecondaryBrowse.Visible = _hasSecondaryPicker;
+        _btnSecondaryBrowse.Click += OnSecondaryBrowseClicked;
     }
 }

@@ -1,4 +1,4 @@
-# Foundation (`v0.3.1`) — Consumer User Guide & Integration Recipes
+# Foundation (`v0.4.0`) — Consumer User Guide & Integration Recipes
 
 > **Goal:** Copy-paste integration recipes for consuming `Foundation` across C#, React/TypeScript, Vanilla Web, and Python projects without re-reading SDK source files.
 > **Full API Dictionary:** [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md)
@@ -41,7 +41,7 @@ using var lockHandle = PidSafeLockfile.Acquire(
 
 ---
 
-## 3. Drop-In Installer Integration (`Foundation.Installer v0.2.2`)
+## 3. Drop-In Installer Integration (`Foundation.Installer v0.4.0`)
 
 ### 3.1 Tier 1 — Zero-Boilerplate `StandardInstallerHost` (Recommended)
 Add a ~15-line `Dev\Installer\Program.cs` referencing `Foundation.Installer.dll` and embedding `payload.zip` as `<ProductName>.Installer.Embedded.payload.zip`:
@@ -57,12 +57,14 @@ var descriptor = new InstallerAppDescriptor(
     MainExecutableRelativePath: @"app\MyApp.exe",
     Subtitle: "Portable & Suite-Compatible Installer",
     BrandAccentHex: "#0EA5E9",
-    AllowAutoStart: false); // Omit or pass true for background daemons; false hides Startup checkbox & clamps --autostart
+    AllowAutoStart: false, // Omit or pass true for background daemons; false hides Startup checkbox & clamps --autostart
+    StudioName: "StreamItAll",
+    SuiteName: "MySuite");
 
 return StandardInstallerHost.Run(descriptor, args, typeof(Program).Assembly);
 ```
 
-- Automatically serves the 650×434 Dark WinForms Setup Wizard (`InstallerWizardForm`) interactively, or `--silent` / `--test-mode` / `--visible-test` (3s auto-closing foreground showcase) / `--verify` / `--uninstall` / `--purge-data` from CLI with exit codes `0` / `1` / `2`.
+- Automatically resolves `%LOCALAPPDATA%\Programs\<Studio>\<Suite?>\<App>\` by default, serves the Dark WinForms Setup Wizard (`InstallerWizardForm`, with optional `InstallerProfileOption` `Lightweight`/`Full` and `SecondaryPathPicker`), or runs `--silent` / `--test-mode` / `--sandbox-root` / `--visible-test` (3s auto-closing foreground showcase) / `--profile` / `--reengine-dir` / `--suite-dir` / `--migrate-legacy` / `--verify` / `--uninstall` / `--purge-data` from CLI with exit codes `0` / `1` / `2`.
 
 ### 3.2 Tier 2 — Custom / Low-Level Host (`InstallerThemeOptions` + `InstallerEngineCore`)
 If building a custom host UI, configure `InstallerThemeOptions` (also supporting `AllowAutoStart = false`) and drive `InstallerEngineCore` directly (writes `FoundationInstallManifest` instead of `InstallManifest`). See [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md).
@@ -111,7 +113,7 @@ var (acquired, lockPath, reason) = HkLockSentinel.TryAcquireDirectoryHkLock(dir,
 
 ---
 
-## 5. React `@foundation/ui` (`v0.2.0`) & Vanilla Web Integration
+## 5. React `@foundation/ui` (`v0.4.0`) & Vanilla Web Integration
 
 ```tsx
 // 7 components + terminalDrawerCore available directly from the barrel:
@@ -133,7 +135,7 @@ For Vanilla JS / FastAPI / Razor hosts, include `foundation-tokens.css`, `founda
 
 ---
 
-## 6. Python `foundation_core` (`v0.1.2`) Quickstart
+## 6. Python `foundation_core` (`v0.4.0`) Quickstart
 
 ```python
 from foundation_core import (

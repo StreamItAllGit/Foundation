@@ -38,107 +38,10 @@ public static class StandardInstallerHost
             catch { }
         }
 
-        string? installDir = null;
-        string? dataDir = null;
-        string? configPath = null;
-        string? logDir = null;
-        string? payloadPath = null;
-        bool uninstall = false;
-        bool purgeData = false;
-        bool verifyOnly = false;
-        bool noShortcuts = false;
-        bool autoStart = false;
-        bool launchAfter = false;
-        bool noLaunch = false;
-        bool silent = false;
-        bool testMode = false;
-        bool dryRun = false;
-        bool headless = false;
-        bool visibleTest = false;
-        bool showHelp = false;
-        bool showVersion = false;
-
-        string? selfExeName = Path.GetFileName(Environment.ProcessPath);
-        if (string.Equals(selfExeName, descriptor.UninstallerExeName, StringComparison.OrdinalIgnoreCase))
-        {
-            uninstall = true;
-        }
-
+        InstallerCliOptions cli;
         try
         {
-            for (int i = 0; i < args.Length; i++)
-            {
-                string arg = args[i].Trim();
-                switch (arg.ToLowerInvariant())
-                {
-                    case "--install-dir":
-                    case "--target-dir":
-                        installDir = RequireNextValue(args, ref i, arg);
-                        break;
-                    case "--data-dir":
-                        dataDir = RequireNextValue(args, ref i, arg);
-                        break;
-                    case "--config":
-                        configPath = RequireNextValue(args, ref i, arg);
-                        break;
-                    case "--log-dir":
-                        logDir = RequireNextValue(args, ref i, arg);
-                        break;
-                    case "--payload":
-                        payloadPath = RequireNextValue(args, ref i, arg);
-                        break;
-                    case "--uninstall":
-                        uninstall = true;
-                        break;
-                    case "--purge-data":
-                        purgeData = true;
-                        break;
-                    case "--verify":
-                        verifyOnly = true;
-                        break;
-                    case "--no-shortcuts":
-                        noShortcuts = true;
-                        break;
-                    case "--autostart":
-                        autoStart = true;
-                        break;
-                    case "--launch":
-                        launchAfter = true;
-                        break;
-                    case "--no-launch":
-                    case "--no-restart":
-                        noLaunch = true;
-                        break;
-                    case "--silent":
-                    case "--quiet":
-                        silent = true;
-                        break;
-                    case "--test-mode":
-                        testMode = true;
-                        break;
-                    case "--dry-run":
-                        dryRun = true;
-                        break;
-                    case "--headless":
-                        headless = true;
-                        break;
-                    case "--visible-test":
-                        visibleTest = true;
-                        break;
-                    case "--version":
-                    case "-v":
-                        showVersion = true;
-                        break;
-                    case "--help":
-                    case "-h":
-                    case "/?":
-                    case "help":
-                        showHelp = true;
-                        break;
-                    default:
-                        throw new ArgumentException($"Unknown option '{arg}'. Pass --help for usage.");
-                }
-            }
+            cli = InstallerEngine.ParseCliArgs(args, descriptor);
         }
         catch (Exception parseEx)
         {
@@ -146,13 +49,13 @@ public static class StandardInstallerHost
             return 2;
         }
 
-        if (showVersion)
+        if (cli.ShowVersion)
         {
             Console.WriteLine(descriptor.Version);
             return 0;
         }
 
-        if (showHelp)
+        if (cli.ShowHelp)
         {
             PrintBanner(descriptor);
             PrintUsage(descriptor);
@@ -160,34 +63,35 @@ public static class StandardInstallerHost
         }
 
         var ctx = new InstallerSandboxContext(
-            cliDataDir: dataDir,
-            cliConfigPath: configPath,
-            cliLogDir: logDir,
-            testMode: testMode,
-            dryRun: dryRun,
-            headless: headless,
+            cliDataDir: cli.DataDir,
+            cliConfigPath: cli.ConfigPath,
+            cliLogDir: cli.LogDir,
+            testMode: cli.TestMode,
+            dryRun: cli.DryRun,
+            headless: cli.Headless,
             envPrefix: descriptor.EnvPrefix,
-            fallbackTestInstallDir: installDir,
-            visibleTest: visibleTest);
+            fallbackTestInstallDir: cli.InstallDir,
+            visibleTest: cli.VisibleTest,
+            cliSandboxRoot: cli.SandboxRoot);
 
-        bool effectiveAutoStart = descriptor.AllowAutoStart && autoStart;
-        if (autoStart && !descriptor.AllowAutoStart)
+        bool effectiveAutoStart = descriptor.AllowAutoStart && cli.AutoStart;
+        if (cli.AutoStart && !descriptor.AllowAutoStart)
         {
             ctx.WriteLog("WARN", $"--autostart ignored for {descriptor.ProductName} because AllowAutoStart is false.");
-            if (!silent)
+            if (!cli.Silent)
             {
                 Console.WriteLine($"Warning: --autostart ignored because {descriptor.DisplayName} disallows Startup registration.");
             }
         }
 
-        if (ctx.VisibleTest && !silent && !ctx.Headless && OperatingSystem.IsWindows())
+        if (ctx.VisibleTest && !cli.Silent && !ctx.Headless && OperatingSystem.IsWindows())
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             var showcaseEngine = new InstallerEngine(descriptor, ctx, resolvedAssembly);
-            string showcaseDir = !string.IsNullOrWhiteSpace(installDir)
-                ? installDir
+            string showcaseDir = !string.IsNullOrWhiteSpace(cli.InstallDir)
+                ? cli.InstallDir
                 : (ctx.IsContainedMode && !string.IsNullOrWhiteSpace(ctx.DataDirectory)
                     ? Path.Combine(ctx.DataDirectory, "installed-app")
                     : showcaseEngine.ResolveDefaultInstallDirectory());
@@ -195,20 +99,24 @@ public static class StandardInstallerHost
                 engine: showcaseEngine,
                 ctx: ctx,
                 initialInstallDir: showcaseDir,
-                externalPayloadPath: payloadPath,
-                isUninstallMode: uninstall,
-                initialCreateShortcuts: !noShortcuts,
+                externalPayloadPath: cli.PayloadPath,
+                isUninstallMode: cli.Uninstall,
+                initialCreateShortcuts: !cli.NoShortcuts,
                 initialAutoStart: effectiveAutoStart,
-                initialLaunchAfter: !noLaunch,
-                initialPurgeData: purgeData,
-                showShowcaseAutoCloseMs: 3000);
+                initialLaunchAfter: !cli.NoLaunch,
+                initialPurgeData: cli.PurgeData,
+                showShowcaseAutoCloseMs: 3000,
+                initialProfileId: cli.ProfileId,
+                initialSecondaryDir: cli.SecondaryDir,
+                secondaryFlagName: cli.SecondaryFlagName,
+                initialMigrateLegacy: cli.MigrateLegacy);
             Application.Run(showcaseWizard);
             return showcaseWizard.ExitCode;
         }
 
-        bool isNonInteractive = silent || ctx.Headless || ctx.TestMode;
+        bool isNonInteractive = cli.Silent || ctx.Headless || ctx.TestMode;
 
-        if (!isNonInteractive && !dryRun && !verifyOnly && string.IsNullOrWhiteSpace(installDir) && OperatingSystem.IsWindows())
+        if (!isNonInteractive && !cli.DryRun && !cli.VerifyOnly && string.IsNullOrWhiteSpace(cli.InstallDir) && OperatingSystem.IsWindows())
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -217,13 +125,17 @@ public static class StandardInstallerHost
             using var wizard = new InstallerWizardForm(
                 engine: guiEngine,
                 ctx: ctx,
-                initialInstallDir: installDir,
-                externalPayloadPath: payloadPath,
-                isUninstallMode: uninstall,
-                initialCreateShortcuts: !noShortcuts,
+                initialInstallDir: cli.InstallDir,
+                externalPayloadPath: cli.PayloadPath,
+                isUninstallMode: cli.Uninstall,
+                initialCreateShortcuts: !cli.NoShortcuts,
                 initialAutoStart: effectiveAutoStart,
-                initialLaunchAfter: !noLaunch,
-                initialPurgeData: purgeData);
+                initialLaunchAfter: !cli.NoLaunch,
+                initialPurgeData: cli.PurgeData,
+                initialProfileId: cli.ProfileId,
+                initialSecondaryDir: cli.SecondaryDir,
+                secondaryFlagName: cli.SecondaryFlagName,
+                initialMigrateLegacy: cli.MigrateLegacy);
             Application.Run(wizard);
             return wizard.ExitCode;
         }
@@ -232,17 +144,17 @@ public static class StandardInstallerHost
             descriptor,
             ctx,
             resolvedAssembly,
-            installDir,
-            payloadPath,
-            uninstall,
-            purgeData,
-            verifyOnly,
-            noShortcuts,
+            cli.InstallDir,
+            cli.PayloadPath,
+            cli.Uninstall,
+            cli.PurgeData,
+            cli.VerifyOnly,
+            cli.NoShortcuts,
             effectiveAutoStart,
-            launchAfter,
-            noLaunch,
-            silent,
-            dryRun).GetAwaiter().GetResult();
+            cli.LaunchAfter,
+            cli.NoLaunch,
+            cli.Silent,
+            cli.DryRun).GetAwaiter().GetResult();
     }
 
     private static async Task<int> RunCliFlowAsync(
@@ -320,16 +232,6 @@ public static class StandardInstallerHost
         }
     }
 
-    private static string RequireNextValue(string[] args, ref int index, string flag)
-    {
-        if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
-        {
-            throw new ArgumentException($"Option '{flag}' requires a value.");
-        }
-        index++;
-        return args[index].Trim();
-    }
-
     private static void PrintBanner(InstallerAppDescriptor descriptor)
     {
         Console.WriteLine("=================================================================");
@@ -340,6 +242,6 @@ public static class StandardInstallerHost
 
     private static void PrintUsage(InstallerAppDescriptor descriptor)
     {
-        Console.WriteLine($"Usage: {descriptor.ProductName}-Setup.exe [--install-dir <dir>] [--silent] [--verify] [--uninstall] [--purge-data] [--test-mode] [--visible-test] [--data-dir <dir>] [--log-dir <dir>] [--config <path>]");
+        Console.WriteLine($"Usage: {descriptor.ProductName}-Setup.exe [--install-dir <dir>] [--profile <lightweight|full>] [--reengine-dir <dir>] [--suite-dir <dir>] [--sandbox-root <dir>] [--migrate-legacy] [--silent] [--verify] [--uninstall] [--purge-data] [--test-mode] [--visible-test] [--data-dir <dir>] [--log-dir <dir>] [--config <path>]");
     }
 }

@@ -60,24 +60,39 @@ public static class SevenZipAndZipInspector
         string? sevenZipExePath = null,
         CancellationToken ct = default)
     {
-        string ext = Path.GetExtension(archivePath);
-        if (string.Equals(ext, ".zip", StringComparison.OrdinalIgnoreCase))
+        if (archivePath.Contains("::", StringComparison.Ordinal))
         {
-            var list = new List<InspectedArchiveEntry>();
-            using var zip = OpenZipReadShared(archivePath);
-            foreach (var entry in zip.Entries)
+            string[] parts = archivePath.Split("::", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length > 1)
             {
-                bool isDir = string.IsNullOrEmpty(entry.Name) && (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'));
-                list.Add(new InspectedArchiveEntry
-                {
-                    Path = entry.FullName.Replace('\\', '/').TrimEnd('/'),
-                    SizeBytes = entry.Length,
-                    PackedBytes = entry.CompressedLength,
-                    Crc32 = isDir ? "" : entry.Crc32.ToString("X8"),
-                    IsFolder = isDir
-                });
+                return await WithNestedArchiveResolvedAsync(
+                    parts[0],
+                    string.Join("::", parts, 1, parts.Length - 1) + "::",
+                    sevenZipExePath,
+                    (resolvedArchive, _) => ListArchiveEntriesFastAsync(resolvedArchive, sevenZipExePath, ct),
+                    ct).ConfigureAwait(false);
             }
-            return list;
+        }
+
+        if (string.Equals(Path.GetExtension(archivePath), ".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                using var zip = OpenZipReadShared(archivePath);
+                return zip.Entries.Select(entry =>
+                {
+                    bool isDir = string.IsNullOrEmpty(entry.Name) && (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'));
+                    return new InspectedArchiveEntry
+                    {
+                        Path = entry.FullName.Replace('\\', '/').TrimEnd('/'),
+                        SizeBytes = entry.Length,
+                        PackedBytes = entry.CompressedLength,
+                        Crc32 = isDir ? "" : entry.Crc32.ToString("X8"),
+                        IsFolder = isDir
+                    };
+                }).ToList();
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidDataException) { }
         }
 
         string exe = ResolveSevenZipExe(sevenZipExePath);
@@ -91,7 +106,6 @@ public static class SevenZipAndZipInspector
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8
         };
-
         using var proc = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to launch '{exe}'.");
         try
         {
@@ -101,64 +115,46 @@ public static class SevenZipAndZipInspector
             await proc.WaitForExitAsync(ct);
             return ParseSevenZipSltOutput(await stdoutTask);
         }
-        catch
-        {
-            TryKillProcessTree(proc);
-            throw;
-        }
+        catch { TryKillProcessTree(proc); throw; }
     }
 
     public static List<InspectedArchiveEntry> ParseSevenZipSltOutput(string stdout)
     {
         var results = new List<InspectedArchiveEntry>();
-        if (string.IsNullOrWhiteSpace(stdout))
-            return results;
+        if (string.IsNullOrWhiteSpace(stdout)) return results;
 
         bool inEntriesSection = false;
         InspectedArchiveEntry? current = null;
-
         foreach (string rawLine in stdout.Split('\n'))
         {
             string line = rawLine.TrimEnd('\r');
             if (!inEntriesSection)
             {
-                if (line.StartsWith("----------", StringComparison.Ordinal))
-                    inEntriesSection = true;
+                if (line.StartsWith("----------", StringComparison.Ordinal)) inEntriesSection = true;
                 continue;
             }
-
             if (string.IsNullOrWhiteSpace(line))
             {
-                if (current != null && !string.IsNullOrWhiteSpace(current.Path))
-                    results.Add(current);
+                if (current != null && !string.IsNullOrWhiteSpace(current.Path)) results.Add(current);
                 current = null;
                 continue;
             }
 
             int eq = line.IndexOf(" = ", StringComparison.Ordinal);
             if (eq <= 0) continue;
-
             string key = line[..eq].Trim();
             string val = line[(eq + 3)..].Trim();
             current ??= new InspectedArchiveEntry();
 
-            if (key.Equals("Path", StringComparison.OrdinalIgnoreCase))
-                current.Path = val.Replace('\\', '/');
-            else if (key.Equals("Size", StringComparison.OrdinalIgnoreCase) && long.TryParse(val, out long sz))
-                current.SizeBytes = sz;
-            else if (key.Equals("Packed Size", StringComparison.OrdinalIgnoreCase) && long.TryParse(val, out long psz))
-                current.PackedBytes = psz;
-            else if (key.Equals("CRC", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(val))
-                current.Crc32 = val.PadLeft(8, '0').ToUpperInvariant();
-            else if (key.Equals("Folder", StringComparison.OrdinalIgnoreCase))
-                current.IsFolder = val == "+";
-            else if (key.Equals("Attributes", StringComparison.OrdinalIgnoreCase) && val.StartsWith('D'))
-                current.IsFolder = true;
+            if (key.Equals("Path", StringComparison.OrdinalIgnoreCase)) current.Path = val.Replace('\\', '/');
+            else if (key.Equals("Size", StringComparison.OrdinalIgnoreCase) && long.TryParse(val, out long sz)) current.SizeBytes = sz;
+            else if (key.Equals("Packed Size", StringComparison.OrdinalIgnoreCase) && long.TryParse(val, out long psz)) current.PackedBytes = psz;
+            else if (key.Equals("CRC", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(val)) current.Crc32 = val.PadLeft(8, '0').ToUpperInvariant();
+            else if (key.Equals("Folder", StringComparison.OrdinalIgnoreCase)) current.IsFolder = val == "+";
+            else if (key.Equals("Attributes", StringComparison.OrdinalIgnoreCase) && val.StartsWith('D')) current.IsFolder = true;
         }
 
-        if (current != null && !string.IsNullOrWhiteSpace(current.Path))
-            results.Add(current);
-
+        if (current != null && !string.IsNullOrWhiteSpace(current.Path)) results.Add(current);
         return results;
     }
 
@@ -171,6 +167,16 @@ public static class SevenZipAndZipInspector
         CancellationToken ct = default,
         Action<long, long>? onBytesRead = null)
     {
+        if (innerEntryPath.Contains("::", StringComparison.Ordinal))
+        {
+            return await WithNestedArchiveResolvedAsync(
+                archivePath,
+                innerEntryPath,
+                sevenZipExePath,
+                (resolvedArchive, leafEntry) => HashArchiveInnerEntryAsync(resolvedArchive, leafEntry, knownSize, sevenZipExePath, headerRules, ct, onBytesRead),
+                ct).ConfigureAwait(false);
+        }
+
         string ext = Path.GetExtension(archivePath);
         string innerExt = Path.GetExtension(innerEntryPath);
 
@@ -179,23 +185,15 @@ public static class SevenZipAndZipInspector
             using var zip = OpenZipReadShared(archivePath);
             var entry = FindZipEntry(zip, innerEntryPath)
                 ?? throw new FileNotFoundException($"Inner ZIP entry '{innerEntryPath}' not found in '{archivePath}'.");
-            await using var entryStream = entry.Open();
-            return await SinglePassStreamHasher.HashStreamSinglePassAsync(entryStream, entry.Length, innerExt, headerRules, includeSha256: false, ct, onBytesRead);
+            try
+            {
+                await using var entryStream = entry.Open();
+                return await SinglePassStreamHasher.HashStreamSinglePassAsync(entryStream, entry.Length, innerExt, headerRules, includeSha256: false, ct, onBytesRead);
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidDataException) { }
         }
 
-        string exe = ResolveSevenZipExe(sevenZipExePath);
-        string argEntry = innerEntryPath.Replace('/', '\\');
-        var psi = new ProcessStartInfo
-        {
-            FileName = exe,
-            Arguments = $"x -so \"{archivePath}\" \"{argEntry}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var proc = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to launch '{exe}'.");
+        using var proc = StartSevenZipExtract(sevenZipExePath, archivePath, innerEntryPath);
         try
         {
             Task<string> stderrTask = proc.StandardError.ReadToEndAsync(ct);
@@ -204,11 +202,7 @@ public static class SevenZipAndZipInspector
             await proc.WaitForExitAsync(ct);
             return hashes;
         }
-        catch
-        {
-            TryKillProcessTree(proc);
-            throw;
-        }
+        catch { TryKillProcessTree(proc); throw; }
     }
 
     public static async Task<string?> ReadArchiveTextEntryAsync(
@@ -229,44 +223,36 @@ public static class SevenZipAndZipInspector
         int maxBytes = 16 * 1024 * 1024,
         CancellationToken ct = default)
     {
-        string ext = Path.GetExtension(archivePath);
-        if (string.Equals(ext, ".zip", StringComparison.OrdinalIgnoreCase))
+        if (innerEntryPath.Contains("::", StringComparison.Ordinal))
+        {
+            return await WithNestedArchiveResolvedAsync(
+                archivePath,
+                innerEntryPath,
+                sevenZipExePath,
+                (resolvedArchive, leafEntry) => ReadArchiveBinaryEntryAsync(resolvedArchive, leafEntry, sevenZipExePath, maxBytes, ct),
+                ct).ConfigureAwait(false);
+        }
+
+        if (string.Equals(Path.GetExtension(archivePath), ".zip", StringComparison.OrdinalIgnoreCase))
         {
             using var zip = OpenZipReadShared(archivePath);
             var entry = FindZipEntry(zip, innerEntryPath);
             if (entry == null) return null;
-            await using var s = entry.Open();
-            using var ms = new MemoryStream();
-            byte[] buf = new byte[16384];
-            int read;
-            while (ms.Length < maxBytes && (read = await s.ReadAsync(buf.AsMemory(0, (int)Math.Min(buf.Length, maxBytes - ms.Length)), ct)) > 0)
-                ms.Write(buf, 0, read);
-            return ms.ToArray();
+            try
+            {
+                await using var s = entry.Open();
+                return await ReadStreamBoundedAsync(s, maxBytes, ct);
+            }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidDataException) { }
         }
 
-        string exe = ResolveSevenZipExe(sevenZipExePath);
-        string argEntry = innerEntryPath.Replace('/', '\\');
-        var psi = new ProcessStartInfo { FileName = exe, Arguments = $"x -so \"{archivePath}\" \"{argEntry}\"", RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-        using var proc = Process.Start(psi);
-        if (proc == null) return null;
-
-        using var outMs = new MemoryStream();
+        using var proc = StartSevenZipExtract(sevenZipExePath, archivePath, innerEntryPath);
         try
         {
             _ = proc.StandardError.ReadToEndAsync(CancellationToken.None);
-            byte[] chunk = new byte[16384];
-            int n;
-            while (outMs.Length < maxBytes &&
-                   (n = await proc.StandardOutput.BaseStream.ReadAsync(chunk.AsMemory(0, (int)Math.Min(chunk.Length, maxBytes - outMs.Length)), ct)) > 0)
-            {
-                outMs.Write(chunk, 0, n);
-            }
+            return await ReadStreamBoundedAsync(proc.StandardOutput.BaseStream, maxBytes, ct);
         }
-        finally
-        {
-            TryKillProcessTree(proc);
-        }
-        return outMs.ToArray();
+        finally { TryKillProcessTree(proc); }
     }
 
     public static async Task<string> ExtractSingleArchiveEntryToFileAsync(
@@ -276,6 +262,16 @@ public static class SevenZipAndZipInspector
         string? sevenZipExePath = null,
         CancellationToken ct = default)
     {
+        if (innerEntryPath.Contains("::", StringComparison.Ordinal))
+        {
+            return await WithNestedArchiveResolvedAsync(
+                archivePath,
+                innerEntryPath,
+                sevenZipExePath,
+                (resolvedArchive, leafEntry) => ExtractSingleArchiveEntryToFileAsync(resolvedArchive, leafEntry, destinationFilePath, sevenZipExePath, ct),
+                ct).ConfigureAwait(false);
+        }
+
         string? destDir = Path.GetDirectoryName(destinationFilePath);
         if (!string.IsNullOrWhiteSpace(destDir))
             Directory.CreateDirectory(destDir);
@@ -287,19 +283,30 @@ public static class SevenZipAndZipInspector
         {
             if (string.Equals(ext, ".zip", StringComparison.OrdinalIgnoreCase))
             {
-                using var zip = OpenZipReadShared(archivePath);
-                var entry = FindZipEntry(zip, innerEntryPath) ?? throw new FileNotFoundException($"Inner ZIP entry '{innerEntryPath}' not found in '{archivePath}'.");
-                await using (var s = entry.Open())
-                await using (var outFs = new FileStream(partial, FileMode.Create, FileAccess.Write, FileShare.None, 131072, useAsync: true))
-                    await s.CopyToAsync(outFs, 131072, ct);
-                File.Move(partial, destinationFilePath, overwrite: true);
-                return destinationFilePath;
+                bool extractedByZip = false;
+                using (var zip = OpenZipReadShared(archivePath))
+                {
+                    var entry = FindZipEntry(zip, innerEntryPath) ?? throw new FileNotFoundException($"Inner ZIP entry '{innerEntryPath}' not found in '{archivePath}'.");
+                    try
+                    {
+                        await using (var s = entry.Open())
+                        await using (var outFs = new FileStream(partial, FileMode.Create, FileAccess.Write, FileShare.None, 131072, useAsync: true))
+                            await s.CopyToAsync(outFs, 131072, ct);
+                        extractedByZip = true;
+                    }
+                    catch (Exception ex) when (ex is NotSupportedException or InvalidDataException)
+                    {
+                        // Method 14 (LZMA), Deflate64, or BZip2 inside .zip: fall back to 7z.exe.
+                    }
+                }
+                if (extractedByZip)
+                {
+                    File.Move(partial, destinationFilePath, overwrite: true);
+                    return destinationFilePath;
+                }
             }
 
-            string exe = ResolveSevenZipExe(sevenZipExePath);
-            string argEntry = innerEntryPath.Replace('/', '\\');
-            var psi = new ProcessStartInfo { FileName = exe, Arguments = $"x -so \"{archivePath}\" \"{argEntry}\"", RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-            using var proc = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to launch '{exe}'.");
+            using var proc = StartSevenZipExtract(sevenZipExePath, archivePath, innerEntryPath);
             string stderr;
             try
             {
@@ -374,6 +381,61 @@ public static class SevenZipAndZipInspector
             new[] { @"C:\Program Files\7-Zip", @"C:\Program Files (x86)\7-Zip" });
 
         return resolved.IsAvailable && !string.IsNullOrWhiteSpace(resolved.ResolvedPath) ? resolved.ResolvedPath : "7z.exe";
+    }
+
+    private static async Task<T> WithNestedArchiveResolvedAsync<T>(
+        string archivePath,
+        string innerEntryPath,
+        string? sevenZipExePath,
+        Func<string, string, Task<T>> leafAction,
+        CancellationToken ct)
+    {
+        string[] parts = innerEntryPath.Split("::", StringSplitOptions.TrimEntries);
+        string tempDir = Path.Combine(Path.GetTempPath(), "fnd_nested_" + Guid.NewGuid().ToString("N")[..12]);
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string currentArchive = archivePath;
+            for (int i = 0; i < parts.Length - 1; i++)
+            {
+                if (string.IsNullOrWhiteSpace(parts[i])) continue;
+                string leafName = Path.GetFileName(parts[i].Replace('\\', '/'));
+                string nextArchive = Path.Combine(tempDir, $"{i}_{leafName}");
+                await ExtractSingleArchiveEntryToFileAsync(currentArchive, parts[i], nextArchive, sevenZipExePath, ct).ConfigureAwait(false);
+                currentArchive = nextArchive;
+            }
+            return await leafAction(currentArchive, parts[^1]).ConfigureAwait(false);
+        }
+        finally
+        {
+            try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    private static Process StartSevenZipExtract(string? sevenZipExePath, string archivePath, string innerEntryPath)
+    {
+        string exe = ResolveSevenZipExe(sevenZipExePath);
+        string argEntry = innerEntryPath.Replace('/', '\\');
+        var psi = new ProcessStartInfo
+        {
+            FileName = exe,
+            Arguments = $"x -so \"{archivePath}\" \"{argEntry}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        return Process.Start(psi) ?? throw new InvalidOperationException($"Failed to launch '{exe}'.");
+    }
+
+    private static async Task<byte[]> ReadStreamBoundedAsync(Stream s, int maxBytes, CancellationToken ct)
+    {
+        using var ms = new MemoryStream();
+        byte[] buf = new byte[16384];
+        int read;
+        while (ms.Length < maxBytes && (read = await s.ReadAsync(buf.AsMemory(0, (int)Math.Min(buf.Length, maxBytes - ms.Length)), ct)) > 0)
+            ms.Write(buf, 0, read);
+        return ms.ToArray();
     }
 
     public static void TryKillProcessTree(Process proc)

@@ -79,6 +79,23 @@ public sealed partial class InstallerWizardForm
         }
     }
 
+    private void OnSecondaryBrowseClicked(object? sender, EventArgs e)
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = $"Select {_secondaryPickerOptions?.Label ?? "companion directory"}",
+            UseDescriptionForTitle = true,
+            SelectedPath = Directory.Exists(_txtSecondaryDir.Text)
+                ? _txtSecondaryDir.Text
+                : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+        };
+
+        if (dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
+        {
+            _txtSecondaryDir.Text = dialog.SelectedPath;
+        }
+    }
+
     private async Task OnPrimaryActionClickedAsync()
     {
         if (_completedSuccessfully)
@@ -102,8 +119,13 @@ public sealed partial class InstallerWizardForm
 
         _txtInstallDir.Enabled = false;
         _btnBrowse.Enabled = false;
+        _txtSecondaryDir.Enabled = false;
+        _btnSecondaryBrowse.Enabled = false;
+        _rbProfileLightweight.Enabled = false;
+        _rbProfileFull.Enabled = false;
         _chkShortcuts.Enabled = false;
         _chkAutoStart.Enabled = false;
+        _chkMigrateLegacy.Enabled = false;
         _chkPurgeData.Enabled = false;
         _btnPrimary.Enabled = false;
 
@@ -163,6 +185,10 @@ public sealed partial class InstallerWizardForm
                 }
                 else
                 {
+                    if (_coreEngine != null && MigrateLegacyChecked && !string.IsNullOrWhiteSpace(_legacyDetectedPath))
+                    {
+                        await _coreEngine.MigrateLegacyInstallAsync(_legacyDetectedPath, targetDir, optInConfirmed: true, cancellationToken: _cts.Token);
+                    }
                     using var emptyZip = new MemoryStream();
                     using (new ZipArchive(emptyZip, ZipArchiveMode.Create, leaveOpen: true)) { }
                     emptyZip.Position = 0;
@@ -225,8 +251,13 @@ public sealed partial class InstallerWizardForm
     {
         _txtInstallDir.Enabled = true;
         _btnBrowse.Enabled = true;
+        _txtSecondaryDir.Enabled = _hasSecondaryPicker;
+        _btnSecondaryBrowse.Enabled = _hasSecondaryPicker;
+        _rbProfileLightweight.Enabled = !_isUninstallMode;
+        _rbProfileFull.Enabled = !_isUninstallMode;
         _chkShortcuts.Enabled = !_isUninstallMode;
         _chkAutoStart.Enabled = _allowAutoStart && !_isUninstallMode;
+        _chkMigrateLegacy.Enabled = _showLegacyMigration;
         _chkPurgeData.Enabled = true;
         _btnPrimary.Enabled = true;
     }

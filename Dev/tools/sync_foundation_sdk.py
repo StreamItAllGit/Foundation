@@ -1,20 +1,25 @@
 # @module: Foundation.Tools.SyncFoundationSdk
-# @purpose: Publishes complete Foundation SDK snapshots (.dll, .xml, WebAssets, foundation_core, tools, sdk-manifest.json) to SharedLibs/Foundation/vX.Y.Z, SharedLibs/Foundation/Latest, and Builds/vX.Y.Z, and syncs consumer projects (--sync-consumer).
-# @depends-on: argparse, datetime, hashlib, json, pathlib, shutil
-# @exports: publish_sdk, sync_consumer, main
+# @purpose: Publishes complete Foundation SDK snapshots (.dll, .xml, WebAssets, foundation_core, tools, LICENSE, sdk-manifest.json) to SharedLibs/Foundation/vX.Y.Z, SharedLibs/Foundation/Latest, and Builds/vX.Y.Z, and syncs consumer projects (--sync-consumer).
+# @depends-on: argparse, datetime, hashlib, json, os, pathlib, shutil
+# @exports: publish_sdk, sync_consumer, purge_stale_pdbs, stage_clean_release_bundle, main
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import shutil
+import stat
 from datetime import datetime, timezone
 from pathlib import Path
 
 FOUNDATION_ROOT = Path(__file__).resolve().parents[2]
 DEV_ROOT = FOUNDATION_ROOT / "Dev"
-SHARED_LIBS_ROOT = Path(r"<PROJECTS_ROOT>\SharedLibs\Foundation")
+SHARED_LIBS_ROOT = Path(
+    os.environ.get("FOUNDATION_SHARED_LIBS_ROOT")
+    or (FOUNDATION_ROOT.parent.parent / "SharedLibs" / "Foundation")
+)
 
 
 def _sha256_file(path: Path) -> str:
@@ -41,13 +46,15 @@ def _copy_tree_contents(src: Path, dst: Path) -> None:
             shutil.copy2(item, target)
 
 
-def sync_web_into_webassets() -> Path:
-    ui_dir = DEV_ROOT / "src" / "Foundation.UI"
-    web_src = ui_dir / "Web"
-    web_assets = ui_dir / "WebAssets"
-    _copy_tree_contents(web_src, web_assets)
-    _copy_tree_contents(web_src, web_assets / "Web")
-    return web_assets
+def purge_stale_pdbs(root_dir: Path) -> int:
+    removed = 0
+    if not root_dir.exists():
+        return 0
+    for pdb_file in root_dir.rglob("*.pdb"):
+        if pdb_file.is_file():
+            pdb_file.unlink()
+            removed += 1
+    return removed
 
 
 def collect_compiled_binaries(configuration: str = "Release") -> list[Path]:
@@ -62,7 +69,7 @@ def collect_compiled_binaries(configuration: str = "Release") -> list[Path]:
             if not bin_cfg.exists():
                 continue
             for tfm_dir in sorted(bin_cfg.glob("net8.0*")):
-                for ext in ("*.dll", "*.xml", "*.pdb", "*.deps.json"):
+                for ext in ("*.dll", "*.xml", "*.deps.json"):
                     for f in tfm_dir.glob(ext):
                         if f.name.startswith("Foundation.") and f.name not in selected:
                             selected[f.name] = f
@@ -74,17 +81,26 @@ def _populate_sdk_target(
     version: str,
     ui_version: str,
     binaries: list[Path],
+    web_src: Path,
     web_assets: Path,
     py_core: Path,
     tools_dir: Path,
 ) -> dict[str, object]:
     target_dir.mkdir(parents=True, exist_ok=True)
+    purge_stale_pdbs(target_dir)
+
     for bin_file in binaries:
         dst = target_dir / bin_file.name
         if bin_file.resolve() != dst.resolve():
             shutil.copy2(bin_file, dst)
 
-    _copy_tree_contents(web_assets, target_dir / "WebAssets")
+    license_file = FOUNDATION_ROOT / "LICENSE"
+    if license_file.exists():
+        shutil.copy2(license_file, target_dir / "LICENSE")
+
+    target_web_assets = target_dir / "WebAssets"
+    _copy_tree_contents(web_assets, target_web_assets)
+    _copy_tree_contents(web_src, target_web_assets)
     _copy_tree_contents(py_core, target_dir / "foundation_core")
     _copy_tree_contents(tools_dir, target_dir / "tools")
 
@@ -114,13 +130,46 @@ def _populate_sdk_target(
     return manifest
 
 
-def publish_sdk(version: str = "0.3.1", ui_version: str = "0.2.0", configuration: str = "Release") -> dict[str, object]:
+def _handle_remove_readonly(func, path, exc_info):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def stage_clean_release_bundle(version: str = "0.4.0") -> Path:
+    latest_dir = FOUNDATION_ROOT / "Releases" / "Latest"
+    latest_dir.mkdir(parents=True, exist_ok=True)
+
+    keep_names = {"README.md", "FEATURES.md", "RELEASE_NOTES.md", "CHANGELOG.md", "LICENSE", "SHA256SUMS.txt"}
+    for item in list(latest_dir.iterdir()):
+        if item.is_dir():
+            shutil.rmtree(item, onexc=_handle_remove_readonly)
+        elif item.is_file() and item.name not in keep_names and not (item.name.startswith("Foundation-v") and item.name.endswith(".zip")):
+            os.chmod(item, stat.S_IWRITE)
+            item.unlink()
+
+    license_file = FOUNDATION_ROOT / "LICENSE"
+    if license_file.exists():
+        shutil.copy2(license_file, latest_dir / "LICENSE")
+
+    lines: list[str] = []
+    for item in sorted(latest_dir.iterdir(), key=lambda p: p.name.lower()):
+        if item.is_file() and item.name != "SHA256SUMS.txt":
+            lines.append(f"{_sha256_file(item).upper()}  {item.name}")
+    (latest_dir / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return latest_dir
+
+
+def publish_sdk(version: str = "0.4.0", ui_version: str = "0.4.0", configuration: str = "Release") -> dict[str, object]:
     clean_ver = version.lstrip("v")
     ver_tag = f"v{clean_ver}"
-    web_assets = sync_web_into_webassets()
+    ui_dir = DEV_ROOT / "src" / "Foundation.UI"
+    web_src = ui_dir / "Web"
+    web_assets = ui_dir / "WebAssets"
     binaries = collect_compiled_binaries(configuration)
     py_core = DEV_ROOT / "src" / "foundation_core"
     tools_dir = DEV_ROOT / "tools"
+
+    purge_stale_pdbs(FOUNDATION_ROOT / "Builds")
 
     targets = [
         SHARED_LIBS_ROOT / ver_tag,
@@ -130,8 +179,9 @@ def publish_sdk(version: str = "0.3.1", ui_version: str = "0.2.0", configuration
     manifest: dict[str, object] = {}
     for target in targets:
         manifest = _populate_sdk_target(
-            target, clean_ver, ui_version, binaries, web_assets, py_core, tools_dir
+            target, clean_ver, ui_version, binaries, web_src, web_assets, py_core, tools_dir
         )
+    stage_clean_release_bundle(clean_ver)
     return manifest
 
 
@@ -174,8 +224,8 @@ def sync_consumer(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Foundation SDK Publisher & Consumer Sync Tool")
-    parser.add_argument("--version", default="0.3.1", help="Foundation SDK SemVer (default: 0.3.1)")
-    parser.add_argument("--ui-version", default="0.2.0", help="Foundation.UI SemVer (default: 0.2.0)")
+    parser.add_argument("--version", default="0.4.0", help="Foundation SDK SemVer (default: 0.4.0)")
+    parser.add_argument("--ui-version", default="0.4.0", help="Foundation.UI SemVer (default: 0.4.0)")
     parser.add_argument("--configuration", default="Release", help="Build configuration (Release/Debug)")
     parser.add_argument("--publish", action="store_true", help="Publish SDK to SharedLibs and Builds")
     parser.add_argument("--sync-consumer", type=Path, help="Consumer project root to sync from SharedLibs")

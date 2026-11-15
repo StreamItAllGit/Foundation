@@ -230,8 +230,8 @@ public sealed class FoundationV031PrimitivesTests : IDisposable
             Assert.False(wizard.AutoStartCheckBox.Visible);
             Assert.False(wizard.AutoStartCheckBox.Enabled);
             Assert.False(wizard.AutoStartCheckBox.Checked);
-            Assert.Equal(42, wizard.ShortcutsCheckBox.Top);
-            Assert.Equal(74, wizard.LaunchAfterCheckBox.Top);
+            Assert.Equal(62, wizard.ShortcutsCheckBox.Top);
+            Assert.Equal(88, wizard.LaunchAfterCheckBox.Top);
         }
 
         var installRes = await engine.InstallAsync(createShortcuts: true, registerAutoStart: true, externalPayloadPath: payloadZip);
@@ -271,7 +271,8 @@ public sealed class FoundationV031PrimitivesTests : IDisposable
 
         var noDataCtx = new InstallerSandboxContext(testMode: true, envPrefix: desc.EnvPrefix);
         var noDataEngine = new InstallerEngine(desc, noDataCtx);
-        Assert.Throws<InvalidOperationException>(() => noDataEngine.ValidateAndNormalizeInstallDirectory(@"<PROGRAMS_ROOT>\UnsafeTarget"));
+        string unsafeHostTarget = Path.Combine(Path.GetPathRoot(Environment.SystemDirectory)!, "Programs", "UnsafeTarget");
+        Assert.Throws<InvalidOperationException>(() => noDataEngine.ValidateAndNormalizeInstallDirectory(unsafeHostTarget));
 
         using var showcaseWizard = new InstallerWizardForm(noDataEngine, noDataCtx, initialInstallDir: safeInstallDir, showShowcaseAutoCloseMs: 250);
         Assert.False(showcaseWizard.PrimaryButton.Enabled);

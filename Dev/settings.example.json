@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "taskBackboneDataSourceId": "",
+  "projectsHubPageId": "",
+  "notes": "Copy to <dataDir>/notion.config.json (never commit live workspace IDs)."
+}

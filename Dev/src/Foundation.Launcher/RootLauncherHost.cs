@@ -4,6 +4,7 @@
 // @exports: RootLauncherHost
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -13,6 +14,28 @@ namespace Foundation.Launcher;
 public static class RootLauncherHost
 {
     private const int ATTACH_PARENT_PROCESS = -1;
+
+    private static readonly HashSet<string> SyncWaitFlags = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--version", "-v", "--help", "-h", "/?", "help",
+        "--headless", "--dry-run", "--wait", "--open",
+        "--check-updates", "--register-assoc", "--visible-test", "--test-mode"
+    };
+
+    private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--port", "--ui", "--data-dir", "--config", "--log-dir", "--feed", "--open",
+        "--frames", "--input-script", "--profile", "--install-dir", "--reengine-dir",
+        "--suite-dir", "--sandbox-root", "--rom", "--manifest", "--output", "--out",
+        "--file", "--path"
+    };
+
+    private static readonly HashSet<string> PathValueOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--open", "--data-dir", "--config", "--log-dir", "--install-dir", "--reengine-dir",
+        "--suite-dir", "--sandbox-root", "--input-script", "--rom", "--manifest",
+        "--output", "--out", "--file", "--path"
+    };
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(int dwProcessId);
@@ -88,6 +111,9 @@ public static class RootLauncherHost
             catch { }
         }
 
+        string callerCwd = Environment.CurrentDirectory;
+        string[] normalizedArgs = NormalizeRelativePathArgs(args, callerCwd);
+
         var psi = new ProcessStartInfo
         {
             FileName = appExe,
@@ -95,7 +121,7 @@ public static class RootLauncherHost
             UseShellExecute = false
         };
 
-        foreach (string arg in args)
+        foreach (string arg in normalizedArgs)
         {
             psi.ArgumentList.Add(arg);
         }
@@ -108,35 +134,137 @@ public static class RootLauncherHost
 
         if (isCliOrSyncWait)
         {
-            proc.WaitForExit();
-            return proc.ExitCode;
+            bool interrupted = false;
+            ConsoleCancelEventHandler handler = (_, e) =>
+            {
+                e.Cancel = true;
+                interrupted = true;
+                try
+                {
+                    if (!proc.HasExited)
+                    {
+                        proc.Kill(entireProcessTree: true);
+                    }
+                }
+                catch { }
+            };
+
+            Console.CancelKeyPress += handler;
+            try
+            {
+                proc.WaitForExit();
+                return interrupted ? 130 : proc.ExitCode;
+            }
+            finally
+            {
+                Console.CancelKeyPress -= handler;
+            }
         }
 
         return 0;
     }
 
-    public static bool ShouldWaitForChild(string[] args)
+    public static string[] NormalizeRelativePathArgs(string[]? args, string callerCwd)
+    {
+        if (args == null || args.Length == 0)
+            return Array.Empty<string>();
+
+        string[] result = new string[args.Length];
+        for (int i = 0; i < args.Length; i++)
+        {
+            string raw = args[i];
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                result[i] = raw;
+                continue;
+            }
+
+            int eq = raw.IndexOf('=', StringComparison.Ordinal);
+            if (eq > 0 && raw.StartsWith("-", StringComparison.Ordinal))
+            {
+                string opt = raw[..eq];
+                string val = raw[(eq + 1)..];
+                result[i] = PathValueOptions.Contains(opt)
+                    ? $"{opt}={RebasePathIfRelative(val, callerCwd)}"
+                    : raw;
+                continue;
+            }
+
+            if (raw.StartsWith("-", StringComparison.Ordinal))
+            {
+                result[i] = raw;
+                if (ValueOptions.Contains(raw) && i + 1 < args.Length)
+                {
+                    i++;
+                    string nextVal = args[i];
+                    result[i] = PathValueOptions.Contains(raw)
+                        ? RebasePathIfRelative(nextVal, callerCwd)
+                        : nextVal;
+                }
+                continue;
+            }
+
+            result[i] = IsLikelyRelativeFileArg(raw, callerCwd)
+                ? RebasePathIfRelative(raw, callerCwd)
+                : raw;
+        }
+
+        return result;
+    }
+
+    public static bool ShouldWaitForChild(string[]? args)
     {
         if (args == null || args.Length == 0)
             return false;
 
-        foreach (string raw in args)
+        for (int i = 0; i < args.Length; i++)
         {
-            string a = raw.Trim();
-            if (a.Equals("--version", StringComparison.OrdinalIgnoreCase) ||
-                a.Equals("-v", StringComparison.OrdinalIgnoreCase) ||
-                a.Equals("--help", StringComparison.OrdinalIgnoreCase) ||
-                a.Equals("-h", StringComparison.OrdinalIgnoreCase) ||
-                a.Equals("/?", StringComparison.OrdinalIgnoreCase) ||
-                a.Equals("help", StringComparison.OrdinalIgnoreCase) ||
-                a.Equals("--headless", StringComparison.OrdinalIgnoreCase) ||
-                a.Equals("--dry-run", StringComparison.OrdinalIgnoreCase))
+            string a = args[i].Trim();
+            if (string.IsNullOrEmpty(a)) continue;
+
+            int eq = a.IndexOf('=', StringComparison.Ordinal);
+            string flagName = eq > 0 && a.StartsWith("-", StringComparison.Ordinal) ? a[..eq] : a;
+
+            if (SyncWaitFlags.Contains(flagName))
+            {
+                return true;
+            }
+
+            if (eq < 0 && ValueOptions.Contains(flagName))
+            {
+                i++;
+                continue;
+            }
+
+            if (!a.StartsWith("-", StringComparison.Ordinal))
             {
                 return true;
             }
         }
 
-        string first = args[0].Trim();
-        return !first.StartsWith("-", StringComparison.Ordinal);
+        return false;
+    }
+
+    private static string RebasePathIfRelative(string value, string callerCwd)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return value;
+        if (Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) && !uri.IsFile)
+        {
+            return value;
+        }
+        if (Path.IsPathRooted(value)) return value;
+        return Path.GetFullPath(value, callerCwd);
+    }
+
+    private static bool IsLikelyRelativeFileArg(string arg, string callerCwd)
+    {
+        if (Uri.TryCreate(arg, UriKind.Absolute, out Uri? uri) && !uri.IsFile) return false;
+        if (Path.IsPathRooted(arg)) return false;
+        if (arg.Contains(Path.DirectorySeparatorChar) || arg.Contains(Path.AltDirectorySeparatorChar) || arg.StartsWith('.'))
+        {
+            return true;
+        }
+        string candidate = Path.GetFullPath(arg, callerCwd);
+        return File.Exists(candidate) || Directory.Exists(candidate);
     }
 }

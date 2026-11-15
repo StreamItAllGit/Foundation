@@ -1,7 +1,7 @@
 // @module: Foundation.Installer.InstallerEngine.TestModeAndCli
-// @purpose: HKCU Uninstall registry registration, pre-upgrade state backups, running process shutdown, and fail-closed path containment.
+// @purpose: CLI argument parsing, HKCU Uninstall registry registration, pre-upgrade state backups, running process shutdown, and bounded self-delete trampoline.
 // @depends-on: System, System.Collections.Generic, System.Diagnostics, System.IO, System.Reflection, System.Text, System.Text.Json, System.Threading, System.Threading.Tasks, Microsoft.Win32
-// @exports: InstallerEngine (partial: RegisterUninstallerMetadata, RemoveUninstallerMetadata, EnsureWithinDirectory, CreatePreUpgradeBackupAsync, OpenPayloadStream)
+// @exports: InstallerCliOptions, InstallerEngine (partial: ParseCliArgs, RegisterUninstallerMetadata, RemoveUninstallerMetadata, EnsureWithinDirectory, CreatePreUpgradeBackupAsync, OpenPayloadStream, BuildSelfDeleteTrampolineCommand)
 
 using System;
 using System.Collections.Generic;
@@ -15,8 +15,104 @@ using Microsoft.Win32;
 
 namespace Foundation.Installer;
 
+public sealed record InstallerCliOptions(
+    string? InstallDir,
+    string? DataDir,
+    string? SandboxRoot,
+    string? ConfigPath,
+    string? LogDir,
+    string? PayloadPath,
+    string? ProfileId,
+    string? ReEngineDir,
+    string? SuiteDir,
+    bool Uninstall,
+    bool PurgeData,
+    bool VerifyOnly,
+    bool NoShortcuts,
+    bool AutoStart,
+    bool LaunchAfter,
+    bool NoLaunch,
+    bool Silent,
+    bool TestMode,
+    bool DryRun,
+    bool Headless,
+    bool VisibleTest,
+    bool MigrateLegacy,
+    bool ShowHelp,
+    bool ShowVersion)
+{
+    public string? SecondaryDir => !string.IsNullOrWhiteSpace(ReEngineDir) ? ReEngineDir : SuiteDir;
+    public string? SecondaryFlagName => !string.IsNullOrWhiteSpace(ReEngineDir) ? "--reengine-dir" : (!string.IsNullOrWhiteSpace(SuiteDir) ? "--suite-dir" : null);
+}
+
 public sealed partial class InstallerEngine
 {
+    public static InstallerCliOptions ParseCliArgs(string[] args, InstallerAppDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        args ??= Array.Empty<string>();
+
+        string? installDir = null, dataDir = null, sandboxRoot = null, configPath = null, logDir = null, payloadPath = null;
+        string? profileId = null, reEngineDir = null, suiteDir = null;
+        bool uninstall = string.Equals(Path.GetFileName(Environment.ProcessPath), descriptor.UninstallerExeName, StringComparison.OrdinalIgnoreCase);
+        bool purgeData = false, verifyOnly = false, noShortcuts = false, autoStart = false, launchAfter = false, noLaunch = false;
+        bool silent = false, testMode = false, dryRun = false, headless = false, visibleTest = false, migrateLegacy = false;
+        bool showHelp = false, showVersion = false;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            string arg = args[i].Trim();
+            switch (arg.ToLowerInvariant())
+            {
+                case "--install-dir":
+                case "--target-dir": installDir = RequireNextCliValue(args, ref i, arg); break;
+                case "--data-dir": dataDir = RequireNextCliValue(args, ref i, arg); break;
+                case "--sandbox-root": sandboxRoot = RequireNextCliValue(args, ref i, arg); break;
+                case "--config": configPath = RequireNextCliValue(args, ref i, arg); break;
+                case "--log-dir": logDir = RequireNextCliValue(args, ref i, arg); break;
+                case "--payload": payloadPath = RequireNextCliValue(args, ref i, arg); break;
+                case "--profile": profileId = RequireNextCliValue(args, ref i, arg); break;
+                case "--reengine-dir": reEngineDir = RequireNextCliValue(args, ref i, arg); break;
+                case "--suite-dir": suiteDir = RequireNextCliValue(args, ref i, arg); break;
+                case "--uninstall": uninstall = true; break;
+                case "--purge-data": purgeData = true; break;
+                case "--verify": verifyOnly = true; break;
+                case "--no-shortcuts": noShortcuts = true; break;
+                case "--autostart": autoStart = true; break;
+                case "--launch": launchAfter = true; break;
+                case "--no-launch":
+                case "--no-restart": noLaunch = true; break;
+                case "--silent":
+                case "--quiet": silent = true; break;
+                case "--test-mode": testMode = true; break;
+                case "--dry-run": dryRun = true; break;
+                case "--headless": headless = true; break;
+                case "--visible-test": visibleTest = true; break;
+                case "--migrate-legacy": migrateLegacy = true; break;
+                case "--version":
+                case "-v": showVersion = true; break;
+                case "--help":
+                case "-h":
+                case "/?":
+                case "help": showHelp = true; break;
+                default: throw new ArgumentException($"Unknown option '{arg}'. Pass --help for usage.");
+            }
+        }
+
+        return new InstallerCliOptions(
+            installDir, dataDir, sandboxRoot, configPath, logDir, payloadPath,
+            profileId, reEngineDir, suiteDir,
+            uninstall, purgeData, verifyOnly, noShortcuts, autoStart, launchAfter, noLaunch,
+            silent, testMode, dryRun, headless, visibleTest, migrateLegacy, showHelp, showVersion);
+    }
+
+    private static string RequireNextCliValue(string[] args, ref int index, string flag)
+    {
+        if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
+            throw new ArgumentException($"Option '{flag}' requires a value.");
+        index++;
+        return args[index].Trim();
+    }
     private string? RegisterUninstallerMetadata(string installDir, string uninstallerPath)
     {
         string displayIcon = ResolveInstalledExecutablePath(installDir);
@@ -155,11 +251,23 @@ public sealed partial class InstallerEngine
         return rootLauncher;
     }
 
+    public static string BuildSelfDeleteTrampolineCommand(string uninstallerPath, string installDir, int maxAttempts = 15)
+    {
+        int boundedAttempts = Math.Clamp(maxAttempts, 1, 60);
+        string appDir = Path.Combine(installDir, "app");
+        string fullUninstaller = Path.GetFullPath(uninstallerPath);
+        string fullAppDir = Path.GetFullPath(appDir);
+        string fullInstallDir = Path.GetFullPath(installDir);
+        string wildUninstallerApp = Path.Combine(fullAppDir, "*-Uninstall.exe");
+        string wildUninstallerRoot = Path.Combine(fullInstallDir, "*-Uninstall.exe");
+
+        return $"for /L %i in (1,1,{boundedAttempts}) do @if exist \"{fullUninstaller}\" (ping 127.0.0.1 -n 2 >nul & del /f /q \"{fullUninstaller}\" 2>nul) & del /f /q \"{wildUninstallerApp}\" 2>nul & del /f /q \"{wildUninstallerRoot}\" 2>nul & rmdir \"{fullAppDir}\" 2>nul & rmdir \"{fullInstallDir}\" 2>nul";
+    }
+
     private static void ScheduleDeferredSelfDelete(string uninstallerPath, string installDir)
     {
         try
         {
-            string appDir = Path.Combine(installDir, "app");
             var psi = new ProcessStartInfo("cmd.exe")
             {
                 UseShellExecute = false,
@@ -167,7 +275,7 @@ public sealed partial class InstallerEngine
                 WindowStyle = ProcessWindowStyle.Hidden
             };
             psi.ArgumentList.Add("/c");
-            psi.ArgumentList.Add($"ping 127.0.0.1 -n 2 > nul & del /f /q \"{uninstallerPath}\" & rmdir \"{appDir}\" 2>nul & rmdir \"{installDir}\" 2>nul");
+            psi.ArgumentList.Add(BuildSelfDeleteTrampolineCommand(uninstallerPath, installDir));
             Process.Start(psi);
         }
         catch { }

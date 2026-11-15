@@ -49,6 +49,9 @@ public sealed record RecompHostOptions
     public int AudioSampleRate { get; init; } = 44100;
     public bool EnableHudOverlay { get; init; }
     public bool VisibleTest { get; init; }
+    public RecompExecutionTierMode ExecutionTier { get; init; } = RecompExecutionTierMode.AotPrimary;
+    public string RenderBackendId { get; init; } = RecompRenderBackendIds.Software;
+    public string? AotCacheDirectory { get; init; }
 }
 
 public sealed record RecompFrameStats(
