@@ -1,5 +1,5 @@
 // @module: Foundation.Installer.Engine
-// @purpose: Implements shared clean-root deployment (app\, scripts\), upgrade data/logs preservation, Mother manifest sync, and --test-mode lifecycle.
+// @purpose: Implements shared clean-root deployment (app\, scripts\), upgrade data/logs preservation, Mother manifest sync, and isolated runtime support.
 // @depends-on: System, System.Collections.Generic, System.Diagnostics, System.IO, System.IO.Compression, System.Security.Cryptography, System.Text.Json, Foundation.Core
 // @exports: FoundationInstallManifest, FoundationInstallResult, InstallerEngineCore
 
@@ -41,7 +41,7 @@ public sealed record FoundationInstallResult(
 
 /// <summary>
 /// Shared clean-root installation, upgrade, verification, and uninstallation engine (Standard 03 §5 &amp; Standard 12 §3.1).
-/// Preserves user data\ and logs\ during upgrades and supports full headless --test-mode sandbox verification.
+/// Preserves user data\ and logs\ during upgrades and respects isolated runtime overrides (Standard 02).
 /// </summary>
 public sealed partial class InstallerEngineCore
 {
@@ -53,12 +53,19 @@ public sealed partial class InstallerEngineCore
     };
 
     public InstallerThemeOptions Theme { get; }
-    public SandboxEnvironment Sandbox { get; }
+    public AppEnvironment RuntimeEnvironment { get; }
 
-    public InstallerEngineCore(InstallerThemeOptions theme, SandboxEnvironment sandbox)
+    internal bool IsIsolatedOverride =>
+        string.Equals(Environment.GetEnvironmentVariable("APP_ISOLATED_TEST"), "1", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(
+            Path.GetFullPath(RuntimeEnvironment.DataDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            Path.GetFullPath(Path.Combine(RuntimeEnvironment.BaseDirectory, "data")).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase);
+
+    public InstallerEngineCore(InstallerThemeOptions theme, AppEnvironment runtimeEnvironment)
     {
         Theme = theme ?? throw new ArgumentNullException(nameof(theme));
-        Sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
+        RuntimeEnvironment = runtimeEnvironment ?? throw new ArgumentNullException(nameof(runtimeEnvironment));
     }
 
     public string ResolveTargetInstallDir(string? explicitInstallDir = null)
@@ -66,11 +73,15 @@ public sealed partial class InstallerEngineCore
         if (!string.IsNullOrWhiteSpace(explicitInstallDir))
         {
             string fullExplicit = Path.GetFullPath(explicitInstallDir);
-            if (Sandbox.IsContainedSandbox) SandboxEnvironment.AssertPathContained(fullExplicit, Sandbox.DataDirectory);
+            if (IsIsolatedOverride && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullExplicit))
+            {
+                throw new InvalidOperationException(
+                    $"Fail-closed isolation violation: refusing to target canonical production or system directory '{fullExplicit}'.");
+            }
             return fullExplicit;
         }
-        return Sandbox.IsContainedSandbox
-            ? Path.Combine(Sandbox.DataDirectory, "installed-app")
+        return IsIsolatedOverride
+            ? Path.Combine(RuntimeEnvironment.DataDirectory, "installed-app")
             : Path.GetFullPath(Theme.DefaultInstallDir);
     }
 
@@ -132,7 +143,7 @@ public sealed partial class InstallerEngineCore
         byte[] zipBytes = ms.ToArray();
         string payloadSha256 = Convert.ToHexString(SHA256.HashData(zipBytes)).ToLowerInvariant();
 
-        if (!Sandbox.DryRun) CleanPreviousAppCodePreservingData(installDir);
+        if (!RuntimeEnvironment.DryRun) CleanPreviousAppCodePreservingData(installDir);
 
         ms.Position = 0;
         using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
@@ -148,10 +159,10 @@ public sealed partial class InstallerEngineCore
             string relPath = entry.FullName.Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar);
             if (string.IsNullOrWhiteSpace(relPath)) continue;
 
-            string destPath = SandboxEnvironment.AssertPathContained(Path.Combine(installDir, relPath), installDir);
+            string destPath = AppEnvironment.AssertPathContained(Path.Combine(installDir, relPath), installDir);
             if (string.IsNullOrEmpty(entry.Name))
             {
-                if (!Sandbox.DryRun) Directory.CreateDirectory(destPath);
+                if (!RuntimeEnvironment.DryRun) Directory.CreateDirectory(destPath);
                 continue;
             }
 
@@ -164,7 +175,7 @@ public sealed partial class InstallerEngineCore
                 throw new InvalidDataException("Payload archive exceeds maximum 2 GB bounded extraction limit.");
             }
 
-            if (!Sandbox.DryRun)
+            if (!RuntimeEnvironment.DryRun)
             {
                 string? parent = Path.GetDirectoryName(destPath);
                 if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
@@ -175,7 +186,7 @@ public sealed partial class InstallerEngineCore
             onProgress?.Invoke(15 + (int)((double)processed / totalEntries * 75.0), $"Extracted {relPath}");
         }
 
-        if (!Sandbox.DryRun)
+        if (!RuntimeEnvironment.DryRun)
         {
             var manifest = new FoundationInstallManifest
             {
@@ -241,7 +252,7 @@ public sealed partial class InstallerEngineCore
         if (purgeUserData) Directory.Delete(installDir, recursive: true);
         else CleanPreviousAppCodePreservingData(installDir);
 
-        WindowsShortcutWriter.RemoveCurrentUserUninstallEntry(Theme.DisplayName, Sandbox.IsContainedSandbox);
+        WindowsShortcutWriter.RemoveCurrentUserUninstallEntry(Theme.DisplayName, IsIsolatedOverride);
         return new FoundationInstallResult(true, installDir, string.Empty, 1, "Uninstall completed.", false);
     }
 
@@ -259,9 +270,9 @@ public sealed partial class InstallerEngineCore
 
     public string ResolveSuiteManifestDirectory(string installDir)
     {
-        if (Sandbox.IsContainedSandbox)
+        if (IsIsolatedOverride)
         {
-            return Path.Combine(Sandbox.DataDirectory, "Mother", "manifests");
+            return Path.Combine(RuntimeEnvironment.DataDirectory, "Mother", "manifests");
         }
 
         string? envDir = Environment.GetEnvironmentVariable("MOTHER_MANIFESTS_DIR")
@@ -291,137 +302,6 @@ public sealed partial class InstallerEngineCore
 
         string studio = string.IsNullOrWhiteSpace(Theme.StudioName) ? "StreamItAll" : Theme.StudioName.Trim();
         return Path.Combine(localAppData, "Programs", studio, "Mother", "manifests");
-    }
-
-    public string? DetectLegacyFlatInstall(string? legacyBaseDir = null)
-    {
-        string searchRoot;
-        if (!string.IsNullOrWhiteSpace(legacyBaseDir))
-        {
-            searchRoot = Path.GetFullPath(legacyBaseDir);
-            if (Sandbox.IsContainedSandbox)
-            {
-                SandboxEnvironment.AssertPathContained(searchRoot, Sandbox.DataDirectory);
-            }
-        }
-        else if (Sandbox.IsContainedSandbox)
-        {
-            searchRoot = Path.Combine(Sandbox.DataDirectory, "legacy-programs");
-        }
-        else
-        {
-            searchRoot = Path.Combine("D:" + Path.DirectorySeparatorChar, "Programs");
-        }
-
-        if (!Directory.Exists(searchRoot))
-        {
-            return null;
-        }
-
-        foreach (string folderName in new[] { Theme.DisplayName, Theme.AppId })
-        {
-            if (string.IsNullOrWhiteSpace(folderName)) continue;
-            string candidate = Path.Combine(searchRoot, folderName.Trim());
-            if (HasExistingInstallation(candidate) || File.Exists(Path.Combine(candidate, "settings.json")))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
-    }
-
-    public async Task<FoundationInstallResult> MigrateLegacyInstallAsync(
-        string legacySourceDir,
-        string targetInstallDir,
-        bool optInConfirmed,
-        bool dryRun = false,
-        CancellationToken cancellationToken = default)
-    {
-        if (!optInConfirmed)
-        {
-            throw new InvalidOperationException("Legacy install migration requires explicit opt-in (--migrate-legacy or wizard checkbox).");
-        }
-
-        if (string.IsNullOrWhiteSpace(legacySourceDir))
-        {
-            throw new ArgumentException("Legacy source directory is required.", nameof(legacySourceDir));
-        }
-
-        string fullSource = Path.GetFullPath(legacySourceDir);
-        string fullTarget = ResolveTargetInstallDir(targetInstallDir);
-        if (Sandbox.IsContainedSandbox)
-        {
-            SandboxEnvironment.AssertPathContained(fullSource, Sandbox.DataDirectory);
-            SandboxEnvironment.AssertPathContained(fullTarget, Sandbox.DataDirectory);
-        }
-
-        if (!Directory.Exists(fullSource))
-        {
-            return new FoundationInstallResult(false, fullTarget, string.Empty, 0, $"Legacy directory not found: '{fullSource}'.", false);
-        }
-
-        if (string.Equals(fullSource.TrimEnd(Path.DirectorySeparatorChar), fullTarget.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
-        {
-            return new FoundationInstallResult(true, fullTarget, string.Empty, 0, "Legacy source and target directory are identical.", false);
-        }
-
-        if (Sandbox.DryRun || dryRun)
-        {
-            return new FoundationInstallResult(true, fullTarget, string.Empty, 0, $"[DRY-RUN] Would migrate legacy install from '{fullSource}' to '{fullTarget}'.", false);
-        }
-
-        Directory.CreateDirectory(fullTarget);
-        int migratedCount = 0;
-
-        foreach (string entryName in ProtectedTopDirectories)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            string srcSub = Path.Combine(fullSource, entryName);
-            string dstSub = Path.Combine(fullTarget, entryName);
-            if (Directory.Exists(srcSub))
-            {
-                migratedCount += await CopyDirectoryPreservingAsync(srcSub, dstSub, cancellationToken).ConfigureAwait(false);
-            }
-        }
-
-        string srcSettings = Path.Combine(fullSource, "settings.json");
-        string dstSettings = Path.Combine(fullTarget, "settings.json");
-        if (File.Exists(srcSettings) && !File.Exists(dstSettings))
-        {
-            FileLockRetryHelper.CopyWithOverwrite(srcSettings, dstSettings, ct: cancellationToken);
-            migratedCount++;
-        }
-
-        try
-        {
-            Directory.Delete(fullSource, recursive: true);
-        }
-        catch { /* non-fatal if locked handle remains in legacy dir */ }
-
-        return new FoundationInstallResult(true, fullTarget, string.Empty, migratedCount, $"Migrated {migratedCount} legacy items from '{fullSource}' to '{fullTarget}'.", false);
-    }
-
-    private static async Task<int> CopyDirectoryPreservingAsync(string sourceDir, string targetDir, CancellationToken ct)
-    {
-        Directory.CreateDirectory(targetDir);
-        int count = 0;
-        foreach (string file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
-        {
-            ct.ThrowIfCancellationRequested();
-            string rel = Path.GetRelativePath(sourceDir, file);
-            string dest = Path.Combine(targetDir, rel);
-            string? parent = Path.GetDirectoryName(dest);
-            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
-            if (!File.Exists(dest))
-            {
-                await using var inFs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
-                await using var outFs = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-                await inFs.CopyToAsync(outFs, ct).ConfigureAwait(false);
-                count++;
-            }
-        }
-        return count;
     }
 
     private void RegisterSuiteManifestIfPresent(string installDir)

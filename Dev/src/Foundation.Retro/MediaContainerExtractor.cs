@@ -98,7 +98,7 @@ public static partial class MediaContainerExtractor
             files.Add(cuePath);
             foreach (string trackRel in ParseCueReferencedFiles(cuePath))
             {
-                string trackFull = SandboxEnvironment.AssertPathContained(Path.Combine(srcDir, trackRel), srcDir);
+                string trackFull = AppEnvironment.AssertPathContained(Path.Combine(srcDir, trackRel), srcDir);
                 if (!File.Exists(trackFull))
                     return Failure(MediaContainerFormat.BinCue, $"CUE sheet references missing track file '{trackRel}'.");
                 if (!files.Contains(trackFull, StringComparer.OrdinalIgnoreCase)) files.Add(trackFull);
@@ -132,14 +132,14 @@ public static partial class MediaContainerExtractor
             activeFiles.Clear();
             foreach (string file in sourceFiles)
             {
-                string target = SandboxEnvironment.AssertPathContained(Path.Combine(destDir, Path.GetRelativePath(srcDir, file)), destDir);
+                string target = AppEnvironment.AssertPathContained(Path.Combine(destDir, Path.GetRelativePath(srcDir, file)), destDir);
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 if (!string.Equals(file, target, StringComparison.OrdinalIgnoreCase))
                     await CopyFileAsync(file, target, ct).ConfigureAwait(false);
                 activeFiles.Add(target);
             }
             if (cuePath is not null)
-                activeCue = SandboxEnvironment.AssertPathContained(Path.Combine(destDir, Path.GetRelativePath(srcDir, cuePath)), destDir);
+                activeCue = AppEnvironment.AssertPathContained(Path.Combine(destDir, Path.GetRelativePath(srcDir, cuePath)), destDir);
             rootForRel = destDir;
         }
 
@@ -161,7 +161,7 @@ public static partial class MediaContainerExtractor
                 string rel = entry.FullName.Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar);
                 if (string.IsNullOrWhiteSpace(rel)) continue;
 
-                string destPath = SandboxEnvironment.AssertPathContained(Path.Combine(destDir, rel), destDir);
+                string destPath = AppEnvironment.AssertPathContained(Path.Combine(destDir, rel), destDir);
                 if (string.IsNullOrEmpty(entry.Name))
                 {
                     Directory.CreateDirectory(destPath);
@@ -200,7 +200,7 @@ public static partial class MediaContainerExtractor
             return Failure(MediaContainerFormat.SevenZip, $"7z extraction failed (exit {exitCode}): {stderr}");
 
         var extracted = Directory.GetFiles(destDir, "*", SearchOption.AllDirectories)
-            .Select(f => SandboxEnvironment.AssertPathContained(f, destDir)).ToList();
+            .Select(f => AppEnvironment.AssertPathContained(f, destDir)).ToList();
         string? cue = extracted.FirstOrDefault(f => f.EndsWith(".cue", StringComparison.OrdinalIgnoreCase));
         return await FinalizeResultAsync(MediaContainerFormat.SevenZip, SelectPrimaryMedia(extracted, cue), cue, extracted, destDir, options, $"Extracted {extracted.Count} file(s) via 7z.", ct).ConfigureAwait(false);
     }
@@ -216,8 +216,8 @@ public static partial class MediaContainerExtractor
 
         Directory.CreateDirectory(destDir);
         string stem = Path.GetFileNameWithoutExtension(sourceChd);
-        string outCue = SandboxEnvironment.AssertPathContained(Path.Combine(destDir, stem + ".cue"), destDir);
-        string outBin = SandboxEnvironment.AssertPathContained(Path.Combine(destDir, stem + ".bin"), destDir);
+        string outCue = AppEnvironment.AssertPathContained(Path.Combine(destDir, stem + ".cue"), destDir);
+        string outBin = AppEnvironment.AssertPathContained(Path.Combine(destDir, stem + ".bin"), destDir);
 
         var (exitCode, stderr) = await RunExternalToolAsync(tool.ResolvedPath, new[] { "extractcd", "-f", "-i", sourceChd, "-o", outCue, "-ob", outBin }, destDir, ct).ConfigureAwait(false);
         if (exitCode != 0 || !File.Exists(outCue))

@@ -122,7 +122,7 @@ public sealed partial class InstallerEngine
                 File.Delete(uninstallerPath);
                 removedFiles++;
             }
-            else if (!_ctx.IsContainedMode && OperatingSystem.IsWindows())
+            else if (!_ctx.ShouldSuppressHostMutations && OperatingSystem.IsWindows())
             {
                 ScheduleDeferredSelfDelete(uninstallerPath, installDir);
             }
@@ -169,7 +169,7 @@ public sealed partial class InstallerEngine
                 {
                     try
                     {
-                        if (!_ctx.IsContainedMode || IsWithinDirectory(_ctx.DataDirectory!, lnk))
+                        if (!_ctx.ShouldSuppressHostMutations || string.IsNullOrWhiteSpace(_ctx.DataDirectory) || IsWithinDirectory(_ctx.DataDirectory, lnk))
                         {
                             File.Delete(lnk);
                             removedFiles++;
@@ -214,7 +214,7 @@ public sealed partial class InstallerEngine
         string startMenuDir;
         string startupDir;
 
-        if (_ctx.IsContainedMode)
+        if (_ctx.ShouldSuppressHostMutations)
         {
             string root = _ctx.DataDirectory ?? installDir;
             desktopDir = Path.Combine(root, "shortcuts", "desktop");

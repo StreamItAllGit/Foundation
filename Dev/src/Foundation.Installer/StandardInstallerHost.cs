@@ -1,5 +1,5 @@
 // @module: Foundation.Installer.StandardInstallerHost
-// @purpose: Turnkey 4-Pillar Single-EXE setup entry point supporting dark GUI wizard, visible-by-default test execution, --headless, --silent, --verify, --uninstall, and --dry-run CLI flags.
+// @purpose: Turnkey 4-Pillar Single-EXE setup entry point supporting dark GUI wizard and --silent, --verify, --uninstall, and --dry-run CLI flags.
 // @depends-on: System, System.Diagnostics, System.IO, System.Reflection, System.Runtime.InteropServices, System.Threading.Tasks, System.Windows.Forms
 // @exports: StandardInstallerHost
 
@@ -87,17 +87,12 @@ public static class StandardInstallerHost
             return new InstallerHostRunResult(0);
         }
 
-        var ctx = new InstallerSandboxContext(
+        var ctx = new InstallerRuntimeContext(
             cliDataDir: cli.DataDir,
             cliConfigPath: cli.ConfigPath,
             cliLogDir: cli.LogDir,
-            testMode: cli.TestMode,
             dryRun: cli.DryRun,
-            headless: cli.Headless,
-            envPrefix: descriptor.EnvPrefix,
-            fallbackTestInstallDir: cli.InstallDir,
-            visibleTest: cli.VisibleTest,
-            cliSandboxRoot: cli.SandboxRoot);
+            envPrefix: descriptor.EnvPrefix);
 
         bool effectiveAutoStart = descriptor.AllowAutoStart && cli.AutoStart;
         if (cli.AutoStart && !descriptor.AllowAutoStart)
@@ -111,42 +106,7 @@ public static class StandardInstallerHost
 
         bool explicitMigrate = cli.MigrateLegacy || (ctx.ConfigOverride?.MigrateLegacy ?? false);
         bool showLegacy = descriptor.AllowLegacyMigration || explicitMigrate;
-
-        if (ctx.EffectiveVisibleTest && !cli.Silent && !cli.VerifyOnly && !cli.DryRun && OperatingSystem.IsWindows())
-        {
-            InitializeWinFormsHost();
-            var visibleEngine = new InstallerEngine(descriptor, ctx, resolvedAssembly);
-            string targetDir = !string.IsNullOrWhiteSpace(cli.InstallDir)
-                ? cli.InstallDir
-                : visibleEngine.ResolveDefaultInstallDirectory();
-            if (string.IsNullOrWhiteSpace(ctx.LogDirectory) && InstallerSandboxContext.IsSafeTestInstallDirectory(targetDir))
-            {
-                ctx.EnsureDefaultLogDirectory(targetDir);
-            }
-
-            using var visibleWizard = new InstallerWizardForm(
-                engine: visibleEngine,
-                ctx: ctx,
-                initialInstallDir: targetDir,
-                externalPayloadPath: cli.PayloadPath,
-                isUninstallMode: cli.Uninstall,
-                initialCreateShortcuts: !cli.NoShortcuts,
-                initialAutoStart: effectiveAutoStart,
-                initialLaunchAfter: !cli.NoLaunch,
-                initialPurgeData: cli.PurgeData,
-                showShowcaseAutoCloseMs: 0,
-                initialProfileId: cli.ProfileId,
-                initialSecondaryDir: cli.SecondaryDir,
-                secondaryFlagName: cli.SecondaryFlagName,
-                initialMigrateLegacy: explicitMigrate,
-                showLegacyMigration: showLegacy,
-                autoRunVisibleTest: true,
-                explicitInstallTargetProvided: !string.IsNullOrWhiteSpace(cli.InstallDir));
-            Application.Run(visibleWizard);
-            return new InstallerHostRunResult(visibleWizard.ExitCode, visibleWizard.LastVisibleTestScreenshotPath, ctx.LogDirectory);
-        }
-
-        bool isNonInteractive = cli.Silent || ctx.Headless || ctx.TestMode;
+        bool isNonInteractive = cli.Silent || ctx.IsIsolatedTestProcess;
 
         if (!isNonInteractive && !cli.DryRun && !cli.VerifyOnly && string.IsNullOrWhiteSpace(cli.InstallDir) && OperatingSystem.IsWindows())
         {
@@ -162,14 +122,13 @@ public static class StandardInstallerHost
                 initialAutoStart: effectiveAutoStart,
                 initialLaunchAfter: !cli.NoLaunch,
                 initialPurgeData: cli.PurgeData,
-                showShowcaseAutoCloseMs: 0,
                 initialProfileId: cli.ProfileId,
                 initialSecondaryDir: cli.SecondaryDir,
                 secondaryFlagName: cli.SecondaryFlagName,
                 initialMigrateLegacy: explicitMigrate,
                 showLegacyMigration: showLegacy);
             Application.Run(wizard);
-            return new InstallerHostRunResult(wizard.ExitCode, wizard.LastVisibleTestScreenshotPath, ctx.LogDirectory);
+            return new InstallerHostRunResult(wizard.ExitCode, ctx.LogDirectory);
         }
 
         return RunCliFlowAsync(descriptor, ctx, resolvedAssembly, cli, effectiveAutoStart, explicitMigrate).GetAwaiter().GetResult();
@@ -177,7 +136,7 @@ public static class StandardInstallerHost
 
     private static async Task<InstallerHostRunResult> RunCliFlowAsync(
         InstallerAppDescriptor descriptor,
-        InstallerSandboxContext ctx,
+        InstallerRuntimeContext ctx,
         Assembly payloadAssembly,
         InstallerCliOptions cli,
         bool autoStart,
@@ -196,14 +155,14 @@ public static class StandardInstallerHost
             {
                 var verify = await engine.VerifyPayloadAsync(cli.PayloadPath);
                 Console.WriteLine(verify.Message);
-                return new InstallerHostRunResult(verify.Valid ? 0 : 1, null, ctx.LogDirectory);
+                return new InstallerHostRunResult(verify.Valid ? 0 : 1, ctx.LogDirectory);
             }
 
             if (cli.Uninstall)
             {
                 var unRes = await engine.UninstallAsync(cli.InstallDir, cli.PurgeData);
                 Console.WriteLine(unRes.Message);
-                return new InstallerHostRunResult(unRes.Success ? 0 : 1, null, ctx.LogDirectory, unRes);
+                return new InstallerHostRunResult(unRes.Success ? 0 : 1, ctx.LogDirectory, unRes);
             }
 
             var res = await engine.InstallAsync(new InstallerInstallOptions(
@@ -219,10 +178,10 @@ public static class StandardInstallerHost
             Console.WriteLine(res.Message);
             if (!res.Success)
             {
-                return new InstallerHostRunResult(1, null, ctx.LogDirectory, res);
+                return new InstallerHostRunResult(1, ctx.LogDirectory, res);
             }
 
-            if ((cli.LaunchAfter || res.WasRunningBeforeInstall) && !cli.NoLaunch && !cli.DryRun && !ctx.IsContainedMode)
+            if ((cli.LaunchAfter || res.WasRunningBeforeInstall) && !cli.NoLaunch && !cli.DryRun && !ctx.ShouldSuppressHostMutations)
             {
                 string installedExe = engine.ResolveInstalledExecutablePath(res.InstallDirectory);
                 if (File.Exists(installedExe))
@@ -236,13 +195,13 @@ public static class StandardInstallerHost
                 }
             }
 
-            return new InstallerHostRunResult(0, null, ctx.LogDirectory, res);
+            return new InstallerHostRunResult(0, ctx.LogDirectory, res);
         }
         catch (Exception ex)
         {
             ctx.WriteLog("ERROR", $"Installer failed: {ex.Message}");
             Console.Error.WriteLine($"Setup error: {ex.Message}");
-            return new InstallerHostRunResult(1, null, ctx.LogDirectory);
+            return new InstallerHostRunResult(1, ctx.LogDirectory);
         }
     }
 
@@ -256,6 +215,6 @@ public static class StandardInstallerHost
 
     private static void PrintUsage(InstallerAppDescriptor descriptor)
     {
-        Console.WriteLine($"Usage: {descriptor.ProductName}-Setup.exe [--install-dir <dir>] [--profile <lightweight|full>] [--reengine-dir <dir>] [--suite-dir <dir>] [--sandbox-root <dir>] [--migrate-legacy] [--silent] [--verify] [--uninstall] [--purge-data] [--test-mode] [--visible-test] [--headless] [--data-dir <dir>] [--log-dir <dir>] [--config <path>]");
+        Console.WriteLine($"Usage: {descriptor.ProductName}-Setup.exe [--install-dir <dir>] [--profile <lightweight|full>] [--reengine-dir <dir>] [--suite-dir <dir>] [--migrate-legacy] [--silent] [--verify] [--uninstall] [--purge-data] [--dry-run] [--data-dir <dir>] [--log-dir <dir>] [--config <path>]");
     }
 }

@@ -141,7 +141,7 @@ def _handle_remove_readonly(func, path, exc_info):
     func(path)
 
 
-def stage_clean_release_bundle(version: str = "0.4.1", sdk_dir: Path | None = None) -> Path:
+def stage_clean_release_bundle(version: str = "0.4.1-hf.1", sdk_dir: Path | None = None) -> Path:
     latest_dir = FOUNDATION_ROOT / "Releases" / "Latest"
     latest_dir.mkdir(parents=True, exist_ok=True)
 
@@ -169,7 +169,7 @@ def stage_clean_release_bundle(version: str = "0.4.1", sdk_dir: Path | None = No
     return latest_dir
 
 
-def publish_sdk(version: str = "0.4.1", ui_version: str = "0.4.1", configuration: str = "Release") -> dict[str, object]:
+def publish_sdk(version: str = "0.4.1-hf.1", ui_version: str = "0.4.1-hf.1", configuration: str = "Release") -> dict[str, object]:
     clean_ver = version.lstrip("v")
     ver_tag = f"v{clean_ver}"
     ui_dir = DEV_ROOT / "src" / "Foundation.UI"
@@ -178,28 +178,19 @@ def publish_sdk(version: str = "0.4.1", ui_version: str = "0.4.1", configuration
     binaries = collect_compiled_binaries(configuration)
     py_core = DEV_ROOT / "src" / "foundation_core"
     tools_dir = DEV_ROOT / "tools"
-
-    purge_stale_pdbs(FOUNDATION_ROOT / "Builds")
-
-    targets = [
-        SHARED_LIBS_ROOT / ver_tag,
-        SHARED_LIBS_ROOT / "Latest",
-        FOUNDATION_ROOT / "Builds" / ver_tag / "app",
-    ]
+    isolated_shared_libs = bool(os.environ.get("FOUNDATION_SHARED_LIBS_ROOT"))
+    targets = [SHARED_LIBS_ROOT / ver_tag, SHARED_LIBS_ROOT / "Latest"]
+    if not isolated_shared_libs:
+        purge_stale_pdbs(FOUNDATION_ROOT / "Builds")
+        targets.append(FOUNDATION_ROOT / "Builds" / ver_tag / "app")
     manifest: dict[str, object] = {}
     for target in targets:
-        manifest = _populate_sdk_target(
-            target, clean_ver, ui_version, binaries, web_src, web_assets, py_core, tools_dir
-        )
-    stage_clean_release_bundle(clean_ver, SHARED_LIBS_ROOT / ver_tag)
+        manifest = _populate_sdk_target(target, clean_ver, ui_version, binaries, web_src, web_assets, py_core, tools_dir)
+    if not isolated_shared_libs:
+        stage_clean_release_bundle(clean_ver, SHARED_LIBS_ROOT / ver_tag)
     return manifest
 
-
-def sync_consumer(
-    consumer_root: Path,
-    source_version: str = "Latest",
-    web_dir: Path | None = None,
-) -> Path:
+def sync_consumer(consumer_root: Path, source_version: str = "Latest", web_dir: Path | None = None) -> Path:
     src_dir = SHARED_LIBS_ROOT / source_version
     if not src_dir.exists():
         raise FileNotFoundError(f"Foundation SharedLibs source not found: {src_dir}")
@@ -229,13 +220,17 @@ def sync_consumer(
         resolved_web = web_dir if web_dir.is_absolute() else (consumer_root / web_dir)
         _copy_tree_contents(src_dir / "WebAssets", resolved_web)
 
+    for stale_root in {dev_lib, target_lib, nested_foundation}:
+        if not stale_root.exists(): continue
+        for pat in ("tools/verify_sandbox_universal.py", "*Sandbox*", "*VisibleTest*"):
+            for item in stale_root.rglob(pat):
+                if item.is_file(): item.unlink(missing_ok=True)
     return target_lib
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Foundation SDK Publisher & Consumer Sync Tool")
-    parser.add_argument("--version", default="0.4.1", help="Foundation SDK SemVer (default: 0.4.1)")
-    parser.add_argument("--ui-version", default="0.4.1", help="Foundation.UI SemVer (default: 0.4.1)")
+    parser.add_argument("--version", default="0.4.1-hf.1", help="Foundation SDK SemVer (default: 0.4.1-hf.1)")
+    parser.add_argument("--ui-version", default="0.4.1-hf.1", help="Foundation.UI SemVer (default: 0.4.1-hf.1)")
     parser.add_argument("--configuration", default="Release", help="Build configuration (Release/Debug)")
     parser.add_argument("--publish", action="store_true", help="Publish SDK to SharedLibs and Builds")
     parser.add_argument("--sync-consumer", type=Path, help="Consumer project root to sync from SharedLibs")

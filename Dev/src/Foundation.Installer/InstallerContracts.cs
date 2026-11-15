@@ -180,6 +180,5 @@ public sealed record InstallerInstallOptions(
 
 public sealed record InstallerHostRunResult(
     int ExitCode,
-    string? ScreenshotPath = null,
     string? LogDirectory = null,
     InstallerOperationResult? OperationResult = null);

@@ -1,5 +1,5 @@
 // @module: Foundation.UI.Desktop.DisposableWebViewHostForm
-// @purpose: Base dark-themed WinForms desktop shell window with Win11 DWM immersive dark titlebar, Standard 02 visible-test foreground activation, and composite bitmap capture.
+// @purpose: Base dark-themed WinForms desktop shell window with Win11 DWM immersive dark titlebar and composite bitmap capture.
 // @depends-on: Foundation.Core, System, System.Drawing, System.Runtime.InteropServices, System.Windows.Forms
 // @exports: DisposableWebViewHostForm
 
@@ -20,7 +20,6 @@ public class DisposableWebViewHostForm : Form
 
     public string TargetUrl { get; }
     public string UserDataFolder { get; }
-    public bool IsVisibleTest { get; }
 
     public DisposableWebViewHostForm(
         string targetUrl,
@@ -29,55 +28,34 @@ public class DisposableWebViewHostForm : Form
         Icon? appIcon = null,
         int defaultWidth = 1440,
         int defaultHeight = 920)
-        : this(targetUrl, userDataFolder, windowTitle, appIcon, defaultWidth, defaultHeight, visibleTest: false)
-    {
-    }
-
-    public DisposableWebViewHostForm(
-        string targetUrl,
-        string userDataFolder,
-        SandboxEnvironment? sandbox,
-        string windowTitle = "Application",
-        Icon? appIcon = null,
-        int defaultWidth = 1440,
-        int defaultHeight = 920)
-        : this(
-            targetUrl,
-            userDataFolder,
-            windowTitle,
-            appIcon,
-            defaultWidth,
-            defaultHeight,
-            visibleTest: VisibleTestWindowHelper.IsVisibleTestActive(sandbox))
-    {
-    }
-
-    protected DisposableWebViewHostForm(
-        string targetUrl,
-        string userDataFolder,
-        string windowTitle,
-        Icon? appIcon,
-        int defaultWidth,
-        int defaultHeight,
-        bool visibleTest)
     {
         TargetUrl = targetUrl;
         UserDataFolder = userDataFolder;
-        IsVisibleTest = visibleTest;
 
-        Text = VisibleTestWindowHelper.FormatWindowTitle(windowTitle, visibleTest);
+        Text = string.IsNullOrWhiteSpace(windowTitle) ? "Application" : windowTitle.Trim();
         Width = defaultWidth;
         Height = defaultHeight;
         MinimumSize = new Size(960, 620);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(9, 14, 23);
         ForeColor = Color.FromArgb(241, 245, 249);
-        if (visibleTest)
-        {
-            TopMost = true;
-        }
         if (appIcon != null)
+        {
             Icon = appIcon;
+        }
+    }
+
+    public DisposableWebViewHostForm(
+        string targetUrl,
+        string userDataFolder,
+        AppEnvironment? environment,
+        string windowTitle = "Application",
+        Icon? appIcon = null,
+        int defaultWidth = 1440,
+        int defaultHeight = 920)
+        : this(targetUrl, userDataFolder, windowTitle, appIcon, defaultWidth, defaultHeight)
+    {
+        _ = environment;
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -86,20 +64,19 @@ public class DisposableWebViewHostForm : Form
         EnableImmersiveDarkTitleBar(Handle);
     }
 
-    protected override void OnShown(EventArgs e)
+    public Bitmap CapturePreviewBitmap()
     {
-        base.OnShown(e);
-        if (IsVisibleTest)
+        if (!IsHandleCreated)
         {
-            VisibleTestWindowHelper.ApplyForegroundVisibleTestWindow(this);
+            CreateControl();
         }
+        PerformLayout();
+        int width = Math.Max(1, ClientSize.Width);
+        int height = Math.Max(1, ClientSize.Height);
+        var bmp = new Bitmap(width, height);
+        DrawToBitmap(bmp, new Rectangle(0, 0, width, height));
+        return bmp;
     }
-
-    public Bitmap CapturePreviewBitmap() =>
-        VisibleTestWindowHelper.CaptureCompositeFormBitmap(this);
-
-    public string? CaptureVisibleTestScreenshot(string? logDirectory, string fileName = "window-visible-test.png") =>
-        VisibleTestWindowHelper.SaveScreenshot(this, logDirectory, fileName);
 
     public static void EnableImmersiveDarkTitleBar(IntPtr hwnd)
     {

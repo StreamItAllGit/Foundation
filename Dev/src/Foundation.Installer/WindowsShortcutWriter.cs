@@ -1,5 +1,5 @@
 // @module: Foundation.Installer.Shortcuts
-// @purpose: Writes pure-C# MS-SHLLINK (.lnk) shortcuts and HKCU Uninstall/Run registry entries with strict test-mode isolation.
+// @purpose: Writes pure-C# MS-SHLLINK (.lnk) shortcuts and HKCU Uninstall/Run registry entries with optional host-mutation suppression.
 // @depends-on: System, System.Buffers.Binary, System.IO, System.Text, Microsoft.Win32
 // @exports: WindowsShortcutWriter
 
@@ -13,7 +13,7 @@ namespace Foundation.Installer;
 
 /// <summary>
 /// Pure managed C# writer for Windows Shell Link (.lnk) files and HKCU Uninstall/Startup registry keys.
-/// Strictly skips live host registry mutations when running inside Sandbox / --test-mode.
+/// Skips live host registry mutations when suppressed for isolated test execution (Standard 02).
 /// </summary>
 public static class WindowsShortcutWriter
 {
@@ -160,9 +160,9 @@ public static class WindowsShortcutWriter
         InstallerThemeOptions theme,
         string installDir,
         string uninstallerExePath,
-        bool isContainedSandbox)
+        bool suppressHostRegistryWrites = false)
     {
-        if (isContainedSandbox || !OperatingSystem.IsWindows())
+        if (suppressHostRegistryWrites || !OperatingSystem.IsWindows())
         {
             return;
         }
@@ -185,9 +185,9 @@ public static class WindowsShortcutWriter
         key.SetValue("NoRepair", 0, RegistryValueKind.DWord);
     }
 
-    public static void RemoveCurrentUserUninstallEntry(string displayName, bool isContainedSandbox)
+    public static void RemoveCurrentUserUninstallEntry(string displayName, bool suppressHostRegistryWrites = false)
     {
-        if (isContainedSandbox || !OperatingSystem.IsWindows())
+        if (suppressHostRegistryWrites || !OperatingSystem.IsWindows())
         {
             return;
         }

@@ -87,7 +87,7 @@ public static class HkLockSentinel
             }
 
             string cleanSlug = string.IsNullOrWhiteSpace(appSlug) ? "app" : appSlug.Trim().ToLowerInvariant();
-            string ourLock = SandboxEnvironment.NormalizeLongPath(
+            string ourLock = AppEnvironment.NormalizeLongPath(
                 Path.Combine(directoryPath, $".{cleanSlug}_{Environment.ProcessId}.hklock"));
             long startUtcTicks = 0;
             try { using var p = Process.GetCurrentProcess(); startUtcTicks = p.StartTime.ToUniversalTime().Ticks; } catch { }

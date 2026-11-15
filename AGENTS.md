@@ -1,8 +1,8 @@
 # Project Context: Foundation (`<PROJECTS_ROOT>\Foundation\`)
 
-- **Role:** Shared SDK (`v0.4.1`: `Core`, `Retro`, `Sidecars`, `Server`, `Launcher`, `UI`, `Installer`, `@foundation/ui`, `foundation_core`).
+- **Role:** Shared SDK (`v0.4.1-hf.1`: `Core`, `Retro`, `Sidecars`, `Server`, `Launcher`, `UI`, `Installer`, `@foundation/ui`, `foundation_core`).
 - **Agent Fast-Path:** `README.md` (Routing Matrix) -> `Dev\docs\INTERFACES.md` (1-Stop API Dictionary) -> `Dev\docs\ARCHITECTURE.md` (File Registry).
-- **Workspace & Hub:** [`Dev\`](file:///<PROJECTS_ROOT>/Foundation/Dev/) | [`Sandbox\`](file:///<PROJECTS_ROOT>/Foundation/Sandbox/) (`--test-mode`) | Read-Only Hub: `<PROJECTS_ROOT>\SharedLibs\Foundation\`
+- **Workspace & Hub:** [`Dev\`](file:///<PROJECTS_ROOT>/Foundation/Dev/) | Read-Only Hub: `<PROJECTS_ROOT>\SharedLibs\Foundation\`
 
 ## 1. Quartet & State
 - [`README.md`](file:///<PROJECTS_ROOT>/Foundation/README.md) | [`FEATURES.md`](file:///<PROJECTS_ROOT>/Foundation/FEATURES.md) | [`ROADMAP.md`](file:///<PROJECTS_ROOT>/Foundation/ROADMAP.md) | [`CHANGELOG.md`](file:///<PROJECTS_ROOT>/Foundation/CHANGELOG.md) | [`active.state`](file:///<PROJECTS_ROOT>/Foundation/active.state)

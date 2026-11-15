@@ -1,7 +1,7 @@
 // @module: Foundation.Retro.RecompContracts
-// @purpose: Pure-.NET static recompilation host, game module, timing/FPS patch, checksum, render backend, and visible-test contracts.
+// @purpose: Pure-.NET static recompilation host, game module, timing/FPS patch, checksum, and render backend contracts.
 // @depends-on: System, System.Collections.Generic, System.Threading, System.Threading.Tasks
-// @exports: DiscChecksumEntry, IRecompModuleManifest, RecompTimingMode, RecompPatchDescriptor, RecompHostOptions, RecompFrameStats, IRecompRenderBackend, IRecompHost, IRecompGameModule, SaveStateFixtureSpec, VisibleTestShowcaseOptions, IVisibleTestHarness
+// @exports: DiscChecksumEntry, IRecompModuleManifest, RecompTimingMode, RecompPatchDescriptor, RecompHostOptions, RecompFrameStats, IRecompRenderBackend, IRecompHost, IRecompGameModule
 
 using System;
 using System.Collections.Generic;
@@ -48,7 +48,6 @@ public sealed record RecompHostOptions
     public int ScaleFactor { get; init; } = 1;
     public int AudioSampleRate { get; init; } = 44100;
     public bool EnableHudOverlay { get; init; }
-    public bool VisibleTest { get; init; }
     public RecompExecutionTierMode ExecutionTier { get; init; } = RecompExecutionTierMode.AotPrimary;
     public string RenderBackendId { get; init; } = RecompRenderBackendIds.Software;
     public string? AotCacheDirectory { get; init; }
@@ -86,25 +85,4 @@ public interface IRecompGameModule
     Task InitializeAsync(IRecompHost host, CancellationToken ct = default);
     Task StepFrameAsync(CancellationToken ct = default);
     Task LoadSaveStateAsync(string saveStatePath, CancellationToken ct = default);
-}
-
-public sealed record SaveStateFixtureSpec(
-    string FixtureId,
-    string SceneName,
-    string SaveStatePath,
-    int FrameCount = 60,
-    string? ExpectedFramebufferSha256 = null,
-    string? ExpectedAudioWavSha256 = null,
-    int AllowedPixelDelta = 0
-);
-
-public sealed record VisibleTestShowcaseOptions(
-    int DurationMs = 3000,
-    bool AutoExit = true,
-    string? CaptureScreenshotPath = null
-);
-
-public interface IVisibleTestHarness
-{
-    Task<bool> RunVisibleTestAsync(VisibleTestShowcaseOptions options, CancellationToken ct = default);
 }

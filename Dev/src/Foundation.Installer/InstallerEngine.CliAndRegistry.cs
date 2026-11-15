@@ -1,14 +1,12 @@
-// @module: Foundation.Installer.InstallerEngine.TestModeAndCli
+// @module: Foundation.Installer.InstallerEngine.CliAndRegistry
 // @purpose: CLI argument parsing, HKCU Uninstall registry registration, pre-upgrade state backups, running process shutdown, and bounded self-delete trampoline.
-// @depends-on: System, System.Collections.Generic, System.Diagnostics, System.IO, System.Reflection, System.Text, System.Text.Json, System.Threading, System.Threading.Tasks, Microsoft.Win32
+// @depends-on: System, System.Collections.Generic, System.Diagnostics, System.IO, System.Threading, System.Threading.Tasks, Microsoft.Win32
 // @exports: InstallerCliOptions, InstallerEngine (partial: ParseCliArgs, RegisterUninstallerMetadata, RemoveUninstallerMetadata, EnsureWithinDirectory, CreatePreUpgradeBackupAsync, OpenPayloadStream, BuildSelfDeleteTrampolineCommand)
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
@@ -18,7 +16,6 @@ namespace Foundation.Installer;
 public sealed record InstallerCliOptions(
     string? InstallDir,
     string? DataDir,
-    string? SandboxRoot,
     string? ConfigPath,
     string? LogDir,
     string? PayloadPath,
@@ -33,10 +30,7 @@ public sealed record InstallerCliOptions(
     bool LaunchAfter,
     bool NoLaunch,
     bool Silent,
-    bool TestMode,
     bool DryRun,
-    bool Headless,
-    bool VisibleTest,
     bool MigrateLegacy,
     bool ShowHelp,
     bool ShowVersion)
@@ -52,12 +46,11 @@ public sealed partial class InstallerEngine
         ArgumentNullException.ThrowIfNull(descriptor);
         args ??= Array.Empty<string>();
 
-        string? installDir = null, dataDir = null, sandboxRoot = null, configPath = null, logDir = null, payloadPath = null;
+        string? installDir = null, dataDir = null, configPath = null, logDir = null, payloadPath = null;
         string? profileId = null, reEngineDir = null, suiteDir = null;
         bool uninstall = string.Equals(Path.GetFileName(Environment.ProcessPath), descriptor.UninstallerExeName, StringComparison.OrdinalIgnoreCase);
         bool purgeData = false, verifyOnly = false, noShortcuts = false, autoStart = false, launchAfter = false, noLaunch = false;
-        bool silent = false, testMode = false, dryRun = false, headless = false, visibleTest = false, migrateLegacy = false;
-        bool showHelp = false, showVersion = false;
+        bool silent = false, dryRun = false, migrateLegacy = false, showHelp = false, showVersion = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -67,7 +60,6 @@ public sealed partial class InstallerEngine
                 case "--install-dir":
                 case "--target-dir": installDir = RequireNextCliValue(args, ref i, arg); break;
                 case "--data-dir": dataDir = RequireNextCliValue(args, ref i, arg); break;
-                case "--sandbox-root": sandboxRoot = RequireNextCliValue(args, ref i, arg); break;
                 case "--config": configPath = RequireNextCliValue(args, ref i, arg); break;
                 case "--log-dir": logDir = RequireNextCliValue(args, ref i, arg); break;
                 case "--payload": payloadPath = RequireNextCliValue(args, ref i, arg); break;
@@ -84,10 +76,7 @@ public sealed partial class InstallerEngine
                 case "--no-restart": noLaunch = true; break;
                 case "--silent":
                 case "--quiet": silent = true; break;
-                case "--test-mode": testMode = true; break;
                 case "--dry-run": dryRun = true; break;
-                case "--headless": headless = true; break;
-                case "--visible-test": visibleTest = true; break;
                 case "--migrate-legacy": migrateLegacy = true; break;
                 case "--version":
                 case "-v": showVersion = true; break;
@@ -100,10 +89,10 @@ public sealed partial class InstallerEngine
         }
 
         return new InstallerCliOptions(
-            installDir, dataDir, sandboxRoot, configPath, logDir, payloadPath,
+            installDir, dataDir, configPath, logDir, payloadPath,
             profileId, reEngineDir, suiteDir,
             uninstall, purgeData, verifyOnly, noShortcuts, autoStart, launchAfter, noLaunch,
-            silent, testMode, dryRun, headless, visibleTest, migrateLegacy, showHelp, showVersion);
+            silent, dryRun, migrateLegacy, showHelp, showVersion);
     }
 
     private static string RequireNextCliValue(string[] args, ref int index, string flag)
@@ -113,32 +102,17 @@ public sealed partial class InstallerEngine
         index++;
         return args[index].Trim();
     }
+
     private string? RegisterUninstallerMetadata(string installDir, string uninstallerPath)
     {
+        if (_ctx.ShouldSuppressHostMutations || !OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
         string displayIcon = ResolveInstalledExecutablePath(installDir);
         string uninstallCmd = $"\"{uninstallerPath}\" --uninstall";
         string quietUninstallCmd = $"\"{uninstallerPath}\" --uninstall --silent";
-
-        if (_ctx.IsContainedMode || !OperatingSystem.IsWindows())
-        {
-            string virtualRegDir = _ctx.DataDirectory ?? installDir;
-            Directory.CreateDirectory(virtualRegDir);
-            string virtualRegPath = Path.Combine(virtualRegDir, "uninstall-registry.json");
-            var record = new Dictionary<string, object>
-            {
-                ["DisplayName"] = Descriptor.DisplayName,
-                ["DisplayVersion"] = InstallerVersion,
-                ["Publisher"] = Descriptor.Publisher,
-                ["InstallLocation"] = installDir,
-                ["DisplayIcon"] = displayIcon,
-                ["UninstallString"] = uninstallCmd,
-                ["QuietUninstallString"] = quietUninstallCmd,
-                ["NoModify"] = 1,
-                ["NoRepair"] = 1
-            };
-            File.WriteAllText(virtualRegPath, JsonSerializer.Serialize(record, JsonOpts), new UTF8Encoding(false));
-            return virtualRegPath;
-        }
 
         using RegistryKey? key = Registry.CurrentUser.CreateSubKey(Descriptor.WindowsUninstallRegistrySubKey, writable: true);
         if (key != null)
@@ -158,18 +132,13 @@ public sealed partial class InstallerEngine
 
     private void RemoveUninstallerMetadata(string? recordedLocation)
     {
-        if (!string.IsNullOrWhiteSpace(recordedLocation) &&
-            !recordedLocation.StartsWith("HKCU\\", StringComparison.OrdinalIgnoreCase) &&
-            File.Exists(recordedLocation))
+        _ = recordedLocation;
+        if (_ctx.ShouldSuppressHostMutations || !OperatingSystem.IsWindows())
         {
-            try { File.Delete(recordedLocation); } catch { }
             return;
         }
 
-        if (!_ctx.IsContainedMode && OperatingSystem.IsWindows())
-        {
-            try { Registry.CurrentUser.DeleteSubKeyTree(Descriptor.WindowsUninstallRegistrySubKey, throwOnMissingSubKey: false); } catch { }
-        }
+        try { Registry.CurrentUser.DeleteSubKeyTree(Descriptor.WindowsUninstallRegistrySubKey, throwOnMissingSubKey: false); } catch { }
     }
 
     public Task<string?> CreatePreUpgradeBackupAsync(

@@ -83,9 +83,9 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
     }
 
     [Fact]
-    public async Task InstallerEngineCore_And_WizardForm_CompleteFullTestModeLifecycle()
+    public async Task InstallerEngineCore_And_WizardForm_CompleteFullIsolatedLifecycle()
     {
-        var sandbox = new SandboxEnvironment("shadowlibrary", new[] { "--data-dir", _tempDir, "--test-mode" });
+        var env = new AppEnvironment("shadowlibrary", new[] { "--data-dir", _tempDir });
         var theme = new InstallerThemeOptions
         {
             AppId = "shadowlibrary",
@@ -94,7 +94,7 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
             BrandAccentHex = "#6366F1",
             DefaultInstallDir = Path.Combine(_tempDir, "installed-app")
         };
-        var engine = new InstallerEngineCore(theme, sandbox);
+        var engine = new InstallerEngineCore(theme, env);
 
         using var payloadZip = BuildSamplePayloadZip("v1");
         FoundationInstallResult installRes = await engine.InstallOrUpgradeFromZipAsync(payloadZip);
@@ -125,7 +125,7 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
         Assert.Equal(570, wizard.ClientSize.Height);
 
         var branding = new ShellBrandingOptions { AppId = "shadowlibrary", DisplayName = "ShadowLibrary" };
-        Assert.Equal("0.4.1", branding.SdkVersion);
+        Assert.Equal("0.4.1-hf.1", branding.SdkVersion);
 
         FoundationInstallResult uninstallRes = engine.Uninstall(purgeUserData: false);
         Assert.True(uninstallRes.Success);
@@ -152,8 +152,8 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
             await File.WriteAllBytesAsync(payloadZipPath, payloadMs.ToArray());
         }
 
-        string sandboxDataDir = Path.Combine(_tempDir, "ne-sandbox");
-        var ctx = new InstallerSandboxContext(cliDataDir: sandboxDataDir, testMode: true, envPrefix: descriptor.EnvPrefix);
+        string isolatedDataDir = Path.Combine(_tempDir, "ne-isolated");
+        var ctx = new InstallerRuntimeContext(cliDataDir: isolatedDataDir, envPrefix: descriptor.EnvPrefix);
         var engine = new InstallerEngine(descriptor, ctx);
 
         var verifyRes = await engine.VerifyPayloadAsync(payloadZipPath);

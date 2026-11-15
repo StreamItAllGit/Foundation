@@ -1,5 +1,5 @@
 // @module: Foundation.Installer.FileLockRetryHelper
-// @purpose: Bounded backoff retry helper for transient file locks and safe Sandbox/Temp test-mode install path detection.
+// @purpose: Bounded backoff retry helper for transient file locks and isolated temp-path safety checks.
 // @depends-on: System, System.IO, System.Threading, System.Threading.Tasks
 // @exports: FileLockRetryHelper
 
@@ -74,7 +74,7 @@ public static class FileLockRetryHelper
         ex is UnauthorizedAccessException ||
         (ex is IOException && ex is not FileNotFoundException && ex is not DirectoryNotFoundException && ex is not PathTooLongException);
 
-    public static bool IsSafeTestInstallDirectory(string? candidateDir)
+    public static bool IsSafeIsolatedInstallDirectory(string? candidateDir)
     {
         if (string.IsNullOrWhiteSpace(candidateDir)) return false;
         try
@@ -82,16 +82,40 @@ public static class FileLockRetryHelper
             string full = Path.GetFullPath(candidateDir.Trim()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             string? root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (string.IsNullOrWhiteSpace(root) || string.Equals(full, root, StringComparison.OrdinalIgnoreCase)) return false;
-
-            string[] segments = full.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Length >= 2 && string.Equals(segments[1], "Programs", StringComparison.OrdinalIgnoreCase)) return false;
+            if (IsCanonicalProductionOrSystemPath(full)) return false;
 
             string tempRoot = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (full.StartsWith(tempRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return true;
+            return full.StartsWith(tempRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
 
-            for (int i = 1; i < segments.Length; i++)
+    public static bool IsCanonicalProductionOrSystemPath(string? candidateDir)
+    {
+        if (string.IsNullOrWhiteSpace(candidateDir)) return false;
+        try
+        {
+            string full = Path.GetFullPath(candidateDir.Trim()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string[] segments = full.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length >= 2 && string.Equals(segments[1], "Programs", StringComparison.OrdinalIgnoreCase)) return true;
+
+            string[] protectedRoots =
             {
-                if (string.Equals(segments[i], "Sandbox", StringComparison.OrdinalIgnoreCase)) return true;
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs")
+            };
+
+            foreach (string root in protectedRoots)
+            {
+                if (string.IsNullOrWhiteSpace(root)) continue;
+                string fullProtected = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.Equals(full, fullProtected, StringComparison.OrdinalIgnoreCase) ||
+                    full.StartsWith(fullProtected + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
             }
             return false;
         }

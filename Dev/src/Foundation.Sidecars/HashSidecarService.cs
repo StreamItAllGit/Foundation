@@ -37,7 +37,7 @@ public static class HashSidecarService
     };
 
     public static string GetHashSidecarPath(string targetFileOrFolderPath) =>
-        SandboxEnvironment.NormalizeLongPath(targetFileOrFolderPath + ".hash");
+        AppEnvironment.NormalizeLongPath(targetFileOrFolderPath + ".hash");
 
     public static SidecarDocument? ParseHashSidecarLines(IEnumerable<string> rawLines, string outerName)
     {

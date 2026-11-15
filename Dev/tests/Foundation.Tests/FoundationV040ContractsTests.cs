@@ -1,5 +1,5 @@
 // @module: Foundation.Tests.V040Contracts
-// @purpose: Acceptance tests for Foundation v0.4.0 contracts (Studio/Suite install root, sibling Sandbox containment, Installer CLI, SafeNetworkTransfer, RootLauncherHost, ConsoleSystemCatalog, and AOT/Recomp contracts).
+// @purpose: Acceptance tests for Foundation v0.4.0+ contracts (Studio/Suite install root, isolated production path guards, Installer CLI, SafeNetworkTransfer, RootLauncherHost, ConsoleSystemCatalog, and AOT/Recomp contracts).
 // @depends-on: System, System.IO, System.Net, System.Net.Http, System.Text, System.Text.RegularExpressions, System.Threading, System.Threading.Tasks, Xunit, Foundation.Core, Foundation.Installer, Foundation.Launcher, Foundation.Retro
 // @exports: FoundationV040ContractsTests
 
@@ -63,31 +63,27 @@ public sealed class FoundationV040ContractsTests : IDisposable
             UmbrellaSubpath: @"CustomStudio\CustomSuite");
         Assert.Equal(Path.Combine(localPrograms, "CustomStudio", "CustomSuite", "UniqueUmbrellaApp040"), umbrella.CanonicalDefaultInstallDir);
 
-        var uncontainedCtx = new InstallerSandboxContext(testMode: false, envPrefix: "UNIQUE_TEST_APP_040");
-        var engine = new InstallerEngine(standalone, uncontainedCtx);
+        var standardCtx = new InstallerRuntimeContext(envPrefix: "UNIQUE_TEST_APP_040");
+        var engine = new InstallerEngine(standalone, standardCtx);
         string resolvedDefault = engine.ResolveDefaultInstallDirectory();
         Assert.StartsWith(localPrograms, resolvedDefault, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(@"D:\Programs", resolvedDefault, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void SandboxEnvironment_And_InstallerEngine_EnforceFailClosedSiblingContainment()
+    public void InstallerEngine_EnforcesIsolatedProductionPathGuard_And_AllowsTempInstallDir()
     {
-        string sandboxRoot = Path.Combine(_tempDir, "Sandbox");
-        string sandboxData = Path.Combine(sandboxRoot, "data");
-        string sandboxInstalled = Path.Combine(sandboxRoot, "installed");
-        Directory.CreateDirectory(sandboxData);
-
-        Assert.Equal(sandboxRoot, SandboxEnvironment.ResolveSiblingSandboxRoot(sandboxData));
-        Assert.Null(SandboxEnvironment.ResolveSiblingSandboxRoot(null));
-        Assert.Null(SandboxEnvironment.ResolveSiblingSandboxRoot(Path.Combine(_tempDir, "HostOnly", "data")));
+        string isolatedRoot = Path.Combine(_tempDir, "Isolated");
+        string isolatedData = Path.Combine(isolatedRoot, "data");
+        string isolatedInstalled = Path.Combine(isolatedRoot, "installed");
+        Directory.CreateDirectory(isolatedData);
 
         var descriptor = new InstallerAppDescriptor("ContainmentApp", "Containment App", "StreamItAll", "0.4.0");
-        var ctx = new InstallerSandboxContext(cliDataDir: sandboxData, testMode: true, envPrefix: "CONTAINMENT_APP");
+        var ctx = new InstallerRuntimeContext(cliDataDir: isolatedData, envPrefix: "CONTAINMENT_APP");
         var engine = new InstallerEngine(descriptor, ctx);
 
-        string normalized = engine.ValidateAndNormalizeInstallDirectory(sandboxInstalled);
-        Assert.Equal(Path.GetFullPath(sandboxInstalled), normalized);
+        string normalized = engine.ValidateAndNormalizeInstallDirectory(isolatedInstalled);
+        Assert.Equal(Path.GetFullPath(isolatedInstalled), normalized);
 
         string hostEscapePath = Path.Combine(Path.GetPathRoot(_tempDir) ?? @"C:\", "Program Files", "HostEscapeApp");
         Assert.Throws<InvalidOperationException>(() => engine.ValidateAndNormalizeInstallDirectory(hostEscapePath));
@@ -100,27 +96,25 @@ public sealed class FoundationV040ContractsTests : IDisposable
         string[] args =
         {
             "--profile", "Full",
-            "--reengine-dir", @"C:\Sandbox\reEngine",
-            "--sandbox-root", @"C:\Sandbox",
+            "--reengine-dir", @"C:\Isolated\reEngine",
             "--migrate-legacy",
-            "--test-mode"
+            "--dry-run"
         };
 
         InstallerCliOptions opts = InstallerEngine.ParseCliArgs(args, descriptor);
         Assert.Equal("Full", opts.ProfileId);
-        Assert.Equal(@"C:\Sandbox\reEngine", opts.ReEngineDir);
+        Assert.Equal(@"C:\Isolated\reEngine", opts.ReEngineDir);
         Assert.Null(opts.SuiteDir);
-        Assert.Equal(@"C:\Sandbox\reEngine", opts.SecondaryDir);
+        Assert.Equal(@"C:\Isolated\reEngine", opts.SecondaryDir);
         Assert.Equal("--reengine-dir", opts.SecondaryFlagName);
-        Assert.Equal(@"C:\Sandbox", opts.SandboxRoot);
         Assert.True(opts.MigrateLegacy);
-        Assert.True(opts.TestMode);
+        Assert.True(opts.DryRun);
 
         InstallerCliOptions suiteOpts = InstallerEngine.ParseCliArgs(
-            new[] { "--suite-dir", @"C:\Sandbox\Suite" },
+            new[] { "--suite-dir", @"C:\Isolated\Suite" },
             descriptor);
-        Assert.Equal(@"C:\Sandbox\Suite", suiteOpts.SuiteDir);
-        Assert.Equal(@"C:\Sandbox\Suite", suiteOpts.SecondaryDir);
+        Assert.Equal(@"C:\Isolated\Suite", suiteOpts.SuiteDir);
+        Assert.Equal(@"C:\Isolated\Suite", suiteOpts.SecondaryDir);
         Assert.Equal("--suite-dir", suiteOpts.SecondaryFlagName);
     }
 
@@ -211,20 +205,19 @@ public sealed class FoundationV040ContractsTests : IDisposable
         Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--open", "game.bin" }));
         Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--check-updates" }));
         Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--register-assoc" }));
-        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--visible-test" }));
-        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--test-mode" }));
+        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--dry-run" }));
         Assert.False(RootLauncherHost.ShouldWaitForChild(Array.Empty<string>()));
         Assert.False(RootLauncherHost.ShouldWaitForChild(new[] { "--tray" }));
 
         string callerCwd = Path.Combine(_tempDir, "caller");
         Directory.CreateDirectory(callerCwd);
         string[] normalized = RootLauncherHost.NormalizeRelativePathArgs(
-            new[] { "--open", "roms/test.bin", "--input-script=scripts/run.json", "--tray", @".\save.dat" },
+            new[] { "--open", "roms/test.bin", "--config=cfg/app.json", "--tray", @".\save.dat" },
             callerCwd);
 
         Assert.Equal("--open", normalized[0]);
         Assert.Equal(Path.GetFullPath("roms/test.bin", callerCwd), normalized[1]);
-        Assert.Equal($"--input-script={Path.GetFullPath("scripts/run.json", callerCwd)}", normalized[2]);
+        Assert.Equal($"--config={Path.GetFullPath("cfg/app.json", callerCwd)}", normalized[2]);
         Assert.Equal("--tray", normalized[3]);
         Assert.Equal(Path.GetFullPath(@".\save.dat", callerCwd), normalized[4]);
     }

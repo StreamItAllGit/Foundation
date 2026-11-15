@@ -32,17 +32,17 @@ public sealed partial class InstallerEngine
         PropertyNameCaseInsensitive = true
     };
 
-    private readonly InstallerSandboxContext _ctx;
+    private readonly InstallerRuntimeContext _ctx;
     private readonly Assembly _payloadAssembly;
 
     public InstallerAppDescriptor Descriptor { get; }
-    public InstallerSandboxContext Context => _ctx;
+    public InstallerRuntimeContext Context => _ctx;
     public string InstallerVersion => Descriptor.Version;
     public string UninstallerExeName => Descriptor.UninstallerExeName;
 
     public InstallerEngine(
         InstallerAppDescriptor descriptor,
-        InstallerSandboxContext ctx,
+        InstallerRuntimeContext ctx,
         Assembly? payloadAssembly = null)
     {
         Descriptor = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
@@ -90,7 +90,7 @@ public sealed partial class InstallerEngine
         if (!string.IsNullOrWhiteSpace(envInstallDir))
             return Path.GetFullPath(envInstallDir.Trim());
 
-        if (!_ctx.IsContainedMode && OperatingSystem.IsWindows())
+        if (!_ctx.ShouldSuppressHostMutations && OperatingSystem.IsWindows())
         {
             try
             {
@@ -125,23 +125,10 @@ public sealed partial class InstallerEngine
             throw new ArgumentException("Refusing to install directly into a filesystem drive root.", nameof(explicitInstallDir));
         }
 
-        if (_ctx.IsContainedMode)
+        if (_ctx.ShouldSuppressHostMutations && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(resolved))
         {
-            if (string.IsNullOrWhiteSpace(_ctx.DataDirectory) && !string.IsNullOrWhiteSpace(explicitInstallDir))
-            {
-                _ctx.TryAdoptSafeTestDataDirectory(resolved);
-            }
-
-            if (string.IsNullOrWhiteSpace(_ctx.DataDirectory))
-            {
-                throw new InvalidOperationException(
-                    $"Fail-closed sandbox violation: --test-mode requires --data-dir, {Descriptor.EnvPrefix}_DATA_DIR, DATA_DIR, APP_HOME, or an explicit --install-dir inside Sandbox\\ or Temp.");
-            }
-
-            string containmentBoundary = !string.IsNullOrWhiteSpace(_ctx.SandboxRoot)
-                ? _ctx.SandboxRoot!
-                : _ctx.DataDirectory!;
-            EnsureWithinDirectory(containmentBoundary, resolved);
+            throw new InvalidOperationException(
+                $"Fail-closed isolation violation: refusing to target canonical production or system directory '{resolved}'.");
         }
 
         _ctx.EnsureDefaultLogDirectory(resolved);

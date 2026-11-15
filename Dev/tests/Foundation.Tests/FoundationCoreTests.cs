@@ -1,5 +1,5 @@
 // @module: Foundation.Tests.Core
-// @purpose: Unit tests for SandboxEnvironment, PidSafeLockfile, SqliteWalPool, CrashBundleService, HeartbeatLogger, HybridModuleLoader, and DualJobCancellationCoordinator.
+// @purpose: Unit tests for AppEnvironment, PidSafeLockfile, SqliteWalPool, CrashBundleService, HeartbeatLogger, HybridModuleLoader, and DualJobCancellationCoordinator.
 // @depends-on: System, System.Collections.Generic, System.IO, System.Threading, System.Threading.Tasks, Foundation.Core, Foundation.Core.Contracts, Xunit
 // @exports: SampleFolderSliceModule, FoundationCoreTests
 
@@ -43,28 +43,26 @@ public sealed class FoundationCoreTests : IDisposable
     }
 
     [Fact]
-    public void SandboxEnvironment_ResolvesFlagsAndEnforcesFailClosedContainment()
+    public void AppEnvironment_ResolvesFlagsAndEnforcesFailClosedContainment()
     {
-        string dataDir = Path.Combine(_tempDir, "sandbox_data");
-        var env = new SandboxEnvironment("shadowlibrary", new[]
+        string dataDir = Path.Combine(_tempDir, "isolated_data");
+        var env = new AppEnvironment("shadowlibrary", new[]
         {
             "--data-dir", dataDir,
-            "--port=15179",
-            "--test-mode",
+            "--port=5179",
             "--suite-tab"
         });
 
         Assert.Equal("shadowlibrary", env.AppId);
-        Assert.True(env.TestMode);
-        Assert.True(env.IsContainedSandbox);
-        Assert.Equal(15179, env.PortOverride);
+        Assert.Equal(Path.GetFullPath(dataDir), env.DataDirectory);
+        Assert.Equal(5179, env.PortOverride);
         Assert.Equal(UiPresentationMode.SuiteTab, env.PresentationMode);
 
         string validChild = Path.Combine(dataDir, "vaults", "nes");
-        Assert.Equal(Path.GetFullPath(validChild), env.AssertSandboxPathContained(validChild));
+        Assert.Equal(Path.GetFullPath(validChild), AppEnvironment.AssertPathContained(validChild, dataDir));
 
         string escapedPath = Path.Combine(_tempDir, "outside_folder");
-        Assert.Throws<InvalidOperationException>(() => env.AssertSandboxPathContained(escapedPath));
+        Assert.Throws<InvalidOperationException>(() => AppEnvironment.AssertPathContained(escapedPath, dataDir));
     }
 
     [Fact]

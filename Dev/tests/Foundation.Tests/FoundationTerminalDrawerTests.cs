@@ -88,10 +88,10 @@ public sealed class FoundationTerminalDrawerTests
         Assert.Contains("coalesceTerminalLogBatch", indexText);
 
         string pkgText = File.ReadAllText(pkgPath);
-        Assert.Contains("\"version\": \"0.4.1\"", pkgText);
+        Assert.Contains("\"version\": \"0.4.1-hf.1\"", pkgText);
 
         var branding = new ShellBrandingOptions { AppId = "test", DisplayName = "Test" };
-        Assert.Equal("0.4.1", branding.SdkVersion);
+        Assert.Equal("0.4.1-hf.1", branding.SdkVersion);
     }
 
     [Fact]
@@ -142,7 +142,14 @@ public sealed class FoundationTerminalDrawerTests
         Assert.True(File.ReadAllLines(scriptPath).Length <= 260);
 
         string tempConsumer = Path.Combine(Path.GetTempPath(), "FoundationConsumerTest_" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(Path.Combine(tempConsumer, "Dev", "lib"));
+        string tempSharedLibs = Path.Combine(Path.GetTempPath(), "FoundationSharedLibsTest_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(Path.Combine(tempConsumer, "Dev", "lib", "Foundation", "tools"));
+        string staleVerifyTool = Path.Combine(tempConsumer, "Dev", "lib", "Foundation", "tools", "verify_sandbox_universal.py");
+        string staleSandboxDll = Path.Combine(tempConsumer, "Dev", "lib", "Foundation.Sandbox.dll");
+        string staleVisibleCs = Path.Combine(tempConsumer, "Dev", "lib", "VisibleTestWindowHelper.cs");
+        File.WriteAllText(staleVerifyTool, "# stale");
+        File.WriteAllText(staleSandboxDll, "stale");
+        File.WriteAllText(staleVisibleCs, "// stale");
         try
         {
             var psi = new ProcessStartInfo("python")
@@ -150,8 +157,8 @@ public sealed class FoundationTerminalDrawerTests
                 ArgumentList =
                 {
                     scriptPath,
-                    "--version", "0.4.1",
-                    "--ui-version", "0.4.1",
+                    "--version", "0.4.1-hf.1",
+                    "--ui-version", "0.4.1-hf.1",
                     "--publish",
                     "--sync-consumer", tempConsumer
                 },
@@ -160,6 +167,7 @@ public sealed class FoundationTerminalDrawerTests
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            psi.Environment["FOUNDATION_SHARED_LIBS_ROOT"] = tempSharedLibs;
 
             using var proc = Process.Start(psi)!;
             string stdout = proc.StandardOutput.ReadToEnd();
@@ -167,17 +175,10 @@ public sealed class FoundationTerminalDrawerTests
             proc.WaitForExit(30000);
             Assert.True(proc.ExitCode == 0, $"sync_foundation_sdk.py failed: {stderr}\n{stdout}");
 
-            string? sharedLibsFoundationRoot = Environment.GetEnvironmentVariable("FOUNDATION_SHARED_LIBS_ROOT");
-            if (string.IsNullOrWhiteSpace(sharedLibsFoundationRoot))
-            {
-                string projectsRoot = Directory.GetParent(Directory.GetParent(root)!.FullName)!.FullName;
-                sharedLibsFoundationRoot = Path.Combine(projectsRoot, "SharedLibs", "Foundation");
-            }
-
             foreach (string sharedDir in new[]
             {
-                Path.Combine(sharedLibsFoundationRoot, "v0.4.1"),
-                Path.Combine(sharedLibsFoundationRoot, "Latest")
+                Path.Combine(tempSharedLibs, "v0.4.1-hf.1"),
+                Path.Combine(tempSharedLibs, "Latest")
             })
             {
                 Assert.True(File.Exists(Path.Combine(sharedDir, "Foundation.UI.dll")));
@@ -189,18 +190,22 @@ public sealed class FoundationTerminalDrawerTests
                 Assert.True(File.Exists(Path.Combine(sharedDir, "sdk-manifest.json")));
 
                 using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(sharedDir, "sdk-manifest.json")));
-                Assert.Equal("0.4.1", doc.RootElement.GetProperty("version").GetString());
-                Assert.Equal("0.4.1", doc.RootElement.GetProperty("uiVersion").GetString());
+                Assert.Equal("0.4.1-hf.1", doc.RootElement.GetProperty("version").GetString());
+                Assert.Equal("0.4.1-hf.1", doc.RootElement.GetProperty("uiVersion").GetString());
             }
 
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "Foundation.UI.dll")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "WebAssets", "foundation-terminal.js")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "WebAssets", "components", "GlobalTerminalDrawer.tsx")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "foundation_core", "__init__.py")));
+            Assert.False(File.Exists(staleVerifyTool));
+            Assert.False(File.Exists(staleSandboxDll));
+            Assert.False(File.Exists(staleVisibleCs));
         }
         finally
         {
             try { Directory.Delete(tempConsumer, recursive: true); } catch { }
+            try { Directory.Delete(tempSharedLibs, recursive: true); } catch { }
         }
     }
 }

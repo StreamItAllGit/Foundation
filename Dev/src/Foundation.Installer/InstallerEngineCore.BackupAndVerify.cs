@@ -247,4 +247,133 @@ public sealed partial class InstallerEngineCore
         }
         catch { return false; }
     }
+
+    public string? DetectLegacyFlatInstall(string? legacyBaseDir = null)
+    {
+        string searchRoot;
+        if (!string.IsNullOrWhiteSpace(legacyBaseDir))
+        {
+            searchRoot = Path.GetFullPath(legacyBaseDir);
+            if (IsIsolatedOverride && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(searchRoot))
+            {
+                throw new InvalidOperationException(
+                    $"Fail-closed isolation violation: refusing to scan canonical production or system path '{searchRoot}'.");
+            }
+        }
+        else if (IsIsolatedOverride)
+        {
+            searchRoot = Path.Combine(RuntimeEnvironment.DataDirectory, "legacy-programs");
+        }
+        else
+        {
+            searchRoot = Path.Combine("D:" + Path.DirectorySeparatorChar, "Programs");
+        }
+
+        if (!Directory.Exists(searchRoot))
+        {
+            return null;
+        }
+
+        foreach (string folderName in new[] { Theme.DisplayName, Theme.AppId })
+        {
+            if (string.IsNullOrWhiteSpace(folderName)) continue;
+            string candidate = Path.Combine(searchRoot, folderName.Trim());
+            if (HasExistingInstallation(candidate) || File.Exists(Path.Combine(candidate, "settings.json")))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    public async Task<FoundationInstallResult> MigrateLegacyInstallAsync(
+        string legacySourceDir,
+        string? targetInstallDir = null,
+        bool optInConfirmed = false,
+        bool dryRun = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (!optInConfirmed)
+        {
+            throw new InvalidOperationException("Legacy install migration requires explicit opt-in (--migrate-legacy or wizard checkbox).");
+        }
+
+        if (string.IsNullOrWhiteSpace(legacySourceDir))
+        {
+            throw new ArgumentException("Legacy source directory is required.", nameof(legacySourceDir));
+        }
+
+        string fullSource = Path.GetFullPath(legacySourceDir);
+        string fullTarget = ResolveTargetInstallDir(targetInstallDir);
+        if (IsIsolatedOverride &&
+            (FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullSource) || FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullTarget)))
+        {
+            throw new InvalidOperationException(
+                "Fail-closed isolation violation: refusing to migrate canonical production or system directories.");
+        }
+
+        if (!Directory.Exists(fullSource))
+        {
+            return new FoundationInstallResult(false, fullTarget, string.Empty, 0, $"Legacy directory not found: '{fullSource}'.", false);
+        }
+
+        if (string.Equals(fullSource.TrimEnd(Path.DirectorySeparatorChar), fullTarget.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+        {
+            return new FoundationInstallResult(true, fullTarget, string.Empty, 0, "Legacy source and target directory are identical.", false);
+        }
+
+        if (RuntimeEnvironment.DryRun || dryRun)
+        {
+            return new FoundationInstallResult(true, fullTarget, string.Empty, 0, $"[DRY-RUN] Would migrate legacy install from '{fullSource}' to '{fullTarget}'.", false);
+        }
+
+        Directory.CreateDirectory(fullTarget);
+        int migratedCount = 0;
+
+        foreach (string entryName in ProtectedTopDirectories)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string srcSub = Path.Combine(fullSource, entryName);
+            string dstSub = Path.Combine(fullTarget, entryName);
+            if (Directory.Exists(srcSub))
+            {
+                migratedCount += await CopyDirectoryPreservingAsync(srcSub, dstSub, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        string srcSettings = Path.Combine(fullSource, "settings.json");
+        string dstSettings = Path.Combine(fullTarget, "settings.json");
+        if (File.Exists(srcSettings) && !File.Exists(dstSettings))
+        {
+            FileLockRetryHelper.CopyWithOverwrite(srcSettings, dstSettings, ct: cancellationToken);
+            migratedCount++;
+        }
+
+        try { Directory.Delete(fullSource, recursive: true); } catch { /* non-fatal if locked */ }
+
+        return new FoundationInstallResult(true, fullTarget, string.Empty, migratedCount, $"Migrated {migratedCount} legacy items from '{fullSource}' to '{fullTarget}'.", false);
+    }
+
+    private static async Task<int> CopyDirectoryPreservingAsync(string sourceDir, string targetDir, CancellationToken ct)
+    {
+        Directory.CreateDirectory(targetDir);
+        int count = 0;
+        foreach (string file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            ct.ThrowIfCancellationRequested();
+            string rel = Path.GetRelativePath(sourceDir, file);
+            string dest = Path.Combine(targetDir, rel);
+            string? parent = Path.GetDirectoryName(dest);
+            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+            if (!File.Exists(dest))
+            {
+                await using var inFs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+                await using var outFs = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+                await inFs.CopyToAsync(outFs, ct).ConfigureAwait(false);
+                count++;
+            }
+        }
+        return count;
+    }
 }

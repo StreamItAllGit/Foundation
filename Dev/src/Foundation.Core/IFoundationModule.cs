@@ -52,6 +52,6 @@ public interface IFoundationModule
     /// <summary>Declarative settings owned by this module, rendered automatically by SchemaSettingsRenderer.</summary>
     IReadOnlyList<SchemaSettingDescriptor> SettingsSchema { get; }
 
-    /// <summary>Executes the module's headless CLI or background worker action with mandatory CancellationToken propagation.</summary>
+    /// <summary>Executes the module's CLI or background worker action with mandatory CancellationToken propagation.</summary>
     Task<int> ExecuteCliAsync(IReadOnlyList<string> args, CancellationToken cancellationToken = default);
 }

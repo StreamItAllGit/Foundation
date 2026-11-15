@@ -18,22 +18,22 @@ public static class RootLauncherHost
     private static readonly HashSet<string> SyncWaitFlags = new(StringComparer.OrdinalIgnoreCase)
     {
         "--version", "-v", "--help", "-h", "/?", "help",
-        "--headless", "--dry-run", "--wait", "--open",
-        "--check-updates", "--register-assoc", "--visible-test", "--test-mode"
+        "--dry-run", "--wait", "--open",
+        "--check-updates", "--register-assoc"
     };
 
     private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
     {
         "--port", "--ui", "--data-dir", "--config", "--log-dir", "--feed", "--open",
-        "--frames", "--input-script", "--profile", "--install-dir", "--reengine-dir",
-        "--suite-dir", "--sandbox-root", "--rom", "--manifest", "--output", "--out",
+        "--frames", "--profile", "--install-dir", "--reengine-dir",
+        "--suite-dir", "--rom", "--manifest", "--output", "--out",
         "--file", "--path"
     };
 
     private static readonly HashSet<string> PathValueOptions = new(StringComparer.OrdinalIgnoreCase)
     {
         "--open", "--data-dir", "--config", "--log-dir", "--install-dir", "--reengine-dir",
-        "--suite-dir", "--sandbox-root", "--input-script", "--rom", "--manifest",
+        "--suite-dir", "--rom", "--manifest",
         "--output", "--out", "--file", "--path"
     };
 

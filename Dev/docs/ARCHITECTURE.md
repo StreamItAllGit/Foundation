@@ -1,4 +1,4 @@
-# Foundation (`v0.4.1`) — Architecture & File Registry
+# Foundation (`v0.4.1-hf.1`) — Architecture & File Registry
 
 > **Audience:** Engineers and autonomous agents working on `<PROJECTS_ROOT>\Foundation\` or tracing internals referenced by consumer apps (`Housekeeping`, `ShadowLibrary`, `reStation`, `KingsFieldRecomp`, `MediaSync`).
 > **Note for API Lookups:** If you only need public signatures, props, or CLI flags, read [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md) first instead of opening source files.
@@ -7,18 +7,18 @@
 
 ## 1. System Overview & Assembly Dependency Topology
 
-`Foundation` is the zero-duplication Shared SDK & Infrastructure Core (`v0.4.1`, `.NET 8`, React/TypeScript `@foundation/ui v0.4.1`, Python `foundation_core v0.4.1`) serving all companion apps under `<PROJECTS_ROOT>\`. Consumers treat both `<PROJECTS_ROOT>\Foundation\` and the published binary hub `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` as **strictly read-only** during consumer development.
+`Foundation` is the zero-duplication Shared SDK & Infrastructure Core (`v0.4.1-hf.1`, `.NET 8`, React/TypeScript `@foundation/ui v0.4.1-hf.1`, Python `foundation_core v0.4.1-hf.1`) serving all companion apps under `<PROJECTS_ROOT>\`. Consumers treat both `<PROJECTS_ROOT>\Foundation\` and the published binary hub `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` as **strictly read-only** during consumer development.
 
 ```mermaid
 flowchart LR
-    Core["Foundation.Core v0.4.1"]
-    Retro["Foundation.Retro v0.4.1"]
-    Sidecars["Foundation.Sidecars v0.4.1"]
-    Server["Foundation.Server v0.4.1"]
-    Installer["Foundation.Installer v0.4.1"]
-    UI["Foundation.UI + @foundation/ui v0.4.1"]
-    Launcher["Foundation.Launcher v0.4.1"]
-    PyCore["foundation_core v0.4.1 (Python >= 3.12)"]
+    Core["Foundation.Core v0.4.1-hf.1"]
+    Retro["Foundation.Retro v0.4.1-hf.1"]
+    Sidecars["Foundation.Sidecars v0.4.1-hf.1"]
+    Server["Foundation.Server v0.4.1-hf.1"]
+    Installer["Foundation.Installer v0.4.1-hf.1"]
+    UI["Foundation.UI + @foundation/ui v0.4.1-hf.1"]
+    Launcher["Foundation.Launcher v0.4.1-hf.1"]
+    PyCore["foundation_core v0.4.1-hf.1 (Python >= 3.12)"]
     Hub["SharedLibs/Foundation/Latest"]
 
     Core --> Retro
@@ -40,50 +40,51 @@ flowchart LR
 
 | Subproject | Target / Runtime | Depends On (Project / External) | Primary Role |
 |---|---|---|---|
-| `Foundation.Core` (`v0.4.1`) | `net8.0` | `Microsoft.Data.Sqlite 8.0.11`, `System.Security.Cryptography.ProtectedData 8.0.0` | Sandboxing (`ResolveSiblingSandboxRoot`, visible-by-default `--test-mode` / `EffectiveVisibleTest`, `HEADLESS` env), CLI/logs, atomic settings, DPAPI, SQLite WAL, locks, telemetry, crash dumps, jobs, hardened HTTP (`ResponseHeadersTimeout`, `416` recovery), tools, module loader, high-res frame pacer, SPSC audio ring buffer, WAV/PNG/RGBA overlay |
-| `Foundation.Retro` (`v0.4.1`) | `net8.0` | `Foundation.Core` | 41-platform catalog (`IsVerifiedReferenceHash`), filename normalizer, Logiqx/Redump/RA/CMP DAT parser, headerless stripper + 20-magic sniff, IPS/BPS/UPS patcher, BYO media extractor, AOT-primary / `.decomp` contracts (`RecompTierAndBackendContracts.cs`) & fixture runner |
-| `Foundation.Sidecars` (`v0.4.1`) | `net8.0` | `Foundation.Core`, `Foundation.Retro` | Single-pass CRC32/MD5/SHA1/SHA256 + headerless hasher, ZIP/7z `-slt` inspector (LZMA/Deflate64 fallback + nested `::` inspection) + TorrentZip, `.hash` v1 sidecars, `.hklock` sentinel |
-| `Foundation.Server` (`v0.4.1`) | `net8.0-windows` | `Foundation.Core`, `Microsoft.AspNetCore.App` | Tiered Kestrel localhost/Tailscale/PBKDF2/HMAC cookie auth + Sister-App `/suite/manifest` endpoints |
-| `Foundation.Launcher` (`v0.4.1`) | `net8.0-windows` | *(None — zero dependencies)* | Clean-root Win32 `AttachConsole(-1)` CLI/GUI shim launching `app\<App>.exe` with `--wait`/`--open`/`--visible-test` sync wait, relative arg rebase & Ctrl+C forwarding |
-| `Foundation.Installer` (`v0.4.1`) | `net8.0-windows` (WinForms) | `Foundation.Core` | Tier 1 drop-in `StandardInstallerHost` (`Run` + `RunWithResult`) + Dark Setup Wizard (`<= 400 LOC` partials, visible-by-default `--test-mode` auto-run with `<LogDirectory>\screenshots\installer-visible-test.png`, Z-order composite `CaptureWizardPreviewBitmap`, `showLegacyMigration` decoupling, manifest forwarding of `InstallProfile` / companion dirs / `MigrateLegacy`); Tier 2 `InstallerEngineCore` |
-| `Foundation.UI` (`v0.4.1` Web) | `net8.0-windows` (WinForms) + React 19 / TS / Vanilla | `Foundation.Core`, `Microsoft.Web.WebView2 1.0.2903.40` (desktop); `react ^19` peer (web) | `VisibleTestWindowHelper`, `DisposableWebViewHostForm` (`SandboxEnvironment` visible-test activation + composite PNG capture), STA dialogs, tray badges, 10 React components, Vanilla drawer + tokens |
-| `foundation_core` (`v0.4.1`) | Python `>= 3.12` | *(Python standard library only)* | Parity CLI sandbox (`--headless`, `--visible-test`, `visible_test`, `effective_visible_test`), atomic settings, heartbeat/capped logging, crash dumper, PID lock, SQLite WAL helper |
+| `Foundation.Core` (`v0.4.1-hf.1`) | `net8.0` | `Microsoft.Data.Sqlite 8.0.11`, `System.Security.Cryptography.ProtectedData 8.0.0` | Runtime environment (`AppEnvironment`, `UiPresentationMode.TrayOrBackground`, `AssertPathContained`, `NormalizeLongPath`), CLI/logs, atomic settings, DPAPI, SQLite WAL, locks, telemetry, crash dumps, jobs, hardened HTTP (`ResponseHeadersTimeout`, `416` recovery), tools, module loader, high-res frame pacer, SPSC audio ring buffer, WAV/PNG/RGBA overlay |
+| `Foundation.Retro` (`v0.4.1-hf.1`) | `net8.0` | `Foundation.Core` | 41-platform catalog (`IsVerifiedReferenceHash`), filename normalizer, Logiqx/Redump/RA/CMP DAT parser, headerless stripper + 20-magic sniff, IPS/BPS/UPS patcher, BYO media extractor, AOT-primary / `.decomp` contracts (`RecompTierAndBackendContracts.cs`) |
+| `Foundation.Sidecars` (`v0.4.1-hf.1`) | `net8.0` | `Foundation.Core`, `Foundation.Retro` | Single-pass CRC32/MD5/SHA1/SHA256 + headerless hasher, ZIP/7z `-slt` inspector (LZMA/Deflate64 fallback + nested `::` inspection) + TorrentZip, `.hash` v1 sidecars, `.hklock` sentinel |
+| `Foundation.Server` (`v0.4.1-hf.1`) | `net8.0-windows` | `Foundation.Core`, `Microsoft.AspNetCore.App` | Tiered Kestrel localhost/Tailscale/PBKDF2/HMAC cookie auth + Sister-App `/suite/manifest` endpoints |
+| `Foundation.Launcher` (`v0.4.1-hf.1`) | `net8.0-windows` | *(None — zero dependencies)* | Clean-root Win32 `AttachConsole(-1)` CLI/GUI shim launching `app\<App>.exe` with `--wait`/`--open`/`--check-updates`/`--register-assoc` sync wait, relative arg rebase & Ctrl+C forwarding |
+| `Foundation.Installer` (`v0.4.1-hf.1`) | `net8.0-windows` (WinForms) | `Foundation.Core` | Tier 1 drop-in `StandardInstallerHost` (`Run` + `RunWithResult`) + Dark Setup Wizard (`<= 400 LOC` partials, composite `CaptureWizardPreviewBitmap`, `showLegacyMigration` decoupling, manifest forwarding of `InstallProfile` / companion dirs / `MigrateLegacy`, `InstallerRuntimeContext` + `FileLockRetryHelper` isolated test guards); Tier 2 `InstallerEngineCore` |
+| `Foundation.UI` (`v0.4.1-hf.1` Web) | `net8.0-windows` (WinForms) + React 19 / TS / Vanilla | `Foundation.Core`, `Microsoft.Web.WebView2 1.0.2903.40` (desktop); `react ^19` peer (web) | `DisposableWebViewHostForm` (`AppEnvironment`-aware ctor, DWM dark frame + composite PNG capture), STA dialogs, tray badges, 10 React components, Vanilla drawer + tokens |
+| `foundation_core` (`v0.4.1-hf.1`) | Python `>= 3.12` | *(Python standard library only)* | Parity CLI (`--data-dir`, `--config`, `--log-dir`, `--port`, `--dry-run`, `resolve_app_paths`), atomic settings, heartbeat/capped logging, crash dumper, PID lock, SQLite WAL helper |
 
 ---
 
 ## 2. Core End-to-End Runtime Pipelines
 
-1. **Startup & Fail-Closed Sandbox Pipeline:**
-   `Program.cs` constructs `new SandboxEnvironment("myapp", args)` → resolves CLI flags (`--test-mode`, `--data-dir`, `--config`, `--log-dir`, `--port`, `--ui`) → asserts path containment inside sandbox root when contained → registers `CrashBundleService.RegisterGlobalHandlers(...)` → loads granular configs via `GranularSettingsManager.LoadOrSelfHeal(...)` → opens `SqliteWalPool` connections.
+1. **Startup & Path Containment Pipeline:**
+   `Program.cs` constructs `new AppEnvironment("myapp", args)` → resolves CLI overrides (`--data-dir`, `--config`, `--log-dir`, `--port`, `--dry-run`, `--tray-only`, `--managed-by-mother`, `--suite-tab`, `--window`/`--browser`) → enforces `AppEnvironment.AssertPathContained` against allowed roots → registers `CrashBundleService.RegisterGlobalHandlers(...)` → loads granular configs via `GranularSettingsManager.LoadOrSelfHeal(...)` → opens `SqliteWalPool` connections.
 2. **Single-Pass Media & `.hash` v1 Sidecar Pipeline:**
    File is checked against `HkLockSentinel.IsTemporaryOrPartialFileName` + `.hklock` → `HeaderlessRomStripper.DetectHeaderSkipLength` inspects leading bytes → `SinglePassStreamHasher.HashFileSinglePassAsync` computes full + headerless CRC32/MD5/SHA1/(SHA256) in a single `ArrayPool<byte>` read pass → `HashSidecarService` persists or verifies `.hash` v1 / `COMPOSITE_SHA1`.
 3. **Kestrel Tiered Request Auth Pipeline:**
    Incoming request hits `FoundationTieredAuthMiddleware` → skips public health/auth routes (`/api/v1/health`, `/api/v1/auth/*`) and non-protected SPA static routes → `TieredAuthEngine.EvaluateRequest` checks API token / direct loopback bypass (absent `X-Forwarded-For`) / Tailscale CGNAT (`100.64.0.0/10`) or ULA IPv6 + Serve headers / `HMAC-SHA256` session cookie → returns HTTP `401` with `requiresSetup` if unauthenticated.
-4. **Two-Tier Drop-In Installer Pipeline (`v0.2.1`):**
-   Setup executable calls `StandardInstallerHost.Run(new InstallerAppDescriptor(...), args)` → `--silent`/`--headless`/`--test-mode` enters `RunCliFlowAsync`, interactive GUI opens `InstallerWizardForm` → extracts embedded/external `payload.zip` via `InstallerEngine` (stopping running instances safely, writing `app\install-manifest.json`, preserving `data\` & `logs\`, creating `.lnk` shortcuts, ARP uninstall keys, and optional `-Uninstall.exe`).
+4. **Two-Tier Drop-In Installer Pipeline:**
+   Setup executable calls `StandardInstallerHost.Run(new InstallerAppDescriptor(...), args)` → `--silent`/`--dry-run`/`--verify`/`--uninstall` enters `RunCliFlowAsync`, interactive GUI opens `InstallerWizardForm` → extracts embedded/external `payload.zip` via `InstallerEngine` (stopping running instances safely, writing `app\install-manifest.json`, preserving `data\` & `logs\`, creating `.lnk` shortcuts, ARP uninstall keys, and optional `-Uninstall.exe`; suppressing HKCU writes when `InstallerRuntimeContext.ShouldSuppressHostMutations` is active and blocking canonical `Programs\` targets during isolated test runs).
 5. **Hybrid Module Discovery Pipeline:**
    `HybridModuleLoader` scans host assemblies via `DiscoverFromAssemblies` (`FolderSlice`) and `app\modules\*.Module.*.dll` via `DiscoverExternalDllModules` (`DllModule`) → reads `IFoundationModule.SettingsSchema` → UI renders controls automatically with `SchemaSettingsRenderer`.
 6. **SDK Hub Publish & Consumer Sync Pipeline:**
-   `python Dev\tools\sync_foundation_sdk.py --publish-hub` copies compiled `Release\net8.0-windows` DLL/XML/PDB outputs, `@foundation/ui` TypeScript sources, and `foundation_core` into `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` with `sdk-manifest.json` → `--sync-consumer <DevDir>` mirrors pinned libraries into consumer workspaces.
+   `python Dev\tools\sync_foundation_sdk.py --publish` copies compiled `Release` DLL/XML outputs, `@foundation/ui` TypeScript sources, `foundation_core`, and `Dev\tools\*.py` into `<PROJECTS_ROOT>\SharedLibs\Foundation\v0.4.1-hf.1\` and `Latest\` with `sdk-manifest.json` → `--sync-consumer <ProjectRoot>` mirrors pinned libraries into consumer workspaces and removes stale retired test-harness artifacts.
 
 ---
 
 ## 3. Complete File & `<= 400 LOC` Registry
 
-Every new and `v0.4.1`-modularized source, build, test, and tooling file in `Dev\` (excluding build-mirrored `Foundation.UI\WebAssets\Web` / `components` copies and generated `bin/` / `obj/`) complies with **Standard 01 / 07 `<= 400 LOC`** (`max = 397 LOC` in `InstallerWizardForm.cs`; two pre-0.4.1 legacy files remain at `441` / `445 LOC`).
+Every source, build, test, and tooling file in `Dev\` (excluding build-mirrored `Foundation.UI\WebAssets\Web` / `components` copies and generated `bin/` / `obj/`) complies with **Standard 01 / 07 `<= 400 LOC`** (`max = 393 LOC` in `InstallerWizardForm.LayoutAndTheme.cs`).
 
 ### 3.1 Solution Root (`Dev\`)
 
 | File | LOC | Responsibility |
 |---|---|---|
-| [`Dev\Directory.Build.props`](file:///<PROJECTS_ROOT>/Foundation/Dev/Directory.Build.props) | 24 | Enforces `net8.0`, nullable/implicit usings, `Deterministic`, `ContinuousIntegrationBuild`, unified SDK `Version=0.4.1` |
+| [`Dev\Directory.Build.props`](file:///<PROJECTS_ROOT>/Foundation/Dev/Directory.Build.props) | 24 | Enforces `net8.0`, nullable/implicit usings, `Deterministic`, `ContinuousIntegrationBuild`, unified SDK `Version=0.4.1-hf.1` |
 | [`Dev\Foundation.sln`](file:///<PROJECTS_ROOT>/Foundation/Dev/Foundation.sln) | 60 | Visual Studio solution binding all 7 C# library projects + `Foundation.Tests` |
 
-### 3.2 `Dev\src\Foundation.Core\` (`18` files + `.csproj`)
+### 3.2 `Dev\src\Foundation.Core\` (`18` `.cs` files + `.csproj`)
 
 | File | LOC | Exported / Key Symbols |
 |---|---|---|
 | `Foundation.Core.csproj` | 13 | Package refs (`Microsoft.Data.Sqlite`, `ProtectedData`) |
+| `AppEnvironment.cs` | 232 | `UiPresentationMode` (`DesktopWindow`, `LocalBrowser`, `SuiteTab`, `TrayOrBackground`), `AppEnvironment`, `AssertPathContained`, `NormalizeLongPath` |
 | `AudioRingBuffer.cs` | 223 | `AudioRingBuffer` (lock-free SPSC `short`/`float` PCM + smooth ramp-to-zero underrun) |
 | `CliAndProcessPrimitives.cs` | 172 | `CliArgumentHelper`, `BoundedTailStream` (64 KB), `CappedSharedLogSink` (4 MB) |
 | `CrashBundleService.cs` | 197 | `CrashBundlePayload`, `CrashBundleService` (`crash_<appId>_<ts>.json`) |
@@ -97,83 +98,80 @@ Every new and `v0.4.1`-modularized source, build, test, and tooling file in `Dev
 | `PidSafeLockfile.cs` | 266 | `PidSafeLockEnvelope`, `PidSafeLockfile` |
 | `PixelOverlayCanvas.cs` | 247 | `RgbaColor`, `PixelOverlayCanvas` (Porter-Duff `SrcOver`, 5×7 ASCII bitmap font) |
 | `RgbaPngWriter.cs` | 133 | `RgbaPngWriter` (pure-.NET lossless RGBA PNG via `ZLibStream` + IEEE CRC32) |
-| `SafeNetworkTransfer.cs` | 255 | `SafeTransferOptions`, `SafeTransferResult`, `SafeNetworkTransfer` |
-| `SandboxEnvironment.cs` | 316 | `UiPresentationMode`, `SandboxEnvironment` (`ExplicitVisibleTest`, `EffectiveVisibleTest`, visible-by-default `--test-mode`, `HEADLESS` env) |
+| `SafeNetworkTransfer.cs` | 303 | `SafeTransferOptions`, `SafeTransferResult`, `SafeNetworkTransfer` |
 | `SqliteWalPool.cs` | 116 | `SqliteWalPool` (`WAL`, `busy_timeout=15000`, `VACUUM INTO`) |
 | `ToolResolver.cs` | 162 | `ToolResolutionSource`, `ToolResolutionResult`, `ToolResolver` |
 | `WavCaptureWriter.cs` | 136 | `WavCaptureWriter` (16-bit PCM RIFF/WAV writer) |
 
-### 3.3 `Dev\src\Foundation.Retro\` (`9` files + `.csproj`, `v0.4.1`)
+### 3.3 `Dev\src\Foundation.Retro\` (`8` `.cs` files + `.csproj`, `v0.4.1-hf.1`)
 
 | File | LOC | Exported / Key Symbols |
 |---|---|---|
-| `Foundation.Retro.csproj` | 12 | Project ref `Foundation.Core` (inherits `v0.4.1`) |
-| `ConsoleSystemCatalog.cs` | 258 | `RetroBiosExpectation` (`IsVerifiedReferenceHash`), `RetroPlatformCatalogEntry`, `RetroHeaderSkipRule`, `RetroProvenanceTagRule`, `ConsoleSystemCatalog` |
+| `Foundation.Retro.csproj` | 12 | Project ref `Foundation.Core` (inherits `v0.4.1-hf.1`) |
+| `ConsoleSystemCatalog.cs` | 265 | `RetroBiosExpectation` (`IsVerifiedReferenceHash`), `RetroPlatformCatalogEntry`, `RetroHeaderSkipRule`, `RetroProvenanceTagRule`, `ConsoleSystemCatalog` |
 | `DatTitleNormalizer.cs` | 335 | `ParsedRomFilenameMetadata`, `DatTitleNormalizer` |
 | `HeaderlessRomStripper.cs` | 206 | `HeaderlessRomStripper`, `MagicBytePlatformDetector` |
-| `MediaContainerExtractor.cs` | 315 | `MediaContainerFormat`, `MediaExtractionOptions`, `MediaExtractionResult`, `MediaContainerExtractor` |
+| `MediaContainerExtractor.cs` | 321 | `MediaContainerFormat`, `MediaExtractionOptions`, `MediaExtractionResult`, `MediaContainerExtractor` |
 | `NoIntroRedumpDatParser.cs` | 368 | `ParsedDatCatalogHeader`, `ParsedDatRomRecord`, `NoIntroRedumpDatParser` |
-| `RecompContracts.cs` | 122 | `DiscChecksumEntry`, `IRecompModuleManifest`, `RecompTimingMode`, `RecompPatchDescriptor`, `RecompHostOptions`, `RecompFrameStats`, `IRecompRenderBackend`, `IRecompHost`, `IRecompGameModule`, `SaveStateFixtureSpec`, `VisibleTestShowcaseOptions`, `IVisibleTestHarness` |
+| `RecompContracts.cs` | 88 | `DiscChecksumEntry`, `IRecompModuleManifest`, `RecompTimingMode`, `RecompPatchDescriptor`, `RecompHostOptions`, `RecompFrameStats`, `IRecompRenderBackend`, `IRecompHost`, `IRecompGameModule` |
 | `RecompTierAndBackendContracts.cs` | 125 | `RecompExecutionTierMode`, `RecompRenderBackendIds`, `IDecompPackageManifest`, `RecompRuntimeTelemetrySnapshot`, `AotCacheLayoutHelper` |
-| `SaveStateFixtureRunner.cs` | 185 | `SaveStateFixtureFrameOutput`, `SaveStateFixtureResult`, `SaveStateFixtureRunner` |
 | `SoftPatchEngine.cs` | 298 | `SoftPatchEngine` (IPS, `BPS1`, `UPS1`, CRC32) |
 
-### 3.4 `Dev\src\Foundation.Sidecars\` (`4` files + `.csproj`)
+### 3.4 `Dev\src\Foundation.Sidecars\` (`5` `.cs` files + `.csproj`)
 
 | File | LOC | Exported / Key Symbols |
 |---|---|---|
-| `Foundation.Sidecars.csproj` | 17 | Project refs `Foundation.Core`, `Foundation.Retro` |
+| `Foundation.Sidecars.csproj` | 13 | Project refs `Foundation.Core`, `Foundation.Retro` |
 | `HashSidecarService.cs` | 287 | `SidecarDocument`, `HashSidecarService` (`.hash` v1, `COMPOSITE_SHA1`) |
 | `HkLockSentinel.cs` | 181 | `HkLockEnvelope`, `HkLockSentinel` (`.hklock`, `.coexistence.json` v2) |
-| `SevenZipAndZipInspector.cs` | 445 | `InspectedArchiveEntry`, `SevenZipAndZipInspector` *(pre-0.4.1 legacy file)* |
+| `SevenZipAndZipInspector.cs` | 208 | `InspectedArchiveEntry`, `SevenZipAndZipInspector` (ZIP/7z listing & stream hashing partial) |
+| `SevenZipAndZipInspector.ExtractAndZip.cs` | 258 | `SevenZipAndZipInspector` (bounded reads, single-entry extract & TorrentZip builder partial) |
 | `SinglePassStreamHasher.cs` | 187 | `ComputedStreamHashes`, `Crc32Accumulator`, `SinglePassStreamHasher` |
 
-### 3.5 `Dev\src\Foundation.Server\` & `Foundation.Launcher\` (`4` files + 2 `.csproj`)
+### 3.5 `Dev\src\Foundation.Server\` & `Foundation.Launcher\` (`4` `.cs` files + 2 `.csproj`)
 
 | File | LOC | Exported / Key Symbols |
 |---|---|---|
-| `Foundation.Server.csproj` | 17 | FrameworkReference `Microsoft.AspNetCore.App`, ref `Foundation.Core` |
+| `Foundation.Server.csproj` | 13 | FrameworkReference `Microsoft.AspNetCore.App`, ref `Foundation.Core` |
 | `SisterAppStandardEndpoints.cs` | 52 | `SisterAppStandardEndpoints` (`/api/v1/suite/manifest`, `/api/suite/manifest`, `/suite.manifest.json`) |
 | `TieredAuthEngine.cs` | 285 | `TieredAuthConfigSnapshot`, `TieredAuthEvaluation`, `TieredAuthEngine` |
 | `TieredAuthMiddleware.cs` | 57 | `FoundationTieredAuthMiddleware` |
-| `Foundation.Launcher.csproj` | 12 | `net8.0-windows`, zero external deps |
-| `RootLauncherHost.cs` | 142 | `RootLauncherHost` (Win32 `AttachConsole(-1)`, fail-closed self-spawn guard) |
+| `Foundation.Launcher.csproj` | 8 | `net8.0-windows`, zero external deps |
+| `RootLauncherHost.cs` | 270 | `RootLauncherHost` (Win32 `AttachConsole(-1)`, fail-closed self-spawn guard) |
 
-### 3.6 `Dev\src\Foundation.Installer\` (`18` files + `.csproj`, `v0.4.1`)
+### 3.6 `Dev\src\Foundation.Installer\` (`17` `.cs` files + `.csproj`, `v0.4.1-hf.1`)
 
 | File | LOC | Role |
 |---|---|---|
-| `Foundation.Installer.csproj` | 13 | `UseWindowsForms`, ref `Foundation.Core`, inherits `v0.4.1` |
-| `FileLockRetryHelper.cs` | 102 | Bounded 10-attempt lock retry (`150/250/500ms`) + safe Sandbox/Temp path check |
-| `InstallerContracts.cs` | 185 | `InstallerAppDescriptor` (`AllowLegacyMigration`), `InstallerConfigOverride`, `InstallManifest`, `InstallerInstallOptions`, `InstallerHostRunResult` |
-| `InstallerSandboxContext.cs` | 179 | Fail-closed sandbox, `HEADLESS` env fallback, `ExplicitVisibleTest`, `EffectiveVisibleTest` |
-| `StandardInstallerHost.cs` | 261 | **Tier 1** `Run` + `RunWithResult` CLI, interactive GUI & visible-by-default `--test-mode` auto-run entry point |
-| `InstallerEngine.Core.cs` | 150 | Core `InstallerEngine` state, installation detection & fail-closed install path validation |
-| `InstallerEngine.InstallAndExtract.cs` | 343 | Process shutdown, ZIP extraction, options forwarding (`InstallProfile`, `ReEngineInstallDir`, `SuiteInstallDir`, `MigrateLegacy`) |
-| `InstallerEngine.TestModeAndCli.cs` | 283 | `InstallerCliOptions`, `ParseCliArgs`, ARP metadata, pre-upgrade backup & containment checks |
-| `InstallerEngine.UninstallAndShortcuts.cs` | 271 | ARP uninstall registry keys, `.lnk` shortcuts, clean removal |
+| `Foundation.Installer.csproj` | 13 | `UseWindowsForms`, ref `Foundation.Core`, inherits `v0.4.1-hf.1` |
+| `FileLockRetryHelper.cs` | 126 | Bounded 10-attempt lock retry (`150/250/500ms`) + `IsSafeIsolatedInstallDirectory` / `IsCanonicalProductionOrSystemPath` |
+| `InstallerContracts.cs` | 184 | `InstallerAppDescriptor` (`AllowLegacyMigration`), `InstallerConfigOverride`, `InstallManifest`, `InstallerInstallOptions`, `InstallerHostRunResult` |
+| `InstallerRuntimeContext.cs` | 118 | `DataDirectory` / `ConfigOverride` resolution + `ShouldSuppressHostMutations` (`APP_ISOLATED_TEST`) |
+| `StandardInstallerHost.cs` | 220 | **Tier 1** `Run` + `RunWithResult` CLI and interactive GUI wizard entry point |
+| `InstallerEngine.Core.cs` | 137 | Core `InstallerEngine` state, installation detection & canonical production path guard |
+| `InstallerEngine.InstallAndExtract.cs` | 344 | Process shutdown, ZIP extraction, options forwarding (`InstallProfile`, `ReEngineInstallDir`, `SuiteInstallDir`, `MigrateLegacy`) |
+| `InstallerEngine.CliAndRegistry.cs` | 252 | `InstallerCliOptions`, `ParseCliArgs`, ARP metadata, pre-upgrade backup & self-delete trampoline scheduling |
+| `InstallerEngine.UninstallAndShortcuts.cs` | 271 | ARP uninstall registry keys (suppressed when isolated), `.lnk` shortcuts, clean removal |
 | `InstallerEngine.VerifyAndUpgrade.cs` | 80 | `HasEmbeddedPayload`, `HasPayloadSource`, SHA-256 payload & archive verification |
-| `InstallerWizardForm.cs` | 397 | 650×434 Dark WinForms Setup Wizard constructors (`showLegacyMigration`, `autoRunVisibleTest`) & header/destination controls |
-| `InstallerWizardForm.ExecutionAndLogs.cs` | 386 | Surface setup, upgrade badge, profile/secondary/legacy forwarding & contained modal suppression |
-| `InstallerWizardForm.LayoutAndTheme.cs` | 377 | Secondary destination controls, options/footer controls, responsive layout bounds & `Dispose` |
-| `InstallerWizardForm.VisibleTest.cs` | 193 | Lifecycle overrides, DWM dark frame, foreground visible auto-run, `CaptureWizardPreviewBitmap` & screenshot capture |
-| `InstallerWizardControls.cs` | 148 | Styled buttons, cards, secondary path pickers & progress controls |
-| `WindowsShortcutWriter.cs` | 216 | COM `IShellLinkW` shortcut creator |
+| `InstallerWizardForm.cs` | 320 | 650×434 Dark WinForms Setup Wizard constructors (`showLegacyMigration`), header & destination controls |
+| `InstallerWizardForm.ExecutionAndLogs.cs` | 378 | Surface setup, upgrade badge, profile/secondary/legacy forwarding & `CaptureWizardPreviewBitmap` |
+| `InstallerWizardForm.LayoutAndTheme.cs` | 393 | Secondary destination controls, options/footer controls, responsive bounds, WinForms lifecycle & DWM dark frame |
+| `InstallerWizardControls.cs` | 167 | Styled buttons, cards, secondary path pickers, DWM dark titlebar & progress controls |
+| `WindowsShortcutWriter.cs` | 216 | COM `IShellLinkW` shortcut creator + isolated HKCU suppression |
 | `InstallerThemeOptions.cs` | 123 | **Tier 2** visual customization DTO (`AllowAutoStart`, `AllowLegacyMigration`, `InstallerThemeOptions`) |
-| `InstallerEngineCore.cs` | 441 | **Tier 2** core clean-root helper (`FoundationInstallManifest`) *(legacy pre-0.4.1 file)* |
-| `InstallerEngineCore.BackupAndVerify.cs` | 250 | **Tier 2** data backup/restore & integrity verify |
+| `InstallerEngineCore.cs` | 321 | **Tier 2** core clean-root helper (`FoundationInstallManifest`) + `IsIsolatedOverride` guard |
+| `InstallerEngineCore.BackupAndVerify.cs` | 379 | **Tier 2** data backup/restore, integrity verify & opt-in legacy migration |
 
-### 3.7 `Dev\src\Foundation.UI\` (`21` core files + `.csproj`, `@foundation/ui v0.4.1`)
+### 3.7 `Dev\src\Foundation.UI\` (`@foundation/ui v0.4.1-hf.1`)
 
 | File | LOC | Exported / Key Symbols |
 |---|---|---|
-| `Foundation.UI.csproj` | 28 | `WebView2 1.0.2903.40`, copies `Web\` to `$(OutputPath)\WebAssets\`, gated `SyncFoundationWebAndSharedLibs` (`v0.4.1`) |
-| `ShellBrandingOptions.cs` | 51 | `ShellBrandingOptions` (`SdkVersion = "0.4.1"`) |
-| `Desktop\DisposableWebViewHostForm.cs` | 117 | `DisposableWebViewHostForm` (Standard 02 `SandboxEnvironment` visible-test activation & screenshot capture) |
-| `Desktop\VisibleTestWindowHelper.cs` | 113 | `VisibleTestWindowHelper` (`FormatWindowTitle`, `ApplyForegroundVisibleTestWindow`, `CaptureCompositeFormBitmap`, `SaveScreenshot`) |
+| `Foundation.UI.csproj` | 28 | `WebView2 1.0.2903.40`, copies `Web\` to `$(OutputPath)\WebAssets\`, gated `SyncFoundationWebAndSharedLibs` (`v0.4.1-hf.1`) |
+| `ShellBrandingOptions.cs` | 51 | `ShellBrandingOptions` (`SdkVersion = "0.4.1-hf.1"`) |
+| `Desktop\DisposableWebViewHostForm.cs` | 94 | `DisposableWebViewHostForm` (`AppEnvironment`-aware ctor, DWM dark frame, composite `CapturePreviewBitmap`) |
 | `Desktop\StaNativeDialogBridgeBase.cs` | 191 | `StaNativeDialogBridgeBase` |
 | `Desktop\TrayIconBadgeHelper.cs` | 56 | `TrayIconBadgeHelper` |
-| `Web\package.json` & `Web\index.ts` | 14 / 51 | `@foundation/ui v0.4.1` barrel (exports 7 of 10 React components + drawer utils) |
+| `Web\package.json` & `Web\index.ts` | 14 / 51 | `@foundation/ui v0.4.1-hf.1` barrel (exports 7 of 10 React components + drawer utils) |
 | `Web\components\GlobalTerminalDrawer.tsx` | 291 | `GlobalTerminalDrawer` |
 | `Web\components\TerminalToolbarAndFilters.tsx` | 275 | `TerminalToolbarAndFilters` |
 | `Web\components\terminalDrawerCore.ts` | 162 | Line level/subsystem classifier, timestamp formatter, `.log` exporter |
@@ -189,73 +187,59 @@ Every new and `v0.4.1`-modularized source, build, test, and tooling file in `Dev
 | `WebAssets\foundation-tokens.css` | 117 | Canonical surface/accent/responsive CSS variables |
 | `WebAssets\foundation-terminal.js` & `.css` | 305 / 111 | Vanilla JS `FoundationTerminalDrawer` & styling |
 
-*(Note: `Web\` is the single canonical TS/TSX source tree; `WebAssets\` holds only vanilla JS/CSS assets in source, and `sync_foundation_sdk.py` merges both into `WebAssets\` at SDK publish time.)*
-
-### 3.8 `Dev\src\foundation_core\` (`8` files, Python `v0.4.1`) & `Dev\tools\` (`4` files)
+### 3.8 `Dev\src\foundation_core\` (`8` files, Python `v0.4.1-hf.1`) & `Dev\tools\` (`3` files)
 
 | File | LOC | Key Symbols / Purpose |
 |---|---|---|
-| `foundation_core\pyproject.toml` & `__init__.py` | 13 / 32 | Package metadata (`foundation-core v0.4.1`, `SDK_VERSION = "0.4.1"`) |
-| `foundation_core\cli.py` | 84 | `StandardCliOptions` (`headless`, `visible_test`, `effective_visible_test`), `parse_standard_cli_flags`, `assert_path_contained` |
+| `foundation_core\pyproject.toml` & `__init__.py` | 13 / 32 | Package metadata (`foundation-core v0.4.1-hf.1`, `SDK_VERSION = "0.4.1-hf.1"`) |
+| `foundation_core\cli.py` | 60 | `StandardCliOptions`, `parse_standard_cli_flags`, `resolve_app_paths`, `assert_path_contained` |
 | `foundation_core\settings.py` | 87 | `SettingsLoadResult`, `GranularSettingsStore` |
 | `foundation_core\logging.py` | 68 | `HeartbeatTracker`, `CappedLogFile` |
 | `foundation_core\crash_dumper.py` | 80 | `CrashDumper` |
 | `foundation_core\locks.py` | 74 | `PidSafeLock` |
 | `foundation_core\db.py` | 83 | `SqliteWalHelper` |
-| `tools\sync_foundation_sdk.py` | 258 | Publish hub (`SharedLibs\Foundation\v0.4.1` & `Latest`), `purge_stale_pdbs`, `stage_clean_release_bundle`, & sync consumers *(enforced `<= 260 LOC`)* |
+| `tools\sync_foundation_sdk.py` | 253 | Publish hub (`SharedLibs\Foundation\v0.4.1-hf.1` & `Latest`), `purge_stale_pdbs`, `stage_clean_release_bundle`, & sync consumers + stale artifact cleanup *(enforced `<= 260 LOC`)* |
 | `tools\build_release_universal.py` | 119 | Universal 6-file bundle validator (`--allow-sdk-zip`), `stage_sdk_release_zip`, `generate_sha256sums` |
-| `tools\verify_sandbox_universal.py` | 180 | Sandbox REST + foreground-visible-by-default browser verifier (`--new-window`, `--headless`) |
 | `tools\notion_task_helper.py` | 77 | Standard 16 Notion Task Backbone helper (`resolve_notion_ids` via env/`notion.config.json`) |
 
 ---
 
 ## 4. SQLite WAL Concurrency & Security Invariants
 
-- **SQLite MVCC Configuration (`SqliteWalPool.cs#L36-L75` & `foundation_core\db.py`):**
-  - `Cache = SqliteCacheMode.Default` (explicitly avoids `Shared` cache table locks under async multi-reader workloads).
-  - `PRAGMA journal_mode = WAL;`
-  - `PRAGMA busy_timeout = 15000;` (15s retry window before `SQLITE_BUSY`)
-  - `PRAGMA synchronous = NORMAL;`
-  - `PRAGMA foreign_keys = ON;`
-  - `PRAGMA temp_store = MEMORY;`
-  - `PRAGMA cache_size = -65536;` (~64 MB page cache)
+- **SQLite MVCC Configuration (`SqliteWalPool.cs` & `foundation_core\db.py`):**
+  - `Cache = SqliteCacheMode.Default` (avoids `Shared` cache table locks under async multi-reader workloads).
+  - `PRAGMA journal_mode = WAL;`, `busy_timeout = 15000`, `synchronous = NORMAL`, `foreign_keys = ON`, `temp_store = MEMORY`, `cache_size = -65536` (~64 MB page cache).
   - Online backups execute `VACUUM INTO` into a temporary file followed by atomic replace.
 - **Security & Containment Boundaries:**
-  - `SandboxEnvironment.AssertPathContained` canonicalizes full paths and aborts traversal outside `Sandbox\`.
-  - `DpapiSecretStore` encrypts API tokens and Discord webhooks under Windows `DataProtectionScope.CurrentUser` so secrets never rest in plaintext `settings.json`.
+  - `AppEnvironment.AssertPathContained` canonicalizes full paths and aborts traversal outside explicit allowed roots.
+  - `InstallerRuntimeContext` (`ShouldSuppressHostMutations`) and `InstallerEngineCore` (`IsIsolatedOverride`) suppress HKCU registry writes and reject canonical production/system install targets (`Programs\`, `Windows\`) during `APP_ISOLATED_TEST` / `--data-dir` unit test runs.
+  - `DpapiSecretStore` encrypts secrets under Windows `DataProtectionScope.CurrentUser` so secrets never rest in plaintext `settings.json`.
   - `PidSafeLockfile` and `HkLockSentinel` verify both PID and `ProcessStartTimeUtc` to defeat OS PID reuse on crash recovery.
-  - `TieredAuthEngine` disables localhost bypass when `X-Forwarded-For` is present (protecting reverse proxies), limits Tailscale bypass to `100.64.0.0/10` / `fd7a:115c:a1e0::/48`, hashes passwords with PBKDF2-SHA256 (`100,000` iterations), and signs session cookies with HMAC-SHA256.
+  - `TieredAuthEngine` disables localhost bypass when `X-Forwarded-For` is present, limits Tailscale bypass to `100.64.0.0/10` / `fd7a:115c:a1e0::/48`, hashes passwords with PBKDF2-SHA256 (`100,000` iterations), and signs session cookies with HMAC-SHA256.
 
 ---
 
-## 5. Unit Test Suite (`40` `[Fact]` Tests across 7 Files)
+## 5. Unit Test Suite (`33` `[Fact]` Tests across 6 Files)
 
-| Test File (`Dev\tests\Foundation.Tests\`) | LOC | Count | Verified Coverage |
-|---|---|---|---|
-| `FoundationCoreTests.cs` | 243 | 6 `[Fact]`s | `SandboxEnvironment` containment/flags, `GranularSettingsManager` `.bak` heal + 20-snapshot trim, `DpapiSecretStore` Windows round-trip, `PidSafeLockfile` contention + orphan breaking, `HeartbeatLogger` `\r\x1b[K` + 15s cap, `SqliteWalPool` WAL pragmas + `VACUUM INTO` |
-| `FoundationSettingsAndInstallerTests.cs` | 270 | 5 `[Fact]`s | `InstallerEngineCore` contained install + `data\` preservation on upgrade, `CrashBundleService` JSON dump, `DualJobCancellationCoordinator` StopCurrent vs StopAll, `SafeNetworkTransfer` HTTP Range `.partial_<jobId>` resume + disk preflight, `StandardInstallerHost` Tier 1 `--silent --test-mode` end-to-end extract/verify/uninstall |
-| `FoundationDecouplingTests.cs` | 154 | 4 `[Fact]`s | `HybridModuleLoader` slice & assembly discovery, `ToolResolver` 4-tier priority, `BoundedTailStream` 64 KB ring + `CappedSharedLogSink` 4 MB cap, `TieredAuthEngine` loopback/`X-Forwarded-For`/PBKDF2/HMAC cookie verification |
-| `FoundationTerminalDrawerTests.cs` | 206 | 3 `[Fact]`s | `terminalDrawerCore` line level/subsystem classification, search/verbosity filtering, dual-token button contract verification, `sync_foundation_sdk.py` `v0.4.1` publish & sync |
-| `FoundationV031PrimitivesTests.cs` | 332 | 8 `[Fact]`s | `HighResFramePacer`, `AudioRingBuffer`, `WavCaptureWriter`, `RgbaPngWriter`, `PixelOverlayCanvas`, `SandboxEnvironment.VisibleTest`, `MediaContainerExtractor`, `RecompContracts`, `SaveStateFixtureRunner`, `AllowAutoStart = false`, `FileLockRetryHelper`, `--test-mode --install-dir` containment, `--visible-test` showcase |
-| `FoundationV040ContractsTests.cs` | 313 | 7 `[Fact]`s | `InstallerAppDescriptor` `%LOCALAPPDATA%` Programs root resolution, `SandboxEnvironment` & `InstallerEngine` fail-closed containment, `ParseCliArgs` v0.4.0 flags, `SafeNetworkTransfer` HTTP 416/404/headers timeout, `RootLauncherHost`, `ConsoleSystemCatalog` verified flags, `AotCacheLayoutHelper` & recomp tier contracts |
-| `FoundationV041VisibleTestTests.cs` | 338 | 7 `[Fact]`s | `SandboxEnvironment` visible-by-default `--test-mode` & `EffectiveVisibleTest` vs `--headless`, Python `foundation_core` & `tools` v0.4.1 parity, `CaptureWizardPreviewBitmap` Z-order control pixels + `showLegacyMigration` decoupling, GUI profile/secondary/legacy `InstallManifest` forwarding, `StandardInstallerHost.RunWithResult` visible auto-run vs `--headless`, `VisibleTestWindowHelper` + `DisposableWebViewHostForm`, strict LOC caps across all 17 `v0.4.1` touched/modularized files |
+| Test File (`Dev\tests\Foundation.Tests\`) | LOC | Verified Coverage |
+|---|---|---|
+| `FoundationCoreTests.cs` | 241 | `AppEnvironment` flags/containment, `GranularSettingsManager` `.bak` heal + 20-snapshot trim, `DpapiSecretStore` Windows round-trip, `PidSafeLockfile` contention + orphan breaking, `HeartbeatLogger` `\r\x1b[K` + 15s cap, `SqliteWalPool` WAL pragmas + `VACUUM INTO` |
+| `FoundationSettingsAndInstallerTests.cs` | 270 | `InstallerEngineCore` isolated install/wizard lifecycle + `data\` preservation on upgrade, `CrashBundleService` JSON dump, `DualJobCancellationCoordinator` StopCurrent vs StopAll, `SafeNetworkTransfer` HTTP Range `.partial_<jobId>` resume + disk preflight, `StandardInstallerHost` + `InstallerEngine` isolated `--silent` lifecycle |
+| `FoundationDecouplingTests.cs` | 154 | `HybridModuleLoader` slice & assembly discovery, `ToolResolver` 4-tier priority, `BoundedTailStream` 64 KB ring + `CappedSharedLogSink` 4 MB cap, `TieredAuthEngine` loopback/`X-Forwarded-For`/PBKDF2/HMAC cookie verification |
+| `FoundationTerminalDrawerTests.cs` | 211 | `terminalDrawerCore` line level/subsystem classification, search/verbosity filtering, dual-token button contract verification, `sync_foundation_sdk.py` `v0.4.1-hf.1` publish, consumer sync & stale test-harness cleanup |
+| `FoundationV031PrimitivesTests.cs` | 310 | `HighResFramePacer`, `AudioRingBuffer`, `WavCaptureWriter`, `RgbaPngWriter`, `PixelOverlayCanvas`, `AppEnvironment.TrayOrBackground` / `DesktopWindow`, `MediaContainerExtractor`, `RecompContracts`, `AllowAutoStart = false`, `FileLockRetryHelper` & isolated path fail-closed guards |
+| `FoundationV040ContractsTests.cs` | 306 | `InstallerAppDescriptor` `%LOCALAPPDATA%` Programs root resolution, `InstallerEngine` isolated production-path fail-closed guard, `ParseCliArgs` flags, `SafeNetworkTransfer` HTTP 416/404/headers timeout, `RootLauncherHost`, `ConsoleSystemCatalog` verified flags, `AotCacheLayoutHelper` & recomp tier contracts |
 
 ---
 
 ## 6. Architectural Decision Records & Extension Playbooks
 
 ### 6.1 Key ADRs
-- **ADR-001 (Zero App Domain Coupling):** `Foundation` may never reference `Housekeeping`, `ShadowLibrary`, `reStation`, or `MediaSync` specifics; domain rules belong in callers via descriptors (`InstallerAppDescriptor`, `SchemaSettingDescriptor`, `IReadOnlyList<RetroPlatformCatalogEntry>`).
-- **ADR-002 (400 LOC File Cap):** All new and `v0.4.1`-modularized source files remain strictly `<= 400` lines (`max = 397 LOC` in `InstallerWizardForm.cs`) via focused partial-class splits (`InstallerEngine.*.cs`, `InstallerWizardForm.*.cs`) and dedicated helper modules (`InstallerSandboxContext.cs`, `InstallerContracts.cs`).
+- **ADR-001 (Zero App Domain Coupling):** `Foundation` may never reference specific consumer apps; domain rules belong in callers via descriptors (`InstallerAppDescriptor`, `SchemaSettingDescriptor`, `IReadOnlyList<RetroPlatformCatalogEntry>`).
+- **ADR-002 (400 LOC File Cap):** 100% of source files stay strictly `<= 400` lines (`max = 393 LOC` in `InstallerWizardForm.LayoutAndTheme.cs`) via focused partial-class splits (`InstallerEngine.*.cs`, `InstallerWizardForm.*.cs`, `SevenZipAndZipInspector.*.cs`) and dedicated helper modules (`InstallerRuntimeContext.cs`, `InstallerContracts.cs`).
 - **ADR-003 (Consumer Read-Only Fence):** Companion app sessions cannot mutate `<PROJECTS_ROOT>\Foundation\` or `SharedLibs\Foundation\`; upstream fixes are logged in `Dev\docs\reports\` and executed only in a dedicated `Foundation` session.
 - **ADR-004 (`SqliteCacheMode.Default` + `15000 ms` busy timeout):** Prevents shared-cache read/write deadlocks across background indexers and web UI API requests.
-- **ADR-005 (Dual-Scope Job Cancellation):** Separating active-job cancellation from queue drain (`DualJobCancellationCoordinator` + `TerminalToolbarAndFilters`) preserves queued jobs when stopping a stuck item.
-- **ADR-006 (Two-Tier Installer Split):** Retaining `InstallerEngineCore` (`v0.2.0`) underneath while promoting `StandardInstallerHost` (`v0.2.1`) lets tiny apps adopt the full dark wizard in 15 lines without breaking existing custom hosts.
+- **ADR-005 (Dual-Scope Job Cancellation):** Separating active-job cancellation from queue drain preserves queued jobs when stopping a stuck item.
+- **ADR-006 (Two-Tier Installer Split):** Retaining `InstallerEngineCore` (`v0.2.0`) underneath while promoting `StandardInstallerHost` (`v0.2.1+`) lets tiny apps adopt the full dark wizard in 15 lines without breaking custom hosts.
 - **ADR-007 (Sidecar & Directory Coexistence Protocol):** `.hash` v1 and `.hklock` use identical schemas across `Housekeeping` and `ShadowLibrary` via `Foundation.Sidecars`.
-- **ADR-008 (Side-Effect Warning on `Foundation.UI.csproj`):** Building `Foundation.UI.csproj` triggers `SyncFoundationWebAndSharedLibs`, which copies built assets to `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`. Never run casual builds during documentation-only audits.
-
-### 6.2 How to Add a New Shared Helper Without Breaking Consumers
-1. Implement the module in the lowest applicable assembly (`Foundation.Core` if pure .NET, `Foundation.Retro` if retro-specific, etc.) in `<= 400` LOC.
-2. Add `[Fact]` unit tests under `Dev\tests\Foundation.Tests\`.
-3. Update [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md) and [`Dev\docs\ARCHITECTURE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/ARCHITECTURE.md).
-4. Explicitly publish when authorized (`dotnet test` + `python Dev\tools\sync_foundation_sdk.py --publish-hub`) and verify `SharedLibs\Foundation\Latest\sdk-manifest.json`.
+- **ADR-008 (Side-Effect Warning on `Foundation.UI.csproj`):** Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` triggers `SyncFoundationWebAndSharedLibs`, which copies built assets to `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`. Never enable that flag during read-only audits.

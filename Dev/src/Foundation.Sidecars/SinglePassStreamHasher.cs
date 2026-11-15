@@ -79,7 +79,7 @@ public static class SinglePassStreamHasher
         CancellationToken ct = default,
         Action<long, long>? onBytesRead = null)
     {
-        string safePath = SandboxEnvironment.NormalizeLongPath(filePath);
+        string safePath = AppEnvironment.NormalizeLongPath(filePath);
         await using var fs = new FileStream(safePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 131072, useAsync: true);
         return await HashStreamSinglePassAsync(fs, fs.Length, Path.GetExtension(filePath), headerRules, includeSha256, ct, onBytesRead);
     }

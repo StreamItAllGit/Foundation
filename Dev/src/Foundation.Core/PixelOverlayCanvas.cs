@@ -11,7 +11,7 @@ public readonly record struct RgbaColor(byte R, byte G, byte B, byte A = 255);
 
 /// <summary>
 /// Pure-.NET RGBA pixel canvas with Porter-Duff SrcOver alpha compositing and built-in 5x7 bitmap text rendering
-/// for SDL3/headless HUD overlays and deterministic PNG screenshot capture.
+/// for SDL3/offscreen HUD overlays and deterministic PNG screenshot capture.
 /// </summary>
 public sealed class PixelOverlayCanvas
 {

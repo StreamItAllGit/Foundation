@@ -1,7 +1,7 @@
-// @module: Foundation.Core.Sandboxing
-// @purpose: Resolves CLI/env sandbox overrides (--data-dir, --config, --log-dir, --test-mode, 4 UI modes) and enforces fail-closed path containment.
+// @module: Foundation.Core.Environment
+// @purpose: Resolves CLI/env path overrides (--data-dir, --config, --log-dir, --port, 4 UI modes) and enforces fail-closed path containment.
 // @depends-on: System, System.Collections.Generic, System.IO
-// @exports: UiPresentationMode, SandboxEnvironment
+// @exports: UiPresentationMode, AppEnvironment
 
 using System;
 using System.Collections.Generic;
@@ -10,20 +10,20 @@ using System.IO;
 namespace Foundation.Core;
 
 /// <summary>
-/// Canonical 4 UI presentation modes per Standard 17 §4 (Suite Tab, Standalone Window, Local Browser, Scoped Mobile PWA).
+/// Canonical 4 UI presentation modes per Standard 17 §4 (Suite Tab, Standalone Window, Local Browser, Tray/Background).
 /// </summary>
 public enum UiPresentationMode
 {
     DesktopWindow,
     LocalBrowser,
     SuiteTab,
-    HeadlessOrTrayOnly
+    TrayOrBackground
 }
 
 /// <summary>
-/// Resolves standard CLI flags and environment variables for fail-closed Sandbox and Production execution (Standard 02).
+/// Resolves standard CLI flags and environment variables for isolated test and production execution (Standard 02).
 /// </summary>
-public sealed class SandboxEnvironment
+public sealed class AppEnvironment
 {
     public string AppId { get; }
     public string BaseDirectory { get; }
@@ -31,19 +31,13 @@ public sealed class SandboxEnvironment
     public string ConfigFilePath { get; }
     public string LogDirectory { get; }
     public int? PortOverride { get; }
-    public bool TestMode { get; }
     public bool DryRun { get; }
-    public bool Headless { get; }
-    public bool ExplicitVisibleTest { get; }
-    public bool VisibleTest { get; }
-    public bool EffectiveVisibleTest => VisibleTest && !Headless;
     public bool TrayOnly { get; }
     public bool ManagedByMother { get; }
     public bool SuiteTab { get; }
     public UiPresentationMode PresentationMode { get; }
-    public bool IsContainedSandbox { get; }
 
-    public SandboxEnvironment(
+    public AppEnvironment(
         string appId,
         IReadOnlyList<string>? args = null,
         string? baseDirectoryOverride = null,
@@ -64,14 +58,10 @@ public sealed class SandboxEnvironment
         string? cliPort = ReadFlagValue(cli, "--port");
         string? cliUi = ReadFlagValue(cli, "--ui");
 
-        TestMode = HasFlag(cli, "--test-mode") || IsTruthyEnv($"{envPrefix}_TEST_MODE") || IsTruthyEnv("TEST_MODE");
         DryRun = HasFlag(cli, "--dry-run") || IsTruthyEnv($"{envPrefix}_DRY_RUN");
-        Headless = HasFlag(cli, "--headless") || IsTruthyEnv($"{envPrefix}_HEADLESS") || IsTruthyEnv("HEADLESS");
-        ExplicitVisibleTest = HasFlag(cli, "--visible-test") || IsTruthyEnv($"{envPrefix}_VISIBLE_TEST") || IsTruthyEnv("VISIBLE_TEST");
         TrayOnly = HasFlag(cli, "--tray-only");
         ManagedByMother = HasFlag(cli, "--managed-by-mother") || IsTruthyEnv("MANAGED_BY_MOTHER");
         SuiteTab = HasFlag(cli, "--suite-tab");
-        VisibleTest = ExplicitVisibleTest || (TestMode && !Headless && !TrayOnly && !ManagedByMother && !SuiteTab);
         bool forceBrowser = HasFlag(cli, "--browser") || string.Equals(cliUi, "browser", StringComparison.OrdinalIgnoreCase);
         bool forceWindow = HasFlag(cli, "--window") || string.Equals(cliUi, "desktop", StringComparison.OrdinalIgnoreCase);
 
@@ -79,19 +69,15 @@ public sealed class SandboxEnvironment
         {
             PresentationMode = UiPresentationMode.SuiteTab;
         }
-        else if (Headless || TrayOnly || ManagedByMother)
+        else if (TrayOnly || ManagedByMother)
         {
-            PresentationMode = UiPresentationMode.HeadlessOrTrayOnly;
-        }
-        else if (ExplicitVisibleTest)
-        {
-            PresentationMode = UiPresentationMode.DesktopWindow;
+            PresentationMode = UiPresentationMode.TrayOrBackground;
         }
         else if (forceBrowser)
         {
             PresentationMode = UiPresentationMode.LocalBrowser;
         }
-        else if (VisibleTest || forceWindow)
+        else if (forceWindow)
         {
             PresentationMode = UiPresentationMode.DesktopWindow;
         }
@@ -106,7 +92,6 @@ public sealed class SandboxEnvironment
             Environment.GetEnvironmentVariable("DATA_DIR"),
             Environment.GetEnvironmentVariable("APP_HOME"));
 
-        IsContainedSandbox = TestMode || !string.IsNullOrWhiteSpace(resolvedData);
         DataDirectory = Path.GetFullPath(!string.IsNullOrWhiteSpace(resolvedData)
             ? resolvedData
             : Path.Combine(BaseDirectory, "data"));
@@ -127,7 +112,7 @@ public sealed class SandboxEnvironment
 
         LogDirectory = Path.GetFullPath(!string.IsNullOrWhiteSpace(resolvedLogs)
             ? resolvedLogs
-            : (IsContainedSandbox ? Path.Combine(DataDirectory, "logs") : Path.Combine(BaseDirectory, "logs")));
+            : (!string.IsNullOrWhiteSpace(resolvedData) ? Path.Combine(DataDirectory, "logs") : Path.Combine(BaseDirectory, "logs")));
 
         if (int.TryParse(FirstNonEmpty(cliPort, Environment.GetEnvironmentVariable($"{envPrefix}_PORT"), Environment.GetEnvironmentVariable("PORT")), out int parsedPort) &&
             parsedPort is > 0 and <= 65535)
@@ -158,79 +143,10 @@ public sealed class SandboxEnvironment
         if (!fullCandidate.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Fail-Closed Sandbox Violation: Path '{fullCandidate}' escapes allowed root '{fullRoot}'.");
+                $"Fail-Closed Path Containment Violation: Path '{fullCandidate}' escapes allowed root '{fullRoot}'.");
         }
 
         return fullCandidate;
-    }
-
-    public string AssertSandboxPathContained(string candidatePath)
-    {
-        return AssertPathContained(candidatePath, DataDirectory);
-    }
-
-    /// <summary>
-    /// Resolves the shared <c>Sandbox\</c> ancestor directory when <paramref name="dataDir"/> sits inside
-    /// a canonical <c>Sandbox\{app,data,logs,installed}</c> tree, returning <see langword="null"/> for host
-    /// or non-sandbox paths so callers fail closed.
-    /// </summary>
-    public static string? ResolveSiblingSandboxRoot(string? dataDir)
-    {
-        if (string.IsNullOrWhiteSpace(dataDir))
-        {
-            return null;
-        }
-
-        string fullData = Path.GetFullPath(StripExtendedPrefix(dataDir))
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-        DirectoryInfo? current = new DirectoryInfo(fullData);
-        while (current is not null)
-        {
-            if (current.Parent is not null &&
-                string.Equals(current.Name, "Sandbox", StringComparison.OrdinalIgnoreCase))
-            {
-                string root = current.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                if (IsHostEscapeRoot(root))
-                {
-                    return null;
-                }
-                return root;
-            }
-            current = current.Parent;
-        }
-
-        return null;
-    }
-
-    private static bool IsHostEscapeRoot(string path)
-    {
-        string normalized = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-        if (normalized.IndexOf(@"\Programs\", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            return true;
-        }
-
-        string[] protectedRoots =
-        {
-            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
-        };
-
-        foreach (string protectedRoot in protectedRoots)
-        {
-            if (string.IsNullOrWhiteSpace(protectedRoot)) continue;
-            string fullProtected = Path.GetFullPath(protectedRoot)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (string.Equals(normalized, fullProtected, StringComparison.OrdinalIgnoreCase) ||
-                normalized.StartsWith(fullProtected + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     public static string NormalizeLongPath(string path)

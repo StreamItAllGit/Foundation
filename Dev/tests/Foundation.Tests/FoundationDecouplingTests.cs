@@ -112,9 +112,9 @@ public sealed class FoundationDecouplingTests
 
         Assert.Null(StaNativeDialogBridgeBase.ResolveNearestExistingDirectory(null, null));
 
-        string[] cliArgs = { "--test-mode", "--data-dir", "C:\\Temp\\Sandbox" };
-        Assert.True(CliArgumentHelper.HasFlag(cliArgs, "--test-mode"));
-        Assert.Equal("C:\\Temp\\Sandbox", CliArgumentHelper.GetOption(cliArgs, "--data-dir"));
+        string[] cliArgs = { "--dry-run", "--data-dir", "C:\\Temp\\IsolatedData" };
+        Assert.True(CliArgumentHelper.HasFlag(cliArgs, "--dry-run"));
+        Assert.Equal("C:\\Temp\\IsolatedData", CliArgumentHelper.GetOption(cliArgs, "--data-dir"));
         Assert.NotNull(typeof(RootLauncherHost));
         string sampleInstallRoot = Path.Combine(
             Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\",

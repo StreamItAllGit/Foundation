@@ -1,5 +1,5 @@
 // @module: Foundation.Tests.V031Primitives
-// @purpose: Unit tests for Foundation v0.3.1 Core timing/audio/PNG/VisibleTest primitives, Retro MediaContainerExtractor/RecompContracts/SaveStateFixtureRunner, and Installer v0.2.2 features.
+// @purpose: Unit tests for Foundation Core timing/audio/PNG/environment primitives, Retro MediaContainerExtractor/RecompContracts, and Installer security/layout features.
 // @depends-on: System, System.Buffers.Binary, System.Collections.Generic, System.IO, System.IO.Compression, System.Security.Cryptography, System.Text, System.Threading, System.Threading.Tasks, System.Windows.Forms, Foundation.Core, Foundation.Retro, Foundation.Installer, Xunit
 // @exports: FoundationV031PrimitivesTests
 
@@ -117,17 +117,17 @@ public sealed class FoundationV031PrimitivesTests : IDisposable
     }
 
     [Fact]
-    public void SandboxEnvironment_VisibleTest_IsDistinctFromHeadless()
+    public void AppEnvironment_PresentationModes_ResolveTrayOrBackgroundAndDesktopWindow()
     {
-        var visible = new SandboxEnvironment("restation", new[] { "--test-mode", "--visible-test", "--data-dir", _tempDir });
-        Assert.True(visible.VisibleTest);
-        Assert.False(visible.Headless);
-        Assert.Equal(UiPresentationMode.DesktopWindow, visible.PresentationMode);
+        var desktop = new AppEnvironment("restation", new[] { "--window", "--data-dir", _tempDir });
+        Assert.Equal(UiPresentationMode.DesktopWindow, desktop.PresentationMode);
 
-        var headless = new SandboxEnvironment("restation", new[] { "--headless", "--visible-test", "--data-dir", _tempDir });
-        Assert.True(headless.VisibleTest);
-        Assert.True(headless.Headless);
-        Assert.Equal(UiPresentationMode.HeadlessOrTrayOnly, headless.PresentationMode);
+        var browser = new AppEnvironment("restation", new[] { "--browser", "--data-dir", _tempDir });
+        Assert.Equal(UiPresentationMode.LocalBrowser, browser.PresentationMode);
+
+        var tray = new AppEnvironment("restation", new[] { "--tray-only", "--data-dir", _tempDir });
+        Assert.True(tray.TrayOnly);
+        Assert.Equal(UiPresentationMode.TrayOrBackground, tray.PresentationMode);
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public sealed class FoundationV031PrimitivesTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveStateFixtureRunner_And_RecompContracts_VerifyFramebuffersAndAudio()
+    public async Task RecompContracts_TimingPatchesAndHostOptions_WorkCleanly()
     {
         var manifest = new SampleManifest();
         var host = new SampleRecompHost();
@@ -189,25 +189,8 @@ public sealed class FoundationV031PrimitivesTests : IDisposable
         await module.InitializeAsync(host);
         host.SetTargetFps(0, unlock: true);
         Assert.True(host.Options.UnlockFps);
-        Assert.True(await module.RunVisibleTestAsync(new VisibleTestShowcaseOptions(DurationMs: 100, AutoExit: true)));
-
-        byte[] fb = new byte[4 * 4 * 4];
-        Array.Fill(fb, (byte)0x7F);
-        string fbSha = Convert.ToHexString(SHA256.HashData(fb)).ToLowerInvariant();
-        var spec = new SaveStateFixtureSpec("boot", "TitleScreen", "boot.sav", FrameCount: 2, ExpectedFramebufferSha256: fbSha);
-
-        string artDir = Path.Combine(_tempDir, "artifacts");
-        var results = await SaveStateFixtureRunner.RunAllFixturesAsync(new[] { spec }, (_, _, _) =>
-            Task.FromResult(new SaveStateFixtureFrameOutput(fb, 4, 4, new short[] { 100, -100 })), artDir);
-        Assert.Single(results);
-        Assert.True(results[0].Passed);
-        Assert.True(File.Exists(results[0].ScreenshotPngPath));
-        Assert.True(File.Exists(results[0].AudioWavPath));
-
-        var badSpec = spec with { ExpectedFramebufferSha256 = new string('f', 64) };
-        SaveStateFixtureResult failRes = await SaveStateFixtureRunner.RunFixtureAsync(
-            badSpec, (_, _, _) => Task.FromResult(new SaveStateFixtureFrameOutput(fb, 4, 4)));
-        Assert.False(failRes.Passed);
+        Assert.Single(module.TimingPatches);
+        Assert.Equal(RecompExecutionTierMode.AotPrimary, host.Options.ExecutionTier);
     }
 
     [Fact]
@@ -220,8 +203,8 @@ public sealed class FoundationV031PrimitivesTests : IDisposable
         Assert.False(gameDesc.AllowAutoStart);
 
         string payloadZip = BuildTestPayloadZip("KingsFieldRecomp.exe");
-        string sandboxDir = Path.Combine(_tempDir, "Sandbox", "kf");
-        var ctx = new InstallerSandboxContext(cliDataDir: sandboxDir, testMode: true, envPrefix: gameDesc.EnvPrefix);
+        string isolatedDir = Path.Combine(_tempDir, "Isolated", "kf");
+        var ctx = new InstallerRuntimeContext(cliDataDir: isolatedDir, envPrefix: gameDesc.EnvPrefix);
         var engine = new InstallerEngine(gameDesc, ctx);
 
         using (var wizard = new InstallerWizardForm(engine, ctx, initialAutoStart: true))
@@ -236,22 +219,22 @@ public sealed class FoundationV031PrimitivesTests : IDisposable
 
         var installRes = await engine.InstallAsync(createShortcuts: true, registerAutoStart: true, externalPayloadPath: payloadZip);
         Assert.True(installRes.Success);
-        Assert.False(Directory.Exists(Path.Combine(sandboxDir, "shortcuts", "startup")));
+        Assert.False(Directory.Exists(Path.Combine(isolatedDir, "shortcuts", "startup")));
 
         var theme = new InstallerThemeOptions
         {
             AppId = "kf",
             DisplayName = "King's Field",
             Version = "0.1.0",
-            DefaultInstallDir = sandboxDir,
+            DefaultInstallDir = isolatedDir,
             AllowAutoStart = false
         };
-        using var tier2Wizard = new InstallerWizardForm(new InstallerEngineCore(theme, new SandboxEnvironment("kf", new[] { "--data-dir", sandboxDir, "--test-mode" })));
+        using var tier2Wizard = new InstallerWizardForm(new InstallerEngineCore(theme, new AppEnvironment("kf", new[] { "--data-dir", isolatedDir })));
         Assert.False(tier2Wizard.AutoStartCheckBox.Visible);
     }
 
     [Fact]
-    public void FileLockRetry_TestModeInstallDirContainment_And_VisibleTestShowcase_WorkFailClosed()
+    public void FileLockRetry_And_IsolatedInstallDirSafety_WorkFailClosed()
     {
         int attempts = 0;
         FileLockRetryHelper.ExecuteWithRetry(() =>
@@ -262,22 +245,18 @@ public sealed class FoundationV031PrimitivesTests : IDisposable
         Assert.Equal(4, attempts);
 
         string payloadZip = BuildTestPayloadZip("RecompApp.exe");
-        string safeInstallDir = Path.Combine(_tempDir, "Sandbox", "AutoContained");
+        string safeInstallDir = Path.Combine(_tempDir, "Isolated", "AutoContained");
+        string safeDataDir = Path.Combine(_tempDir, "Isolated", "AutoData");
         var desc = new InstallerAppDescriptor("RecompApp", "Recomp App", "Suite", "0.1.0", MainExecutableRelativePath: "RecompApp.exe", AllowAutoStart: false);
 
-        int rc = StandardInstallerHost.Run(desc, new[] { "--install-dir", safeInstallDir, "--payload", payloadZip, "--test-mode", "--silent" });
+        int rc = StandardInstallerHost.Run(desc, new[] { "--install-dir", safeInstallDir, "--data-dir", safeDataDir, "--payload", payloadZip, "--silent" });
         Assert.Equal(0, rc);
-        Assert.True(File.Exists(Path.Combine(safeInstallDir, "logs", "installer.log")));
+        Assert.True(File.Exists(Path.Combine(safeDataDir, "logs", "installer.log")));
 
-        var noDataCtx = new InstallerSandboxContext(testMode: true, envPrefix: desc.EnvPrefix);
-        var noDataEngine = new InstallerEngine(desc, noDataCtx);
+        var isolatedCtx = new InstallerRuntimeContext(cliDataDir: safeDataDir, envPrefix: desc.EnvPrefix);
+        var isolatedEngine = new InstallerEngine(desc, isolatedCtx);
         string unsafeHostTarget = Path.Combine(Path.GetPathRoot(Environment.SystemDirectory)!, "Programs", "UnsafeTarget");
-        Assert.Throws<InvalidOperationException>(() => noDataEngine.ValidateAndNormalizeInstallDirectory(unsafeHostTarget));
-
-        using var showcaseWizard = new InstallerWizardForm(noDataEngine, noDataCtx, initialInstallDir: safeInstallDir, showShowcaseAutoCloseMs: 250);
-        Assert.False(showcaseWizard.PrimaryButton.Enabled);
-        Application.Run(showcaseWizard);
-        Assert.Equal(0, showcaseWizard.ExitCode);
+        Assert.Throws<InvalidOperationException>(() => isolatedEngine.ValidateAndNormalizeInstallDirectory(unsafeHostTarget));
     }
 
     private string BuildTestPayloadZip(string exeName)
@@ -320,13 +299,12 @@ public sealed class FoundationV031PrimitivesTests : IDisposable
         public void SetTargetFps(double targetFps, bool unlock = false) => Options = Options with { TargetFps = targetFps, UnlockFps = unlock };
     }
 
-    private sealed class SampleGameModule(IRecompModuleManifest manifest) : IRecompGameModule, IVisibleTestHarness
+    private sealed class SampleGameModule(IRecompModuleManifest manifest) : IRecompGameModule
     {
         public IRecompModuleManifest Manifest { get; } = manifest;
         public IReadOnlyList<RecompPatchDescriptor> TimingPatches { get; } = [new("unlock-60", "60 FPS Unlock", 60.0, IsUnlocked: true)];
         public Task InitializeAsync(IRecompHost host, CancellationToken ct = default) => Task.CompletedTask;
         public Task StepFrameAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task LoadSaveStateAsync(string saveStatePath, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<bool> RunVisibleTestAsync(VisibleTestShowcaseOptions options, CancellationToken ct = default) => Task.FromResult(options.AutoExit);
     }
 }

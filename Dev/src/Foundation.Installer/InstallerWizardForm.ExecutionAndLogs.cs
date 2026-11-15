@@ -52,7 +52,7 @@ public sealed partial class InstallerWizardForm
         }
         catch (Exception ex)
         {
-            _ = ex; // Icon extraction failure is non-fatal in headless/test hosts.
+            _ = ex; // Icon extraction failure is non-fatal in non-GUI test hosts.
         }
 
         InitializeHeaderAndDestinationControls(defaultDir, initialSecondaryDir, extractedIcon);
@@ -78,14 +78,6 @@ public sealed partial class InstallerWizardForm
 
     private void UpdateUpgradeDetectionBadge()
     {
-        if (_autoRunVisibleTest || _showcaseAutoCloseMs > 0)
-        {
-            _lblModeBadge.Text = "VISIBLE TEST";
-            _lblModeBadge.ForeColor = _accentColor;
-            UpdateLayoutBounds();
-            return;
-        }
-
         if (_isUninstallMode)
         {
             _lblModeBadge.Text = "UNINSTALL MODE";
@@ -161,8 +153,8 @@ public sealed partial class InstallerWizardForm
     {
         if (_completedSuccessfully)
         {
-            bool isContained = _ctx?.IsContainedMode ?? (_coreEngine?.Sandbox.IsContainedSandbox ?? false);
-            if (!_isUninstallMode && _chkLaunchAfter.Checked && !isContained)
+            bool suppressLaunch = _ctx?.ShouldSuppressHostMutations ?? (_coreEngine?.IsIsolatedOverride ?? false);
+            if (!_isUninstallMode && _chkLaunchAfter.Checked && !suppressLaunch)
             {
                 TryLaunchInstalledApplication(_completedInstallDir);
             }

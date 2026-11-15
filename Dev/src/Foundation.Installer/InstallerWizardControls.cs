@@ -1,11 +1,12 @@
 // @module: Foundation.Installer.UI.Controls
-// @purpose: Provides color parsing and factory helpers for the 650x434 / 650x544 Deep Slate Dark WinForms Setup Wizard.
-// @depends-on: System, System.Drawing, System.Globalization, System.Windows.Forms
+// @purpose: Provides color parsing, DWM dark titlebar styling, and factory helpers for the 650x434 / 650x544 Deep Slate Dark WinForms Setup Wizard.
+// @depends-on: System, System.Drawing, System.Globalization, System.Runtime.InteropServices, System.Windows.Forms
 // @exports: InstallerWizardControls
 
 using System;
 using System.Drawing;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace Foundation.Installer;
@@ -21,6 +22,24 @@ public static class InstallerWizardControls
     public static readonly Color BorderSubtle = Color.FromArgb(42, 51, 68);
     public static readonly Color AccentEmerald = Color.FromArgb(16, 185, 129);
     public static readonly Color AccentDanger = Color.FromArgb(239, 68, 68);
+    private const int DwmUseImmersiveDarkMode = 20;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    public static void EnableDarkTitleBar(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        try
+        {
+            int useDark = 1;
+            DwmSetWindowAttribute(hwnd, DwmUseImmersiveDarkMode, ref useDark, sizeof(int));
+        }
+        catch (Exception ex)
+        {
+            _ = ex; // Systems without DWM dark titlebar support proceed with default window frame.
+        }
+    }
 
     public static Color ParseHexColor(string? hex, Color fallback)
     {

@@ -15,13 +15,47 @@ public sealed partial class InstallerWizardForm
     {
         if (disposing)
         {
-            _showcaseTimer?.Stop();
-            _showcaseTimer?.Dispose();
-            _showcaseTimer = null;
             _cts?.Dispose();
             _cts = null;
         }
         base.Dispose(disposing);
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        InstallerWizardControls.EnableDarkTitleBar(Handle);
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        UpdateLayoutBounds();
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        UpdateLayoutBounds();
+    }
+
+    private bool ShouldSuppressModalDialogs =>
+        (_ctx?.ShouldSuppressHostMutations ?? (_coreEngine?.IsIsolatedOverride ?? false)) || !Environment.UserInteractive;
+
+    private void RunOnUiThread(Action action)
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+        if (InvokeRequired)
+        {
+            BeginInvoke(action);
+        }
+        else
+        {
+            action();
+        }
     }
 
     private void InitializeSecondaryDestinationControls(string? initialSecondaryDir)
@@ -277,24 +311,6 @@ public sealed partial class InstallerWizardForm
 
         base.AcceptButton = _btnPrimary;
         base.CancelButton = _btnCancel;
-
-        if (_showcaseAutoCloseMs > 0)
-        {
-            ExitCode = 0;
-            _txtInstallDir.Enabled = false;
-            _btnBrowse.Enabled = false;
-            _txtSecondaryDir.Enabled = false;
-            _btnSecondaryBrowse.Enabled = false;
-            _rbProfileLightweight.Enabled = false;
-            _rbProfileFull.Enabled = false;
-            _chkShortcuts.Enabled = false;
-            _chkAutoStart.Enabled = false;
-            _chkLaunchAfter.Enabled = false;
-            _chkMigrateLegacy.Enabled = false;
-            _chkPurgeData.Enabled = false;
-            _btnPrimary.Enabled = false;
-            _lblStatus.Text = $"Visible test showcase (dry preview — auto-closing in {_showcaseAutoCloseMs / 1000.0:F1}s)...";
-        }
     }
 
     public void ToggleDetailsDrawer() => SetDetailsExpanded(!_isDetailsExpanded);

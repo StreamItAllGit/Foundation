@@ -142,7 +142,7 @@ public sealed class CappedSharedLogSink
 
     public CappedSharedLogSink(string logFilePath, long maxBytes = 4L * 1024 * 1024)
     {
-        _logFilePath = SandboxEnvironment.NormalizeLongPath(logFilePath);
+        _logFilePath = AppEnvironment.NormalizeLongPath(logFilePath);
         _maxBytes = Math.Max(65536L, maxBytes);
     }
 

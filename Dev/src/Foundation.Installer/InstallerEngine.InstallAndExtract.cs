@@ -300,15 +300,13 @@ public sealed partial class InstallerEngine
         string? explicitSecondaryDir,
         string? explicitSecondaryFlagName)
     {
-        string? boundary = _ctx.IsContainedMode
-            ? (!string.IsNullOrWhiteSpace(_ctx.SandboxRoot) ? _ctx.SandboxRoot : _ctx.DataDirectory)
-            : null;
-        string? reEngineDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.ReEngineInstallDir, boundary);
-        string? suiteDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.SuiteInstallDir, boundary);
+        bool isolated = _ctx.ShouldSuppressHostMutations;
+        string? reEngineDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.ReEngineInstallDir, isolated);
+        string? suiteDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.SuiteInstallDir, isolated);
 
         if (!string.IsNullOrWhiteSpace(explicitSecondaryDir))
         {
-            string normalizedExplicit = NormalizeSecondaryPath(explicitSecondaryDir, boundary)!;
+            string normalizedExplicit = NormalizeSecondaryPath(explicitSecondaryDir, isolated)!;
             if (string.Equals(explicitSecondaryFlagName, "--reengine-dir", StringComparison.OrdinalIgnoreCase))
             {
                 reEngineDir = normalizedExplicit;
@@ -330,14 +328,17 @@ public sealed partial class InstallerEngine
         return (reEngineDir, suiteDir);
     }
 
-    private static string? NormalizeSecondaryPath(string? rawPath, string? containmentBoundary)
+    private static string? NormalizeSecondaryPath(string? rawPath, bool rejectCanonicalProduction)
     {
         if (string.IsNullOrWhiteSpace(rawPath))
             return null;
 
         string fullPath = Path.GetFullPath(rawPath.Trim());
-        return !string.IsNullOrWhiteSpace(containmentBoundary)
-            ? EnsureWithinDirectory(containmentBoundary, fullPath)
-            : fullPath;
+        if (rejectCanonicalProduction && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullPath))
+        {
+            throw new InvalidOperationException(
+                $"Fail-closed isolation violation: refusing to target canonical production or system secondary directory '{fullPath}'.");
+        }
+        return fullPath;
     }
 }

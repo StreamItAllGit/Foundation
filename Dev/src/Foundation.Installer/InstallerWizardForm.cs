@@ -19,7 +19,7 @@ public sealed partial class InstallerWizardForm : Form
     public const int ExpandedClientHeight = 544;
 
     private readonly InstallerEngine? _fullEngine;
-    private readonly InstallerSandboxContext? _ctx;
+    private readonly InstallerRuntimeContext? _ctx;
     private readonly InstallerEngineCore? _coreEngine;
     private readonly Func<CancellationToken, Action<int, string>, Task<FoundationInstallResult>>? _customInstallAction;
     private readonly string? _externalPayloadPath;
@@ -31,15 +31,10 @@ public sealed partial class InstallerWizardForm : Form
     private readonly Color _bgPrimary;
     private readonly Color _bgCard;
     private readonly bool _allowAutoStart;
-    private readonly int _showcaseAutoCloseMs;
     private readonly SecondaryPathPickerOptions? _secondaryPickerOptions;
     private readonly bool _hasSecondaryPicker;
     private readonly bool _showLegacyMigration;
-    private readonly bool _autoRunVisibleTest;
-    private readonly bool _explicitInstallTargetProvided;
     private readonly string? _legacyDetectedPath;
-    private bool _visibleTestStarted;
-    private System.Windows.Forms.Timer? _showcaseTimer;
 
     private Panel _headerPanel = null!;
     private Panel _bodyPanel = null!;
@@ -108,12 +103,10 @@ public sealed partial class InstallerWizardForm : Form
     public bool MigrateLegacyChecked => _showLegacyMigration && _chkMigrateLegacy.Checked;
     public bool IsAutoStartAllowed => _allowAutoStart;
     public bool IsDetailsExpanded => _isDetailsExpanded;
-    public bool AutoRunVisibleTest => _autoRunVisibleTest;
-    public string? LastVisibleTestScreenshotPath { get; private set; }
 
     public InstallerWizardForm(
         InstallerEngine engine,
-        InstallerSandboxContext ctx,
+        InstallerRuntimeContext ctx,
         string? initialInstallDir = null,
         string? externalPayloadPath = null,
         bool isUninstallMode = false,
@@ -121,64 +114,22 @@ public sealed partial class InstallerWizardForm : Form
         bool initialAutoStart = false,
         bool initialLaunchAfter = true,
         bool initialPurgeData = false,
-        int showShowcaseAutoCloseMs = 0,
         string? initialProfileId = null,
         string? initialSecondaryDir = null,
         string? secondaryFlagName = null,
-        bool initialMigrateLegacy = false)
-        : this(
-            engine,
-            ctx,
-            initialInstallDir,
-            externalPayloadPath,
-            isUninstallMode,
-            initialCreateShortcuts,
-            initialAutoStart,
-            initialLaunchAfter,
-            initialPurgeData,
-            showShowcaseAutoCloseMs,
-            initialProfileId,
-            initialSecondaryDir,
-            secondaryFlagName,
-            initialMigrateLegacy,
-            showLegacyMigration: !isUninstallMode && (initialMigrateLegacy || (ctx?.ConfigOverride?.MigrateLegacy ?? false) || (engine?.Descriptor.AllowLegacyMigration ?? false)),
-            autoRunVisibleTest: false,
-            explicitInstallTargetProvided: !string.IsNullOrWhiteSpace(initialInstallDir))
-    {
-    }
-
-    public InstallerWizardForm(
-        InstallerEngine engine,
-        InstallerSandboxContext ctx,
-        string? initialInstallDir,
-        string? externalPayloadPath,
-        bool isUninstallMode,
-        bool initialCreateShortcuts,
-        bool initialAutoStart,
-        bool initialLaunchAfter,
-        bool initialPurgeData,
-        int showShowcaseAutoCloseMs,
-        string? initialProfileId,
-        string? initialSecondaryDir,
-        string? secondaryFlagName,
-        bool initialMigrateLegacy,
-        bool showLegacyMigration,
-        bool autoRunVisibleTest = false,
-        bool explicitInstallTargetProvided = false)
+        bool initialMigrateLegacy = false,
+        bool? showLegacyMigration = null)
     {
         _fullEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         _ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
         _externalPayloadPath = externalPayloadPath;
         _isUninstallMode = isUninstallMode;
-        _autoRunVisibleTest = autoRunVisibleTest;
-        _explicitInstallTargetProvided = explicitInstallTargetProvided || !string.IsNullOrWhiteSpace(initialInstallDir);
 
         InstallerAppDescriptor desc = _fullEngine.Descriptor;
         _displayName = desc.DisplayName;
         _version = desc.Version;
         _subtitle = desc.EffectiveSubtitle;
         _allowAutoStart = desc.AllowAutoStart;
-        _showcaseAutoCloseMs = Math.Max(0, showShowcaseAutoCloseMs);
         _accentColor = InstallerWizardControls.ParseHexColor(desc.BrandAccentHex, Color.FromArgb(14, 165, 233));
         _bgPrimary = Color.FromArgb(14, 17, 23);
         _bgCard = Color.FromArgb(22, 27, 36);
@@ -196,7 +147,7 @@ public sealed partial class InstallerWizardForm : Form
             _secondaryPickerOptions = new SecondaryPathPickerOptions(flag, label, effectiveSecondary);
         }
         _hasSecondaryPicker = !_isUninstallMode && _secondaryPickerOptions != null;
-        _showLegacyMigration = !_isUninstallMode && (showLegacyMigration || initialMigrateLegacy || (ctx.ConfigOverride?.MigrateLegacy ?? false));
+        _showLegacyMigration = !_isUninstallMode && (showLegacyMigration ?? (initialMigrateLegacy || (ctx.ConfigOverride?.MigrateLegacy ?? false) || desc.AllowLegacyMigration));
 
         string defaultDir = !string.IsNullOrWhiteSpace(initialInstallDir)
             ? initialInstallDir
@@ -218,48 +169,20 @@ public sealed partial class InstallerWizardForm : Form
         bool isUninstallMode = false,
         string? initialInstallDir = null,
         Func<CancellationToken, Action<int, string>, Task<FoundationInstallResult>>? customInstallAction = null,
-        int showShowcaseAutoCloseMs = 0,
         string? initialProfileId = null,
         string? initialSecondaryDir = null,
-        bool initialMigrateLegacy = false)
-        : this(
-            engine,
-            isUninstallMode,
-            initialInstallDir,
-            customInstallAction,
-            showShowcaseAutoCloseMs,
-            initialProfileId,
-            initialSecondaryDir,
-            initialMigrateLegacy,
-            showLegacyMigration: !isUninstallMode && ((engine?.Theme.AllowLegacyMigration ?? false) || initialMigrateLegacy),
-            autoRunVisibleTest: false)
-    {
-    }
-
-    public InstallerWizardForm(
-        InstallerEngineCore engine,
-        bool isUninstallMode,
-        string? initialInstallDir,
-        Func<CancellationToken, Action<int, string>, Task<FoundationInstallResult>>? customInstallAction,
-        int showShowcaseAutoCloseMs,
-        string? initialProfileId,
-        string? initialSecondaryDir,
-        bool initialMigrateLegacy,
-        bool showLegacyMigration,
-        bool autoRunVisibleTest = false)
+        bool initialMigrateLegacy = false,
+        bool? showLegacyMigration = null)
     {
         _coreEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         _isUninstallMode = isUninstallMode;
         _customInstallAction = customInstallAction;
-        _autoRunVisibleTest = autoRunVisibleTest;
-        _explicitInstallTargetProvided = !string.IsNullOrWhiteSpace(initialInstallDir);
 
         InstallerThemeOptions theme = _coreEngine.Theme;
         _displayName = theme.DisplayName;
         _version = theme.Version;
         _subtitle = theme.Subtitle;
         _allowAutoStart = theme.AllowAutoStart;
-        _showcaseAutoCloseMs = Math.Max(0, showShowcaseAutoCloseMs);
         _accentColor = InstallerWizardControls.ParseHexColor(theme.BrandAccentHex, Color.FromArgb(14, 165, 233));
         _bgPrimary = InstallerWizardControls.ParseHexColor(theme.SurfaceBackdropHex, Color.FromArgb(14, 17, 23));
         _bgCard = InstallerWizardControls.ParseHexColor(theme.SurfaceCardHex, Color.FromArgb(22, 27, 36));
@@ -270,7 +193,7 @@ public sealed partial class InstallerWizardForm : Form
             : _secondaryPickerOptions?.DefaultPath;
         _hasSecondaryPicker = !_isUninstallMode && (_secondaryPickerOptions != null || !string.IsNullOrWhiteSpace(effectiveSecondary));
         _legacyDetectedPath = !_isUninstallMode ? _coreEngine.DetectLegacyFlatInstall() : null;
-        _showLegacyMigration = !_isUninstallMode && (showLegacyMigration || theme.AllowLegacyMigration || initialMigrateLegacy || _legacyDetectedPath != null);
+        _showLegacyMigration = !_isUninstallMode && (showLegacyMigration ?? (theme.AllowLegacyMigration || initialMigrateLegacy || _legacyDetectedPath != null));
 
         string defaultDir = _coreEngine.ResolveTargetInstallDir(initialInstallDir);
         string effectiveProfile = initialProfileId ?? theme.DefaultProfileId;

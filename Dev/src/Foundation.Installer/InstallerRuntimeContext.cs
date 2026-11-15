@@ -1,7 +1,7 @@
-// @module: Foundation.Installer.InstallerSandboxContext
-// @purpose: Fail-closed Standard 02 installer sandbox, CLI/env resolution, visible-by-default test flags, and diagnostic file logging.
+// @module: Foundation.Installer.InstallerRuntimeContext
+// @purpose: Resolves installer CLI/env runtime path overrides (--data-dir, --config, --log-dir), isolated test safety, and diagnostic logging.
 // @depends-on: System, System.IO, System.Text, System.Text.Json
-// @exports: InstallerSandboxContext
+// @exports: InstallerRuntimeContext
 
 using System;
 using System.IO;
@@ -10,36 +10,26 @@ using System.Text.Json;
 
 namespace Foundation.Installer;
 
-public sealed class InstallerSandboxContext
+public sealed class InstallerRuntimeContext
 {
     public string EnvPrefix { get; }
     public string? DataDirectory { get; private set; }
-    public string? SandboxRoot { get; private set; }
     public string? ConfigFilePath { get; }
     public string? LogDirectory { get; private set; }
-    public bool TestMode { get; }
     public bool DryRun { get; }
-    public bool Headless { get; }
-    public bool ExplicitVisibleTest { get; }
-    public bool VisibleTest { get; }
-    public bool EffectiveVisibleTest => VisibleTest && !Headless;
+    public bool IsIsolatedTestProcess { get; }
+    public bool ShouldSuppressHostMutations => IsIsolatedTestProcess || !string.IsNullOrWhiteSpace(DataDirectory);
     public InstallerConfigOverride? ConfigOverride { get; }
 
-    public bool IsContainedMode => TestMode || !string.IsNullOrWhiteSpace(DataDirectory);
-
-    public InstallerSandboxContext(
+    public InstallerRuntimeContext(
         string? cliDataDir = null,
         string? cliConfigPath = null,
         string? cliLogDir = null,
-        bool testMode = false,
         bool dryRun = false,
-        bool headless = false,
-        string envPrefix = "APP",
-        string? fallbackTestInstallDir = null,
-        bool visibleTest = false,
-        string? cliSandboxRoot = null)
+        string envPrefix = "APP")
     {
         EnvPrefix = string.IsNullOrWhiteSpace(envPrefix) ? "APP" : envPrefix.Trim().ToUpperInvariant();
+        IsIsolatedTestProcess = IsTruthyEnv("APP_ISOLATED_TEST");
 
         string? rawData = FirstNonEmpty(
             cliDataDir,
@@ -48,15 +38,6 @@ public sealed class InstallerSandboxContext
             Environment.GetEnvironmentVariable("APP_HOME"));
 
         DataDirectory = !string.IsNullOrWhiteSpace(rawData) ? Path.GetFullPath(rawData) : null;
-
-        string? rawSandboxRoot = FirstNonEmpty(
-            cliSandboxRoot,
-            Environment.GetEnvironmentVariable($"{EnvPrefix}_SANDBOX_ROOT"),
-            Environment.GetEnvironmentVariable("SANDBOX_ROOT"));
-
-        SandboxRoot = !string.IsNullOrWhiteSpace(rawSandboxRoot)
-            ? Path.GetFullPath(rawSandboxRoot)
-            : ResolveSiblingSandboxRoot(DataDirectory);
 
         string? rawConfig = FirstNonEmpty(
             cliConfigPath,
@@ -74,16 +55,7 @@ public sealed class InstallerSandboxContext
             ? Path.GetFullPath(rawLog)
             : (!string.IsNullOrWhiteSpace(DataDirectory) ? Path.Combine(DataDirectory, "logs") : null);
 
-        TestMode = testMode || IsTruthyEnv($"{EnvPrefix}_TEST_MODE") || IsTruthyEnv("TEST_MODE");
         DryRun = dryRun || IsTruthyEnv($"{EnvPrefix}_DRY_RUN");
-        Headless = headless || IsTruthyEnv($"{EnvPrefix}_HEADLESS") || IsTruthyEnv("HEADLESS");
-        ExplicitVisibleTest = visibleTest || IsTruthyEnv($"{EnvPrefix}_VISIBLE_TEST") || IsTruthyEnv("VISIBLE_TEST");
-        VisibleTest = ExplicitVisibleTest || (TestMode && !Headless);
-
-        if (TestMode && string.IsNullOrWhiteSpace(DataDirectory) && IsSafeTestInstallDirectory(fallbackTestInstallDir))
-        {
-            TryAdoptSafeTestDataDirectory(fallbackTestInstallDir!);
-        }
 
         if (!string.IsNullOrWhiteSpace(ConfigFilePath) && File.Exists(ConfigFilePath))
         {
@@ -95,41 +67,8 @@ public sealed class InstallerSandboxContext
         }
     }
 
-    public static bool IsSafeTestInstallDirectory(string? candidateDir) =>
-        FileLockRetryHelper.IsSafeTestInstallDirectory(candidateDir);
-
-    public bool TryAdoptSafeTestDataDirectory(string candidateInstallDir)
-    {
-        if (!TestMode || !string.IsNullOrWhiteSpace(DataDirectory) || !IsSafeTestInstallDirectory(candidateInstallDir))
-            return false;
-
-        DataDirectory = Path.GetFullPath(candidateInstallDir);
-        if (string.IsNullOrWhiteSpace(SandboxRoot))
-            SandboxRoot = ResolveSiblingSandboxRoot(DataDirectory);
-        if (string.IsNullOrWhiteSpace(LogDirectory))
-            LogDirectory = Path.Combine(DataDirectory, "logs");
-        return true;
-    }
-
-    private static string? ResolveSiblingSandboxRoot(string? dataDirectory)
-    {
-        if (string.IsNullOrWhiteSpace(dataDirectory))
-            return null;
-
-        string fullData = Path.GetFullPath(dataDirectory)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        string folderName = Path.GetFileName(fullData);
-        if (string.Equals(folderName, "data", StringComparison.OrdinalIgnoreCase))
-        {
-            string? parent = Path.GetDirectoryName(fullData);
-            if (!string.IsNullOrWhiteSpace(parent) && IsSafeTestInstallDirectory(parent))
-            {
-                return parent;
-            }
-        }
-
-        return fullData;
-    }
+    public static bool IsSafeIsolatedInstallDirectory(string? candidateDir) =>
+        FileLockRetryHelper.IsSafeIsolatedInstallDirectory(candidateDir);
 
     public void EnsureDefaultLogDirectory(string installDir)
     {
