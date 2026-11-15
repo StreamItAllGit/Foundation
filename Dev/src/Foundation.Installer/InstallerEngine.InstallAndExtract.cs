@@ -17,26 +17,72 @@ namespace Foundation.Installer;
 
 public sealed partial class InstallerEngine
 {
-    public async Task<InstallerOperationResult> InstallAsync(
+    public Task<InstallerOperationResult> InstallAsync(
         string? explicitInstallDir = null,
         bool createShortcuts = true,
         bool registerAutoStart = false,
         string? externalPayloadPath = null,
         CancellationToken ct = default,
+        IProgress<string>? progress = null) =>
+        InstallAsync(
+            new InstallerInstallOptions(
+                ExplicitInstallDir: explicitInstallDir,
+                CreateShortcuts: createShortcuts,
+                RegisterAutoStart: registerAutoStart,
+                ExternalPayloadPath: externalPayloadPath),
+            ct,
+            progress);
+
+    public Task<InstallerOperationResult> InstallAsync(
+        string? explicitInstallDir,
+        bool createShortcuts,
+        bool registerAutoStart,
+        string? externalPayloadPath,
+        string? installProfile,
+        string? secondaryInstallDir = null,
+        string? secondaryFlagName = null,
+        bool migrateLegacy = false,
+        CancellationToken ct = default,
+        IProgress<string>? progress = null) =>
+        InstallAsync(
+            new InstallerInstallOptions(
+                ExplicitInstallDir: explicitInstallDir,
+                CreateShortcuts: createShortcuts,
+                RegisterAutoStart: registerAutoStart,
+                ExternalPayloadPath: externalPayloadPath,
+                InstallProfile: installProfile,
+                SecondaryInstallDir: secondaryInstallDir,
+                SecondaryFlagName: secondaryFlagName,
+                MigrateLegacy: migrateLegacy),
+            ct,
+            progress);
+
+    public async Task<InstallerOperationResult> InstallAsync(
+        InstallerInstallOptions options,
+        CancellationToken ct = default,
         IProgress<string>? progress = null)
     {
-        string installDir = ValidateAndNormalizeInstallDirectory(explicitInstallDir);
+        ArgumentNullException.ThrowIfNull(options);
+        string installDir = ValidateAndNormalizeInstallDirectory(options.ExplicitInstallDir);
         _ctx.EnsureDefaultLogDirectory(installDir);
-        bool effectiveShortcuts = _ctx.ConfigOverride?.CreateShortcuts ?? createShortcuts;
-        bool requestedAutoStart = _ctx.ConfigOverride?.AutoStart ?? registerAutoStart;
+        bool effectiveShortcuts = _ctx.ConfigOverride?.CreateShortcuts ?? options.CreateShortcuts;
+        bool requestedAutoStart = _ctx.ConfigOverride?.AutoStart ?? options.RegisterAutoStart;
         bool effectiveAutoStart = Descriptor.AllowAutoStart && requestedAutoStart;
+        string effectiveProfile = NormalizeOptionalProfile(options.InstallProfile)
+            ?? NormalizeOptionalProfile(_ctx.ConfigOverride?.InstallProfile)
+            ?? Descriptor.DefaultProfile;
+        (string? reEngineDir, string? suiteDir) = ResolveSecondaryDirectories(
+            options.SecondaryInstallDir,
+            options.SecondaryFlagName);
+        bool effectiveMigrateLegacy = options.MigrateLegacy || (_ctx.ConfigOverride?.MigrateLegacy ?? false);
+
         if (requestedAutoStart && !Descriptor.AllowAutoStart)
         {
             _ctx.WriteLog("WARN", $"AutoStart requested for {Descriptor.ProductName}, but AllowAutoStart is false; skipping Startup shortcut.");
         }
 
         progress?.Report("Verifying embedded payload SHA-256 & archive integrity...");
-        var verify = await VerifyPayloadAsync(externalPayloadPath, ct);
+        var verify = await VerifyPayloadAsync(options.ExternalPayloadPath, ct);
         if (!verify.Valid)
         {
             return new InstallerOperationResult(false, installDir, string.Empty, 0, verify.Message);
@@ -44,7 +90,7 @@ public sealed partial class InstallerEngine
 
         if (_ctx.DryRun)
         {
-            string dryMsg = $"[DRY-RUN] Verified payload ({verify.EntryCount:N0} files, SHA-256: {verify.Sha256}); would install {Descriptor.DisplayName} v{InstallerVersion} into '{installDir}'.";
+            string dryMsg = $"[DRY-RUN] Verified payload ({verify.EntryCount:N0} files, SHA-256: {verify.Sha256}); would install {Descriptor.DisplayName} v{InstallerVersion} (profile: {effectiveProfile}) into '{installDir}'.";
             return new InstallerOperationResult(true, installDir, verify.Sha256, 0, dryMsg);
         }
 
@@ -63,7 +109,10 @@ public sealed partial class InstallerEngine
                 string prevRaw = await File.ReadAllTextAsync(existingManifestPath, Encoding.UTF8, ct);
                 previousManifest = JsonSerializer.Deserialize<InstallManifest>(prevRaw, JsonOpts);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _ = ex; // Unreadable previous manifest falls back cleanly to directory artifact detection.
+            }
         }
 
         bool isUpgrade = previousManifest != null || HasExistingInstallationArtifacts(installDir);
@@ -77,7 +126,7 @@ public sealed partial class InstallerEngine
         var installedRelFiles = new List<string>();
         var installedTopDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        await using Stream payloadStream = OpenPayloadStream(externalPayloadPath)
+        await using Stream payloadStream = OpenPayloadStream(options.ExternalPayloadPath)
             ?? throw new FileNotFoundException("Unable to open installer payload stream.");
 
         using (var zip = new ZipArchive(payloadStream, ZipArchiveMode.Read, leaveOpen: false))
@@ -176,7 +225,10 @@ public sealed partial class InstallerEngine
                     string obsoletePath = EnsureWithinDirectory(installDir, Path.Combine(installDir, oldRel.Replace('/', Path.DirectorySeparatorChar)));
                     FileLockRetryHelper.DeleteIfExists(obsoletePath, onRetryLog: msg => _ctx.WriteLog("WARN", msg), ct: ct);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _ = ex; // Best-effort cleanup of obsolete files from previous release.
+                }
             }
         }
 
@@ -216,7 +268,12 @@ public sealed partial class InstallerEngine
             InstalledRelativeFiles = installedRelFiles,
             InstalledTopDirectories = installedTopDirs.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList(),
             CreatedShortcuts = createdShortcuts,
-            UninstallRegistryRecord = registryRecord
+            UninstallRegistryRecord = registryRecord,
+            InstallProfile = effectiveProfile,
+            ReEngineInstallDir = reEngineDir,
+            SuiteInstallDir = suiteDir,
+            UmbrellaSubpath = Descriptor.UmbrellaSubpath,
+            MigrateLegacy = effectiveMigrateLegacy
         };
 
         string targetManifestPath = Path.Combine(metaContainerDir, InstallManifestFileName);
@@ -229,8 +286,58 @@ public sealed partial class InstallerEngine
         string actionVerb = isUpgrade ? "Upgraded" : "Installed";
         string backupSuffix = !string.IsNullOrWhiteSpace(backupZipPath) ? $" (Pre-upgrade backup: '{Path.GetFileName(backupZipPath)}')" : "";
         string doneMsg = $"{actionVerb} {Descriptor.DisplayName} v{InstallerVersion} ({installedRelFiles.Count:N0} files) to '{installDir}'{backupSuffix}.";
-        _ctx.WriteLog("INFO", $"{doneMsg} SHA-256={verify.Sha256}");
+        _ctx.WriteLog(
+            "INFO",
+            $"{doneMsg} SHA-256={verify.Sha256} Profile={effectiveProfile} ReEngineDir={reEngineDir ?? "none"} SuiteDir={suiteDir ?? "none"} MigrateLegacy={effectiveMigrateLegacy}");
         progress?.Report(doneMsg);
         return new InstallerOperationResult(true, installDir, verify.Sha256, installedRelFiles.Count, doneMsg, wasRunning, backupZipPath);
+    }
+
+    private static string? NormalizeOptionalProfile(string? rawProfile) =>
+        string.IsNullOrWhiteSpace(rawProfile) ? null : rawProfile.Trim();
+
+    private (string? ReEngineDir, string? SuiteDir) ResolveSecondaryDirectories(
+        string? explicitSecondaryDir,
+        string? explicitSecondaryFlagName)
+    {
+        string? boundary = _ctx.IsContainedMode
+            ? (!string.IsNullOrWhiteSpace(_ctx.SandboxRoot) ? _ctx.SandboxRoot : _ctx.DataDirectory)
+            : null;
+        string? reEngineDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.ReEngineInstallDir, boundary);
+        string? suiteDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.SuiteInstallDir, boundary);
+
+        if (!string.IsNullOrWhiteSpace(explicitSecondaryDir))
+        {
+            string normalizedExplicit = NormalizeSecondaryPath(explicitSecondaryDir, boundary)!;
+            if (string.Equals(explicitSecondaryFlagName, "--reengine-dir", StringComparison.OrdinalIgnoreCase))
+            {
+                reEngineDir = normalizedExplicit;
+            }
+            else if (string.Equals(explicitSecondaryFlagName, "--suite-dir", StringComparison.OrdinalIgnoreCase))
+            {
+                suiteDir = normalizedExplicit;
+            }
+            else if (!string.IsNullOrWhiteSpace(reEngineDir) && string.IsNullOrWhiteSpace(suiteDir))
+            {
+                reEngineDir = normalizedExplicit;
+            }
+            else
+            {
+                suiteDir = normalizedExplicit;
+            }
+        }
+
+        return (reEngineDir, suiteDir);
+    }
+
+    private static string? NormalizeSecondaryPath(string? rawPath, string? containmentBoundary)
+    {
+        if (string.IsNullOrWhiteSpace(rawPath))
+            return null;
+
+        string fullPath = Path.GetFullPath(rawPath.Trim());
+        return !string.IsNullOrWhiteSpace(containmentBoundary)
+            ? EnsureWithinDirectory(containmentBoundary, fullPath)
+            : fullPath;
     }
 }

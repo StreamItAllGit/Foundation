@@ -11,8 +11,14 @@ import json
 import os
 import shutil
 import stat
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+from build_release_universal import stage_sdk_release_zip
 
 FOUNDATION_ROOT = Path(__file__).resolve().parents[2]
 DEV_ROOT = FOUNDATION_ROOT / "Dev"
@@ -135,7 +141,7 @@ def _handle_remove_readonly(func, path, exc_info):
     func(path)
 
 
-def stage_clean_release_bundle(version: str = "0.4.0") -> Path:
+def stage_clean_release_bundle(version: str = "0.4.1", sdk_dir: Path | None = None) -> Path:
     latest_dir = FOUNDATION_ROOT / "Releases" / "Latest"
     latest_dir.mkdir(parents=True, exist_ok=True)
 
@@ -151,6 +157,10 @@ def stage_clean_release_bundle(version: str = "0.4.0") -> Path:
     if license_file.exists():
         shutil.copy2(license_file, latest_dir / "LICENSE")
 
+    if sdk_dir is not None and sdk_dir.exists() and not os.environ.get("FOUNDATION_SKIP_RELEASE_ZIP"):
+        stage_sdk_release_zip(sdk_dir, latest_dir, version)
+        return latest_dir
+
     lines: list[str] = []
     for item in sorted(latest_dir.iterdir(), key=lambda p: p.name.lower()):
         if item.is_file() and item.name != "SHA256SUMS.txt":
@@ -159,7 +169,7 @@ def stage_clean_release_bundle(version: str = "0.4.0") -> Path:
     return latest_dir
 
 
-def publish_sdk(version: str = "0.4.0", ui_version: str = "0.4.0", configuration: str = "Release") -> dict[str, object]:
+def publish_sdk(version: str = "0.4.1", ui_version: str = "0.4.1", configuration: str = "Release") -> dict[str, object]:
     clean_ver = version.lstrip("v")
     ver_tag = f"v{clean_ver}"
     ui_dir = DEV_ROOT / "src" / "Foundation.UI"
@@ -181,7 +191,7 @@ def publish_sdk(version: str = "0.4.0", ui_version: str = "0.4.0", configuration
         manifest = _populate_sdk_target(
             target, clean_ver, ui_version, binaries, web_src, web_assets, py_core, tools_dir
         )
-    stage_clean_release_bundle(clean_ver)
+    stage_clean_release_bundle(clean_ver, SHARED_LIBS_ROOT / ver_tag)
     return manifest
 
 
@@ -224,8 +234,8 @@ def sync_consumer(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Foundation SDK Publisher & Consumer Sync Tool")
-    parser.add_argument("--version", default="0.4.0", help="Foundation SDK SemVer (default: 0.4.0)")
-    parser.add_argument("--ui-version", default="0.4.0", help="Foundation.UI SemVer (default: 0.4.0)")
+    parser.add_argument("--version", default="0.4.1", help="Foundation SDK SemVer (default: 0.4.1)")
+    parser.add_argument("--ui-version", default="0.4.1", help="Foundation.UI SemVer (default: 0.4.1)")
     parser.add_argument("--configuration", default="Release", help="Build configuration (Release/Debug)")
     parser.add_argument("--publish", action="store_true", help="Publish SDK to SharedLibs and Builds")
     parser.add_argument("--sync-consumer", type=Path, help="Consumer project root to sync from SharedLibs")

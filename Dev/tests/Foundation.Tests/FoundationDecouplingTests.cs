@@ -116,15 +116,19 @@ public sealed class FoundationDecouplingTests
         Assert.True(CliArgumentHelper.HasFlag(cliArgs, "--test-mode"));
         Assert.Equal("C:\\Temp\\Sandbox", CliArgumentHelper.GetOption(cliArgs, "--data-dir"));
         Assert.NotNull(typeof(RootLauncherHost));
+        string sampleInstallRoot = Path.Combine(
+            Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\",
+            "SamplePrograms",
+            "ShadowLibrary");
         Assert.Equal(
-            Path.Combine("<PROGRAMS_ROOT>\\ShadowLibrary", "app", "ShadowLibrary.exe"),
-            RootLauncherHost.ResolveTargetExecutable("<PROGRAMS_ROOT>\\ShadowLibrary", "ShadowLibrary.exe"));
+            Path.Combine(sampleInstallRoot, "app", "ShadowLibrary.exe"),
+            RootLauncherHost.ResolveTargetExecutable(sampleInstallRoot, "ShadowLibrary.exe"));
         Assert.Equal(
-            Path.Combine("<PROGRAMS_ROOT>\\ShadowLibrary", "app", "ShadowLibrary.exe"),
+            Path.Combine(sampleInstallRoot, "app", "ShadowLibrary.exe"),
             RootLauncherHost.ResolveTargetExecutable(
-                "<PROGRAMS_ROOT>\\ShadowLibrary",
+                sampleInstallRoot,
                 "ShadowLibrary.exe",
-                "<PROGRAMS_ROOT>\\ShadowLibrary\\ShadowLibrary.exe"));
+                Path.Combine(sampleInstallRoot, "ShadowLibrary.exe")));
     }
 
     [Fact]

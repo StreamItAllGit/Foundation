@@ -1,7 +1,7 @@
-# Foundation (`v0.4.0`) — Strategic Roadmap
+# Foundation (`v0.4.1`) — Strategic Roadmap
 
-> **Active Version:** `v0.4.0` (Unified SemVer across all 7 C# assemblies, `@foundation/ui v0.4.0`, and `foundation_core v0.4.0`)
-> **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` (`52` published files)
+> **Active Version:** `v0.4.1` (Unified SemVer across all 7 C# assemblies, `@foundation/ui v0.4.1`, and `foundation_core v0.4.1`)
+> **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` (`51` published files)
 
 ---
 
@@ -37,11 +37,17 @@
 - **Network, Sidecars & Launcher (`SafeNetworkTransfer`, `SevenZipAndZipInspector`, `RootLauncherHost`):** Sanitized `JobId` (`:` ADS fix), recovered HTTP `416`, excluded `400/401/403/404/410` from transient retries, enforced `ResponseHeadersTimeout`, added LZMA/Deflate64 `7z.exe` fallback + nested `::` inspection, and fixed `RootLauncherHost` `--wait`/`--open`/`--visible-test` blocking, relative arg rebasing, and Ctrl+C forwarding.
 - **Unified `0.4.0` SemVer & Public-Repo Readiness:** Aligned all 7 `.csproj` assemblies, `@foundation/ui`, and `foundation_core` on `0.4.0`; deduplicated tripled `Foundation.UI` TS/TSX source copies into `Web\`; externalized Notion IDs (`Dev\.env.example`, `Dev\settings.example.json`); purged `14` stale `.pdb`s; verified `33/33` `[Fact]` tests (`0` warnings) and `--visible-test` wizard UI; archived all `12` diagnostic reports (`0` open reports).
 
+### ✅ `v0.4.1` — Wave 2: Visible-by-Default `--test-mode`, Installer Preview Z-Order & Profile/Secondary Forwarding
+- **Visible-by-Default `--test-mode` Contracts (`Foundation.Core`, `foundation_core`, `Foundation.UI`, `Dev\tools\`):** Added `ExplicitVisibleTest` / `EffectiveVisibleTest` and `HEADLESS` / `VISIBLE_TEST` fallbacks across [`SandboxEnvironment.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SandboxEnvironment.cs) and [`foundation_core\cli.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/cli.py); added [`VisibleTestWindowHelper.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.UI/Desktop/VisibleTestWindowHelper.cs) + `SandboxEnvironment`-aware [`DisposableWebViewHostForm.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.UI/Desktop/DisposableWebViewHostForm.cs), foreground `--new-window` browser verification in `verify_sandbox_universal.py`, and `--allow-sdk-zip` / `Foundation-v0.4.1.zip` release validation in `build_release_universal.py` & `sync_foundation_sdk.py`.
+- **Installer Real Visible Auto-Run, Preview Z-Order & Forwarding (`Foundation.Installer`):** Extracted `InstallerContracts.cs`, `InstallerSandboxContext.cs`, and `InstallerWizardForm.VisibleTest.cs` (`<= 400 LOC`), removed artificial 3s preview dwell during `--test-mode` auto-run, fixed composite back-to-front `CaptureWizardPreviewBitmap()` overdraw, decoupled `showLegacyMigration` visibility from `AllowLegacyMigration`, and forwarded `SelectedProfileId` / `SecondaryInstallDir` / `UmbrellaSubpath` / `MigrateLegacyChecked` into `InstallManifest`.
+- **Verification & Compliance:** Implemented per [`0.4.1.2026-11-15.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/plans/0.4.1.2026-11-15.md) (`@dean` Gate 1 & Gate 2 `PASS`; `40/40` `[Fact]` tests, `0` warnings; live `@inspecter-games` `Sandbox\` visible-test `VerifyHarness.exe` run verified centered `TopMost` window, `1064 ms` exit `0`, visual PNG inspection, `--test-mode --headless` fallback, `6/6` `--run-suite`, and `0` errors across all 3 log tiers); archived both `0.4.0` installer reports (`0` open reports); published `51` files to `SharedLibs\Foundation\v0.4.1` & `Latest` and staged `Releases\Latest\Foundation-v0.4.1.zip`.
+
 ---
 
-## Remaining Upstream Consumer Backlog (`v0.4.1+`)
+## Remaining Upstream Consumer Backlog (`v0.4.2+`)
 
-- **Open Diagnostic Reports ([`Dev\docs\reports\`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/)):** `0` open reports (`12` reconciled into `v0.4.0` and archived in `Dev\docs\reports\archive\`).
+- **Open Diagnostic Reports ([`Dev\docs\reports\`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/)):** `0` open reports (`17` historical reports reconciled and archived in `Dev\docs\reports\archive\`).
+- **Consumer Fleet Visible-by-Default `--test-mode` Sync (`15` projects):** Propagate Foundation `v0.4.1` visible-by-default `--test-mode` contracts and foreground browser CDP harnesses across the 15 audited ecosystem workspaces.
 
 ---
 

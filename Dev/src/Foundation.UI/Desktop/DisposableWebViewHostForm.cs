@@ -1,12 +1,13 @@
 // @module: Foundation.UI.Desktop.DisposableWebViewHostForm
-// @purpose: Base dark-themed WinForms desktop shell window with Win11 DWM immersive dark titlebar and child browser disposal.
-// @depends-on: System, System.Drawing, System.Runtime.InteropServices, System.Windows.Forms
+// @purpose: Base dark-themed WinForms desktop shell window with Win11 DWM immersive dark titlebar, Standard 02 visible-test foreground activation, and composite bitmap capture.
+// @depends-on: Foundation.Core, System, System.Drawing, System.Runtime.InteropServices, System.Windows.Forms
 // @exports: DisposableWebViewHostForm
 
 using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using Foundation.Core;
 
 namespace Foundation.UI.Desktop;
 
@@ -19,6 +20,7 @@ public class DisposableWebViewHostForm : Form
 
     public string TargetUrl { get; }
     public string UserDataFolder { get; }
+    public bool IsVisibleTest { get; }
 
     public DisposableWebViewHostForm(
         string targetUrl,
@@ -27,17 +29,53 @@ public class DisposableWebViewHostForm : Form
         Icon? appIcon = null,
         int defaultWidth = 1440,
         int defaultHeight = 920)
+        : this(targetUrl, userDataFolder, windowTitle, appIcon, defaultWidth, defaultHeight, visibleTest: false)
+    {
+    }
+
+    public DisposableWebViewHostForm(
+        string targetUrl,
+        string userDataFolder,
+        SandboxEnvironment? sandbox,
+        string windowTitle = "Application",
+        Icon? appIcon = null,
+        int defaultWidth = 1440,
+        int defaultHeight = 920)
+        : this(
+            targetUrl,
+            userDataFolder,
+            windowTitle,
+            appIcon,
+            defaultWidth,
+            defaultHeight,
+            visibleTest: VisibleTestWindowHelper.IsVisibleTestActive(sandbox))
+    {
+    }
+
+    protected DisposableWebViewHostForm(
+        string targetUrl,
+        string userDataFolder,
+        string windowTitle,
+        Icon? appIcon,
+        int defaultWidth,
+        int defaultHeight,
+        bool visibleTest)
     {
         TargetUrl = targetUrl;
         UserDataFolder = userDataFolder;
+        IsVisibleTest = visibleTest;
 
-        Text = windowTitle;
+        Text = VisibleTestWindowHelper.FormatWindowTitle(windowTitle, visibleTest);
         Width = defaultWidth;
         Height = defaultHeight;
         MinimumSize = new Size(960, 620);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(9, 14, 23);
         ForeColor = Color.FromArgb(241, 245, 249);
+        if (visibleTest)
+        {
+            TopMost = true;
+        }
         if (appIcon != null)
             Icon = appIcon;
     }
@@ -48,6 +86,21 @@ public class DisposableWebViewHostForm : Form
         EnableImmersiveDarkTitleBar(Handle);
     }
 
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        if (IsVisibleTest)
+        {
+            VisibleTestWindowHelper.ApplyForegroundVisibleTestWindow(this);
+        }
+    }
+
+    public Bitmap CapturePreviewBitmap() =>
+        VisibleTestWindowHelper.CaptureCompositeFormBitmap(this);
+
+    public string? CaptureVisibleTestScreenshot(string? logDirectory, string fileName = "window-visible-test.png") =>
+        VisibleTestWindowHelper.SaveScreenshot(this, logDirectory, fileName);
+
     public static void EnableImmersiveDarkTitleBar(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero) return;
@@ -56,6 +109,9 @@ public class DisposableWebViewHostForm : Form
             int useDark = 1;
             DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, sizeof(int));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _ = ex; // Systems without DWM dark titlebar support proceed with default window frame.
+        }
     }
 }

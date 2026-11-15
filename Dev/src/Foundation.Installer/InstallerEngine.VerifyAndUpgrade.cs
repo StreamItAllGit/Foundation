@@ -17,6 +17,12 @@ public sealed partial class InstallerEngine
     public bool HasEmbeddedPayload() =>
         _payloadAssembly.GetManifestResourceInfo(Descriptor.EffectiveEmbeddedPayloadResource) != null;
 
+    public bool HasPayloadSource(string? externalPayloadPath = null)
+    {
+        using Stream? stream = OpenPayloadStream(externalPayloadPath);
+        return stream != null;
+    }
+
     public async Task<(bool Valid, string Sha256, long SizeBytes, int EntryCount, string Message)> VerifyPayloadAsync(
         string? externalPayloadPath = null,
         CancellationToken ct = default)

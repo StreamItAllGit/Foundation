@@ -12,7 +12,7 @@ from .locks import PidSentinelLock
 from .logging import RollingLogSink, emit_heartbeat
 from .settings import ThreeFileSettingsStore
 
-SDK_VERSION: str = "0.3.0"
+SDK_VERSION: str = "0.4.1"
 MODULE_VERSION: str = "0.1.0"
 
 __all__ = [

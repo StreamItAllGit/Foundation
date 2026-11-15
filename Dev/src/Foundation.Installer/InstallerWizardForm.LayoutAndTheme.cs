@@ -11,6 +11,41 @@ namespace Foundation.Installer;
 
 public sealed partial class InstallerWizardForm
 {
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _showcaseTimer?.Stop();
+            _showcaseTimer?.Dispose();
+            _showcaseTimer = null;
+            _cts?.Dispose();
+            _cts = null;
+        }
+        base.Dispose(disposing);
+    }
+
+    private void InitializeSecondaryDestinationControls(string? initialSecondaryDir)
+    {
+        string secLabel = _secondaryPickerOptions?.Label ?? "Companion Directory:";
+        string secDefault = initialSecondaryDir ?? _secondaryPickerOptions?.DefaultPath ?? string.Empty;
+        _lblSecondaryDirHeader = InstallerWizardControls.CreateSectionLabel(secLabel, new Point(22, 150));
+        _lblSecondaryDirHeader.Visible = _hasSecondaryPicker;
+
+        _txtSecondaryDir = InstallerWizardControls.CreateDarkPathTextBox(secDefault, new Point(22, 172), 502);
+        _txtSecondaryDir.PlaceholderText = _secondaryPickerOptions?.Placeholder ?? string.Empty;
+        _txtSecondaryDir.Visible = _hasSecondaryPicker;
+
+        _btnSecondaryBrowse = InstallerWizardControls.CreateFlatButton(
+            "Browse...",
+            new Point(532, 170),
+            new Size(96, 29),
+            _bgCard,
+            TextPrimary,
+            BorderSubtle);
+        _btnSecondaryBrowse.Visible = _hasSecondaryPicker;
+        _btnSecondaryBrowse.Click += OnSecondaryBrowseClicked;
+    }
+
     private void InitializeOptionsAndFooterControls(
         bool initialCreateShortcuts,
         bool initialAutoStart,
@@ -260,61 +295,6 @@ public sealed partial class InstallerWizardForm
             _btnPrimary.Enabled = false;
             _lblStatus.Text = $"Visible test showcase (dry preview — auto-closing in {_showcaseAutoCloseMs / 1000.0:F1}s)...";
         }
-    }
-
-    protected override void OnHandleCreated(EventArgs e)
-    {
-        base.OnHandleCreated(e);
-        TryApplyDarkModeTitleBar();
-        UpdateLayoutBounds();
-    }
-
-    protected override void OnLoad(EventArgs e)
-    {
-        base.OnLoad(e);
-        UpdateLayoutBounds();
-    }
-
-    protected override void OnShown(EventArgs e)
-    {
-        base.OnShown(e);
-        UpdateLayoutBounds();
-
-        if (_showcaseAutoCloseMs > 0 && _showcaseTimer is null)
-        {
-            Activate();
-            _showcaseTimer = new System.Windows.Forms.Timer { Interval = Math.Max(200, _showcaseAutoCloseMs) };
-            _showcaseTimer.Tick += (_, _) =>
-            {
-                _showcaseTimer?.Stop();
-                ExitCode = 0;
-                Close();
-            };
-            _showcaseTimer.Start();
-        }
-    }
-
-    protected override void OnResize(EventArgs e)
-    {
-        base.OnResize(e);
-        UpdateLayoutBounds();
-    }
-
-    private void TryApplyDarkModeTitleBar()
-    {
-        if (!OperatingSystem.IsWindows() || !IsHandleCreated)
-            return;
-
-        try
-        {
-            int useDark = 1;
-            int hr = DwmSetWindowAttribute(Handle, DwmwaUseImmersiveDarkMode, ref useDark, sizeof(int));
-            if (hr != 0)
-            {
-                DwmSetWindowAttribute(Handle, DwmwaUseImmersiveDarkModeBefore20H1, ref useDark, sizeof(int));
-            }
-        }
-        catch { }
     }
 
     public void ToggleDetailsDrawer() => SetDetailsExpanded(!_isDetailsExpanded);

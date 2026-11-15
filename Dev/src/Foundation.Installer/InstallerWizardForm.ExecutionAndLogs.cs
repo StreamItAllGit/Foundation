@@ -5,6 +5,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Threading;
@@ -15,9 +16,69 @@ namespace Foundation.Installer;
 
 public sealed partial class InstallerWizardForm
 {
+    private void InitializeWizardSurface(
+        string defaultDir,
+        bool initialCreateShortcuts,
+        bool initialAutoStart,
+        bool initialLaunchAfter,
+        bool initialPurgeData,
+        string initialProfileId,
+        string? initialSecondaryDir,
+        bool initialMigrateLegacy)
+    {
+        Text = _isUninstallMode
+            ? $"{_displayName} Uninstall (v{_version})"
+            : $"{_displayName} Setup (v{_version})";
+        ClientSize = new Size(DefaultClientWidth, CollapsedClientHeight);
+        StartPosition = FormStartPosition.CenterScreen;
+        BackColor = _bgPrimary;
+        ForeColor = TextPrimary;
+        Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+
+        Icon? extractedIcon = null;
+        try
+        {
+            string? selfExe = Environment.ProcessPath;
+            if (!string.IsNullOrWhiteSpace(selfExe) && File.Exists(selfExe))
+            {
+                extractedIcon = Icon.ExtractAssociatedIcon(selfExe);
+                if (extractedIcon != null)
+                {
+                    Icon = extractedIcon;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _ = ex; // Icon extraction failure is non-fatal in headless/test hosts.
+        }
+
+        InitializeHeaderAndDestinationControls(defaultDir, initialSecondaryDir, extractedIcon);
+        InitializeOptionsAndFooterControls(
+            initialCreateShortcuts,
+            initialAutoStart,
+            initialLaunchAfter,
+            initialPurgeData,
+            initialProfileId,
+            initialMigrateLegacy);
+
+        _controlsInitialized = true;
+        UpdateUpgradeDetectionBadge();
+        UpdateLayoutBounds();
+
+        AppendLogLine($"{_displayName} Setup v{_version} initialized.");
+        AppendLogLine($"Target directory: {_txtInstallDir.Text}");
+        if (_hasSecondaryPicker)
+        {
+            AppendLogLine($"Secondary directory ({_secondaryPickerOptions?.FlagName}): {_txtSecondaryDir.Text}");
+        }
+    }
+
     private void UpdateUpgradeDetectionBadge()
     {
-        if (_showcaseAutoCloseMs > 0)
+        if (_autoRunVisibleTest || _showcaseAutoCloseMs > 0)
         {
             _lblModeBadge.Text = "VISIBLE TEST";
             _lblModeBadge.ForeColor = _accentColor;
@@ -113,7 +174,10 @@ public sealed partial class InstallerWizardForm
         string targetDir = _txtInstallDir.Text.Trim();
         if (string.IsNullOrWhiteSpace(targetDir))
         {
-            MessageBox.Show(this, "Please specify a valid target installation folder.", $"{_displayName} Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (!ShouldSuppressModalDialogs)
+            {
+                MessageBox.Show(this, "Please specify a valid target installation folder.", $"{_displayName} Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
             return;
         }
 
@@ -132,12 +196,11 @@ public sealed partial class InstallerWizardForm
         _progressBar.Style = ProgressBarStyle.Marquee;
         _cts = new CancellationTokenSource();
 
-        var progress = new Progress<string>(msg =>
+        var progress = new Progress<string>(msg => RunOnUiThread(() =>
         {
-            if (IsDisposed) return;
             _lblStatus.Text = msg;
             AppendLogLine(msg);
-        });
+        }));
 
         try
         {
@@ -155,13 +218,17 @@ public sealed partial class InstallerWizardForm
                 }
                 else
                 {
-                    bool shortcuts = _chkShortcuts.Checked;
-                    bool autoStart = _allowAutoStart && _chkAutoStart.Checked;
+                    var installOpts = new InstallerInstallOptions(
+                        ExplicitInstallDir: targetDir,
+                        CreateShortcuts: _chkShortcuts.Checked,
+                        RegisterAutoStart: _allowAutoStart && _chkAutoStart.Checked,
+                        ExternalPayloadPath: _externalPayloadPath,
+                        InstallProfile: SelectedProfileId,
+                        SecondaryInstallDir: _hasSecondaryPicker && !string.IsNullOrWhiteSpace(SecondaryInstallDir) ? SecondaryInstallDir : null,
+                        SecondaryFlagName: _secondaryPickerOptions?.FlagName,
+                        MigrateLegacy: MigrateLegacyChecked);
                     result = await Task.Run(() => _fullEngine.InstallAsync(
-                        explicitInstallDir: targetDir,
-                        createShortcuts: shortcuts,
-                        registerAutoStart: autoStart,
-                        externalPayloadPath: _externalPayloadPath,
+                        installOpts,
                         ct: _cts.Token,
                         progress: progress));
                 }
@@ -175,13 +242,13 @@ public sealed partial class InstallerWizardForm
                 }
                 else if (_customInstallAction != null)
                 {
-                    coreRes = await _customInstallAction(_cts.Token, (pct, msg) =>
+                    coreRes = await _customInstallAction(_cts.Token, (pct, msg) => RunOnUiThread(() =>
                     {
                         _progressBar.Style = ProgressBarStyle.Blocks;
                         _progressBar.Value = Math.Clamp(pct, 0, 100);
                         _lblStatus.Text = msg;
                         AppendLogLine(msg);
-                    });
+                    }));
                 }
                 else
                 {
@@ -197,48 +264,55 @@ public sealed partial class InstallerWizardForm
                 result = new InstallerOperationResult(coreRes.Success, coreRes.InstallDirectory, coreRes.PayloadSha256, coreRes.FileCount, coreRes.Message);
             }
 
-            _progressBar.Style = ProgressBarStyle.Blocks;
-
-            if (result.Success)
+            RunOnUiThread(() =>
             {
-                _progressBar.Value = 100;
-                _completedSuccessfully = true;
-                _completedInstallDir = result.InstallDirectory;
-                ExitCode = 0;
+                _progressBar.Style = ProgressBarStyle.Blocks;
+                if (result.Success)
+                {
+                    _progressBar.Value = 100;
+                    _completedSuccessfully = true;
+                    _completedInstallDir = result.InstallDirectory;
+                    ExitCode = 0;
 
-                _lblStatus.Text = result.Message;
-                _lblStatus.ForeColor = AccentEmerald;
-                AppendLogLine("SUCCESS: " + result.Message);
+                    _lblStatus.Text = result.Message;
+                    _lblStatus.ForeColor = AccentEmerald;
+                    AppendLogLine("SUCCESS: " + result.Message);
 
-                _btnPrimary.Text = !_isUninstallMode && _chkLaunchAfter.Checked ? "Launch" : "Finish";
-                _btnPrimary.BackColor = AccentEmerald;
-                _btnPrimary.Enabled = true;
-                _btnCancel.Visible = false;
-                UpdateLayoutBounds();
-            }
-            else
-            {
-                _progressBar.Value = 0;
-                ExitCode = 1;
-                _lblStatus.Text = "Error: " + result.Message;
-                _lblStatus.ForeColor = AccentDanger;
-                AppendLogLine("ERROR: " + result.Message);
-                SetDetailsExpanded(true);
-                MessageBox.Show(this, result.Message, $"{_displayName} Setup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                ReEnableInputsAfterFailure();
-            }
+                    _btnPrimary.Text = !_isUninstallMode && _chkLaunchAfter.Checked ? "Launch" : "Finish";
+                    _btnPrimary.BackColor = AccentEmerald;
+                    _btnPrimary.Enabled = true;
+                    _btnCancel.Visible = false;
+                    UpdateLayoutBounds();
+                }
+                else
+                {
+                    _progressBar.Value = 0;
+                    ExitCode = 1;
+                    _lblStatus.Text = "Error: " + result.Message;
+                    _lblStatus.ForeColor = AccentDanger;
+                    AppendLogLine("ERROR: " + result.Message);
+                    SetDetailsExpanded(true);
+                    if (!ShouldSuppressModalDialogs)
+                        MessageBox.Show(this, result.Message, $"{_displayName} Setup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ReEnableInputsAfterFailure();
+                }
+            });
         }
         catch (Exception ex)
         {
-            _progressBar.Style = ProgressBarStyle.Blocks;
-            _progressBar.Value = 0;
-            ExitCode = 1;
-            _lblStatus.Text = "Setup failed: " + ex.Message;
-            _lblStatus.ForeColor = AccentDanger;
-            AppendLogLine("EXCEPTION: " + ex.Message);
-            SetDetailsExpanded(true);
-            MessageBox.Show(this, ex.Message, $"{_displayName} Setup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            ReEnableInputsAfterFailure();
+            RunOnUiThread(() =>
+            {
+                _progressBar.Style = ProgressBarStyle.Blocks;
+                _progressBar.Value = 0;
+                ExitCode = 1;
+                _lblStatus.Text = "Setup failed: " + ex.Message;
+                _lblStatus.ForeColor = AccentDanger;
+                AppendLogLine("EXCEPTION: " + ex.Message);
+                SetDetailsExpanded(true);
+                if (!ShouldSuppressModalDialogs)
+                    MessageBox.Show(this, ex.Message, $"{_displayName} Setup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ReEnableInputsAfterFailure();
+            });
         }
         finally
         {
@@ -304,6 +378,9 @@ public sealed partial class InstallerWizardForm
                 UseShellExecute = true
             });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _ = ex; // Optional post-install launch failure does not negate completed install.
+        }
     }
 }

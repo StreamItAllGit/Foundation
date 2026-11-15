@@ -118,6 +118,6 @@ public sealed record InstallerThemeOptions
     /// <summary>Optional secondary directory picker (e.g., --reengine-dir or --suite-dir).</summary>
     public SecondaryPathPickerOptions? SecondaryPathPicker { get; init; }
 
-    /// <summary>Whether the wizard offers opt-in migration from legacy flat <PROGRAMS_ROOT>\ installations.</summary>
+    /// <summary>Whether the wizard offers opt-in migration from legacy flat &lt;PROGRAMS_ROOT&gt;\ installations.</summary>
     public bool AllowLegacyMigration { get; init; } = false;
 }

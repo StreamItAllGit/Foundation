@@ -7,8 +7,8 @@
   "containerTier": "Tier A (6-Folder)",
   "ecosystemTier": "Tier1_Infrastructure",
   "appArchetype": "SDK",
-  "version": "0.4.0",
-  "activeMilestone": "0.4.0",
+  "version": "0.4.1",
+  "activeMilestone": "0.4.1",
   "goalMajorVersion": "1.0.0",
   "stateChangedDate": "2026-11-04",
   "lastVersionDate": "2026-11-15",
@@ -25,6 +25,6 @@
     "isInspecterVerified": true,
     "isTessaSynced": true
   },
-  "notes": "Shared ecosystem SDK v0.4.0 (Foundation.Core, Foundation.Retro, Foundation.Sidecars, Foundation.Server, Foundation.Launcher, Foundation.UI, Foundation.Installer with Studio/Suite default install root, Lightweight/Full profiles, SecondaryPathPicker, opt-in --migrate-legacy, AOT-primary .decomp contracts, sibling Sandbox containment, @foundation/ui v0.4.0, foundation_core v0.4.0, sync_foundation_sdk.py) published to SharedLibs\\Foundation\\v0.4.0.",
-  "updatedAtUtc": "2026-11-15T09:16:00.000Z"
+  "notes": "Shared ecosystem SDK v0.4.1 (visible-by-default --test-mode / EffectiveVisibleTest across Core, Installer, UI, foundation_core & verify_sandbox_universal.py; zero-delay foreground installer run with composite CaptureWizardPreviewBitmap & decoupled AllowLegacyMigration / manifest forwarding; Foundation.Installer <= 400 LOC modular splits; 40/40 tests; 51 files) published to SharedLibs\\Foundation\\v0.4.1.",
+  "updatedAtUtc": "2026-11-15T19:46:00.000Z"
 }

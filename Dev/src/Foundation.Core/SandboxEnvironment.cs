@@ -34,7 +34,9 @@ public sealed class SandboxEnvironment
     public bool TestMode { get; }
     public bool DryRun { get; }
     public bool Headless { get; }
+    public bool ExplicitVisibleTest { get; }
     public bool VisibleTest { get; }
+    public bool EffectiveVisibleTest => VisibleTest && !Headless;
     public bool TrayOnly { get; }
     public bool ManagedByMother { get; }
     public bool SuiteTab { get; }
@@ -64,11 +66,12 @@ public sealed class SandboxEnvironment
 
         TestMode = HasFlag(cli, "--test-mode") || IsTruthyEnv($"{envPrefix}_TEST_MODE") || IsTruthyEnv("TEST_MODE");
         DryRun = HasFlag(cli, "--dry-run") || IsTruthyEnv($"{envPrefix}_DRY_RUN");
-        Headless = HasFlag(cli, "--headless") || IsTruthyEnv($"{envPrefix}_HEADLESS");
-        VisibleTest = HasFlag(cli, "--visible-test") || IsTruthyEnv($"{envPrefix}_VISIBLE_TEST") || IsTruthyEnv("VISIBLE_TEST");
+        Headless = HasFlag(cli, "--headless") || IsTruthyEnv($"{envPrefix}_HEADLESS") || IsTruthyEnv("HEADLESS");
+        ExplicitVisibleTest = HasFlag(cli, "--visible-test") || IsTruthyEnv($"{envPrefix}_VISIBLE_TEST") || IsTruthyEnv("VISIBLE_TEST");
         TrayOnly = HasFlag(cli, "--tray-only");
         ManagedByMother = HasFlag(cli, "--managed-by-mother") || IsTruthyEnv("MANAGED_BY_MOTHER");
         SuiteTab = HasFlag(cli, "--suite-tab");
+        VisibleTest = ExplicitVisibleTest || (TestMode && !Headless && !TrayOnly && !ManagedByMother && !SuiteTab);
         bool forceBrowser = HasFlag(cli, "--browser") || string.Equals(cliUi, "browser", StringComparison.OrdinalIgnoreCase);
         bool forceWindow = HasFlag(cli, "--window") || string.Equals(cliUi, "desktop", StringComparison.OrdinalIgnoreCase);
 
@@ -80,7 +83,7 @@ public sealed class SandboxEnvironment
         {
             PresentationMode = UiPresentationMode.HeadlessOrTrayOnly;
         }
-        else if (VisibleTest)
+        else if (ExplicitVisibleTest)
         {
             PresentationMode = UiPresentationMode.DesktopWindow;
         }
@@ -88,7 +91,7 @@ public sealed class SandboxEnvironment
         {
             PresentationMode = UiPresentationMode.LocalBrowser;
         }
-        else if (forceWindow)
+        else if (VisibleTest || forceWindow)
         {
             PresentationMode = UiPresentationMode.DesktopWindow;
         }

@@ -88,10 +88,10 @@ public sealed class FoundationTerminalDrawerTests
         Assert.Contains("coalesceTerminalLogBatch", indexText);
 
         string pkgText = File.ReadAllText(pkgPath);
-        Assert.Contains("\"version\": \"0.4.0\"", pkgText);
+        Assert.Contains("\"version\": \"0.4.1\"", pkgText);
 
         var branding = new ShellBrandingOptions { AppId = "test", DisplayName = "Test" };
-        Assert.Equal("0.3.1", branding.SdkVersion);
+        Assert.Equal("0.4.1", branding.SdkVersion);
     }
 
     [Fact]
@@ -150,8 +150,8 @@ public sealed class FoundationTerminalDrawerTests
                 ArgumentList =
                 {
                     scriptPath,
-                    "--version", "0.4.0",
-                    "--ui-version", "0.4.0",
+                    "--version", "0.4.1",
+                    "--ui-version", "0.4.1",
                     "--publish",
                     "--sync-consumer", tempConsumer
                 },
@@ -176,7 +176,7 @@ public sealed class FoundationTerminalDrawerTests
 
             foreach (string sharedDir in new[]
             {
-                Path.Combine(sharedLibsFoundationRoot, "v0.4.0"),
+                Path.Combine(sharedLibsFoundationRoot, "v0.4.1"),
                 Path.Combine(sharedLibsFoundationRoot, "Latest")
             })
             {
@@ -189,8 +189,8 @@ public sealed class FoundationTerminalDrawerTests
                 Assert.True(File.Exists(Path.Combine(sharedDir, "sdk-manifest.json")));
 
                 using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(sharedDir, "sdk-manifest.json")));
-                Assert.Equal("0.4.0", doc.RootElement.GetProperty("version").GetString());
-                Assert.Equal("0.4.0", doc.RootElement.GetProperty("uiVersion").GetString());
+                Assert.Equal("0.4.1", doc.RootElement.GetProperty("version").GetString());
+                Assert.Equal("0.4.1", doc.RootElement.GetProperty("uiVersion").GetString());
             }
 
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "Foundation.UI.dll")));

@@ -1,4 +1,4 @@
-# Foundation (`v0.4.0`) — Consumer User Guide & Integration Recipes
+# Foundation (`v0.4.1`) — Consumer User Guide & Integration Recipes
 
 > **Goal:** Copy-paste integration recipes for consuming `Foundation` across C#, React/TypeScript, Vanilla Web, and Python projects without re-reading SDK source files.
 > **Full API Dictionary:** [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md)
@@ -37,11 +37,11 @@ using var lockHandle = PidSafeLockfile.Acquire(
     "startup");
 ```
 
-- Pass `--test-mode` during sandbox testing; `SandboxEnvironment` enforces fail-closed path containment (`AssertPathContained`) and keeps all writes inside `Sandbox\`.
+- Pass `--test-mode` during sandbox testing; `SandboxEnvironment` enforces fail-closed path containment (`AssertPathContained`), keeps all writes inside `Sandbox\`, and defaults to foreground visible execution (`EffectiveVisibleTest = true`) unless `--headless` (`HEADLESS=1` / `{PREFIX}_HEADLESS=1`), `--tray-only`, `--managed-by-mother`, `--suite-tab`, or `--browser` is set (preserving `--headless --visible-test` precedence).
 
 ---
 
-## 3. Drop-In Installer Integration (`Foundation.Installer v0.4.0`)
+## 3. Drop-In Installer Integration (`Foundation.Installer v0.4.1`)
 
 ### 3.1 Tier 1 — Zero-Boilerplate `StandardInstallerHost` (Recommended)
 Add a ~15-line `Dev\Installer\Program.cs` referencing `Foundation.Installer.dll` and embedding `payload.zip` as `<ProductName>.Installer.Embedded.payload.zip`:
@@ -64,7 +64,7 @@ var descriptor = new InstallerAppDescriptor(
 return StandardInstallerHost.Run(descriptor, args, typeof(Program).Assembly);
 ```
 
-- Automatically resolves `%LOCALAPPDATA%\Programs\<Studio>\<Suite?>\<App>\` by default, serves the Dark WinForms Setup Wizard (`InstallerWizardForm`, with optional `InstallerProfileOption` `Lightweight`/`Full` and `SecondaryPathPicker`), or runs `--silent` / `--test-mode` / `--sandbox-root` / `--visible-test` (3s auto-closing foreground showcase) / `--profile` / `--reengine-dir` / `--suite-dir` / `--migrate-legacy` / `--verify` / `--uninstall` / `--purge-data` from CLI with exit codes `0` / `1` / `2`.
+- Automatically resolves `%LOCALAPPDATA%\Programs\<Studio>\<Suite?>\<App>\` by default, serves the Dark WinForms Setup Wizard (`InstallerWizardForm`, with optional `InstallerProfileOption` `Lightweight`/`Full`, `SecondaryPathPicker`, and decoupled `AllowLegacyMigration` / `showLegacyMigration` forwarding `SelectedProfileId`, `SecondaryInstallDir`, and `MigrateLegacyChecked`), or runs `--silent` / `--test-mode` (visible-by-default centered `TopMost` foreground execution with `[v] Show Details`, zero artificial preview wait, composite `CaptureWizardPreviewBitmap()` screenshot at `<LogDirectory>\screenshots\installer-visible-test.png`, and suppressed modal popups unless `--headless` or `HEADLESS=1` is passed) / `--sandbox-root` / `--visible-test` / `--headless` / `--profile` / `--reengine-dir` / `--suite-dir` / `--migrate-legacy` / `--verify` / `--uninstall` / `--purge-data` from CLI with exit codes `0` / `1` / `2`.
 
 ### 3.2 Tier 2 — Custom / Low-Level Host (`InstallerThemeOptions` + `InstallerEngineCore`)
 If building a custom host UI, configure `InstallerThemeOptions` (also supporting `AllowAutoStart = false`) and drive `InstallerEngineCore` directly (writes `FoundationInstallManifest` instead of `InstallManifest`). See [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md).
@@ -113,7 +113,9 @@ var (acquired, lockPath, reason) = HkLockSentinel.TryAcquireDirectoryHkLock(dir,
 
 ---
 
-## 5. React `@foundation/ui` (`v0.4.0`) & Vanilla Web Integration
+## 5. React `@foundation/ui` (`v0.4.1`) & Vanilla Web Integration
+
+> **Desktop Visible Test & Browser Verification (`v0.4.1`):** Use [`VisibleTestWindowHelper`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.UI/Desktop/VisibleTestWindowHelper.cs) and the `SandboxEnvironment`-aware [`DisposableWebViewHostForm`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.UI/Desktop/DisposableWebViewHostForm.cs) overload for centered `TopMost` WebView2 visible-test runs + composite PNG screenshots, and pass `--launch-browser` without `--headless` to [`verify_sandbox_universal.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/verify_sandbox_universal.py) for foreground `--new-window` browser verification.
 
 ```tsx
 // 7 components + terminalDrawerCore available directly from the barrel:
@@ -135,11 +137,12 @@ For Vanilla JS / FastAPI / Razor hosts, include `foundation-tokens.css`, `founda
 
 ---
 
-## 6. Python `foundation_core` (`v0.4.0`) Quickstart
+## 6. Python `foundation_core` (`v0.4.1`) Quickstart
 
 ```python
 from foundation_core import (
     resolve_sandbox_paths,
+    parse_standard_cli_flags,
     GranularSettingsStore,
     HeartbeatTracker,
     CrashDumper,
@@ -147,6 +150,7 @@ from foundation_core import (
     SqliteWalHelper,
 )
 
+cli = parse_standard_cli_flags("my_py_app")  # headless, visible_test, effective_visible_test
 paths = resolve_sandbox_paths("my_py_app")
 CrashDumper.register_global_handlers(paths.log_dir, "my_py_app", "0.1.0")
 store = GranularSettingsStore(paths.data_dir)
