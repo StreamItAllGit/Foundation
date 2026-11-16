@@ -54,18 +54,35 @@ public sealed partial class InstallerEngineCore
 
     public InstallerThemeOptions Theme { get; }
     public AppEnvironment RuntimeEnvironment { get; }
+    public SandboxResolution Sandbox => RuntimeEnvironment.Sandbox;
+    public bool IsIsolatedTestProcess => IsTruthyEnv("APP_ISOLATED_TEST");
+    public bool IsSandboxActive => Sandbox.IsSandboxActive && !IsIsolatedTestProcess;
+    internal SandboxResolution EffectiveSandbox => IsSandboxActive ? Sandbox : SandboxResolution.Inactive;
+    public bool IsStage1Isolated =>
+        IsIsolatedTestProcess ||
+        (!IsSandboxActive && !string.Equals(
+            NormalizeDir(RuntimeEnvironment.DataDirectory),
+            NormalizeDir(Path.Combine(RuntimeEnvironment.BaseDirectory, "data")),
+            StringComparison.OrdinalIgnoreCase));
+    public bool ShouldSuppressHostMutations => IsStage1Isolated;
+    public bool ShouldSuppressLiveHostMutations => IsStage1Isolated || IsSandboxActive;
+    public IPlatformRegistry Registry { get; }
 
-    internal bool IsIsolatedOverride =>
-        string.Equals(Environment.GetEnvironmentVariable("APP_ISOLATED_TEST"), "1", StringComparison.OrdinalIgnoreCase) ||
-        !string.Equals(
-            Path.GetFullPath(RuntimeEnvironment.DataDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-            Path.GetFullPath(Path.Combine(RuntimeEnvironment.BaseDirectory, "data")).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-            StringComparison.OrdinalIgnoreCase);
+    internal bool IsIsolatedOverride => ShouldSuppressLiveHostMutations;
 
     public InstallerEngineCore(InstallerThemeOptions theme, AppEnvironment runtimeEnvironment)
+        : this(theme, runtimeEnvironment, registryOverride: null)
+    {
+    }
+
+    public InstallerEngineCore(
+        InstallerThemeOptions theme,
+        AppEnvironment runtimeEnvironment,
+        IPlatformRegistry? registryOverride)
     {
         Theme = theme ?? throw new ArgumentNullException(nameof(theme));
         RuntimeEnvironment = runtimeEnvironment ?? throw new ArgumentNullException(nameof(runtimeEnvironment));
+        Registry = registryOverride ?? PlatformRegistryFactory.CreateDefault(EffectiveSandbox, ShouldSuppressHostMutations);
     }
 
     public string ResolveTargetInstallDir(string? explicitInstallDir = null)
@@ -73,16 +90,23 @@ public sealed partial class InstallerEngineCore
         if (!string.IsNullOrWhiteSpace(explicitInstallDir))
         {
             string fullExplicit = Path.GetFullPath(explicitInstallDir);
-            if (IsIsolatedOverride && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullExplicit))
+            if (ShouldSuppressLiveHostMutations && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullExplicit, EffectiveSandbox))
             {
-                throw new InvalidOperationException(
+                SandboxEnvironmentSeam.ThrowContainmentViolation(
                     $"Fail-closed isolation violation: refusing to target canonical production or system directory '{fullExplicit}'.");
+            }
+            if (IsSandboxActive)
+            {
+                fullExplicit = SandboxEnvironmentSeam.AssertSandboxPathIfActive(fullExplicit, Sandbox);
             }
             return fullExplicit;
         }
-        return IsIsolatedOverride
-            ? Path.Combine(RuntimeEnvironment.DataDirectory, "installed-app")
-            : Path.GetFullPath(Theme.DefaultInstallDir);
+
+        if (IsStage1Isolated)
+            return Path.Combine(RuntimeEnvironment.DataDirectory, "installed-app");
+        if (IsSandboxActive)
+            return KnownFolderPaths.MapHostPathToSandbox(Theme.DefaultInstallDir, Sandbox);
+        return Path.GetFullPath(Theme.DefaultInstallDir);
     }
 
     public bool HasExistingInstallation(string? targetDir)
@@ -252,7 +276,7 @@ public sealed partial class InstallerEngineCore
         if (purgeUserData) Directory.Delete(installDir, recursive: true);
         else CleanPreviousAppCodePreservingData(installDir);
 
-        WindowsShortcutWriter.RemoveCurrentUserUninstallEntry(Theme.DisplayName, IsIsolatedOverride);
+        WindowsShortcutWriter.RemoveCurrentUserUninstallEntry(Theme.DisplayName, ShouldSuppressHostMutations, Registry);
         return new FoundationInstallResult(true, installDir, string.Empty, 1, "Uninstall completed.", false);
     }
 
@@ -270,7 +294,7 @@ public sealed partial class InstallerEngineCore
 
     public string ResolveSuiteManifestDirectory(string installDir)
     {
-        if (IsIsolatedOverride)
+        if (IsStage1Isolated)
         {
             return Path.Combine(RuntimeEnvironment.DataDirectory, "Mother", "manifests");
         }
@@ -279,29 +303,43 @@ public sealed partial class InstallerEngineCore
             ?? Environment.GetEnvironmentVariable("SUITE_MANIFESTS_DIR");
         if (!string.IsNullOrWhiteSpace(envDir))
         {
-            return Path.GetFullPath(envDir.Trim());
+            string fullEnv = Path.GetFullPath(envDir.Trim());
+            return IsSandboxActive ? SandboxEnvironmentSeam.AssertSandboxPathIfActive(fullEnv, Sandbox) : fullEnv;
         }
 
-        string fullInstall = Path.GetFullPath(installDir)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string fullInstall = NormalizeDir(installDir);
         string? parent = Path.GetDirectoryName(fullInstall);
         if (!string.IsNullOrWhiteSpace(parent) &&
             string.Equals(Path.GetFileName(parent), "Mother", StringComparison.OrdinalIgnoreCase))
         {
-            return Path.Combine(parent, "manifests");
+            string candidate = Path.Combine(parent, "manifests");
+            return IsSandboxActive ? SandboxEnvironmentSeam.AssertSandboxPathIfActive(candidate, Sandbox) : candidate;
         }
 
-        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string localAppData = KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, EffectiveSandbox);
         if (string.IsNullOrWhiteSpace(localAppData))
         {
             localAppData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.UserProfile, EffectiveSandbox),
                 "AppData",
                 "Local");
         }
 
         string studio = string.IsNullOrWhiteSpace(Theme.StudioName) ? "StreamItAll" : Theme.StudioName.Trim();
         return Path.Combine(localAppData, "Programs", studio, "Mother", "manifests");
+    }
+
+    private static string NormalizeDir(string path) =>
+        Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+    private static bool IsTruthyEnv(string name)
+    {
+        string? v = Environment.GetEnvironmentVariable(name);
+        if (string.IsNullOrWhiteSpace(v)) return false;
+        v = v.Trim();
+        return v.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals("yes", StringComparison.OrdinalIgnoreCase);
     }
 
     private void RegisterSuiteManifestIfPresent(string installDir)

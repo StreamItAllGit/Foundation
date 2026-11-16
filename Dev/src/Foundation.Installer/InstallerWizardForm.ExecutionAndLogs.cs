@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.UI.Wizard.ExecutionAndLogs
 // @purpose: Upgrade badge detection, interactive FolderBrowserDialog browse handler, asynchronous install/upgrade/uninstall execution, progress logging, and post-setup launch.
-// @depends-on: System, System.Diagnostics, System.IO, System.IO.Compression, System.Threading, System.Threading.Tasks, System.Windows.Forms
+// @depends-on: System, System.Diagnostics, System.IO, System.IO.Compression, System.Threading, System.Threading.Tasks, System.Windows.Forms, Foundation.Core
 // @exports: InstallerWizardForm (partial: UpdateUpgradeDetectionBadge, OnBrowseClicked, OnPrimaryActionClickedAsync, AppendLogLine)
 
 using System;
@@ -11,6 +11,7 @@ using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -117,13 +118,14 @@ public sealed partial class InstallerWizardForm
 
     private void OnBrowseClicked(object? sender, EventArgs e)
     {
+        SandboxResolution? sandbox = _ctx?.EffectiveSandbox ?? _coreEngine?.EffectiveSandbox;
         using var dialog = new FolderBrowserDialog
         {
             Description = $"Select {_displayName} installation directory",
             UseDescriptionForTitle = true,
             SelectedPath = Directory.Exists(_txtInstallDir.Text)
                 ? _txtInstallDir.Text
-                : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+                : KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox)
         };
 
         if (dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
@@ -134,13 +136,14 @@ public sealed partial class InstallerWizardForm
 
     private void OnSecondaryBrowseClicked(object? sender, EventArgs e)
     {
+        SandboxResolution? sandbox = _ctx?.EffectiveSandbox ?? _coreEngine?.EffectiveSandbox;
         using var dialog = new FolderBrowserDialog
         {
             Description = $"Select {_secondaryPickerOptions?.Label ?? "companion directory"}",
             UseDescriptionForTitle = true,
             SelectedPath = Directory.Exists(_txtSecondaryDir.Text)
                 ? _txtSecondaryDir.Text
-                : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+                : KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox)
         };
 
         if (dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
@@ -153,7 +156,7 @@ public sealed partial class InstallerWizardForm
     {
         if (_completedSuccessfully)
         {
-            bool suppressLaunch = _ctx?.ShouldSuppressHostMutations ?? (_coreEngine?.IsIsolatedOverride ?? false);
+            bool suppressLaunch = _ctx?.ShouldSuppressHostMutations ?? (_coreEngine?.ShouldSuppressHostMutations ?? false);
             if (!_isUninstallMode && _chkLaunchAfter.Checked && !suppressLaunch)
             {
                 TryLaunchInstalledApplication(_completedInstallDir);
@@ -296,7 +299,9 @@ public sealed partial class InstallerWizardForm
             {
                 _progressBar.Style = ProgressBarStyle.Blocks;
                 _progressBar.Value = 0;
-                ExitCode = 1;
+                ExitCode = SandboxEnvironmentSeam.IsContainmentViolation(ex)
+                    ? SandboxEnvironmentSeam.ContainmentExitCode
+                    : 1;
                 _lblStatus.Text = "Setup failed: " + ex.Message;
                 _lblStatus.ForeColor = AccentDanger;
                 AppendLogLine("EXCEPTION: " + ex.Message);
@@ -362,6 +367,11 @@ public sealed partial class InstallerWizardForm
 
             if (!File.Exists(exePath))
                 return;
+
+            if (_ctx?.IsSandboxActive == true)
+                exePath = SandboxEnvironmentSeam.AssertSandboxPathIfActive(exePath, _ctx.Sandbox);
+            else if (_coreEngine?.IsSandboxActive == true)
+                exePath = SandboxEnvironmentSeam.AssertSandboxPathIfActive(exePath, _coreEngine.Sandbox);
 
             Process.Start(new ProcessStartInfo
             {

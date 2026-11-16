@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.InstallerEngine.CliAndRegistry
-// @purpose: CLI argument parsing, HKCU Uninstall registry registration, pre-upgrade state backups, running process shutdown, and bounded self-delete trampoline.
-// @depends-on: System, System.Collections.Generic, System.Diagnostics, System.IO, System.Threading, System.Threading.Tasks, Microsoft.Win32
+// @purpose: CLI argument parsing, IPlatformRegistry HKCU Uninstall registration, pre-upgrade state backups, running process shutdown, and bounded self-delete trampoline.
+// @depends-on: System, System.Collections.Generic, System.Diagnostics, System.IO, System.Threading, System.Threading.Tasks, Foundation.Core
 // @exports: InstallerCliOptions, InstallerEngine (partial: ParseCliArgs, RegisterUninstallerMetadata, RemoveUninstallerMetadata, EnsureWithinDirectory, CreatePreUpgradeBackupAsync, OpenPayloadStream, BuildSelfDeleteTrampolineCommand)
 
 using System;
@@ -9,7 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Win32;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -105,7 +105,7 @@ public sealed partial class InstallerEngine
 
     private string? RegisterUninstallerMetadata(string installDir, string uninstallerPath)
     {
-        if (_ctx.ShouldSuppressHostMutations || !OperatingSystem.IsWindows())
+        if (_ctx.ShouldSuppressHostMutations || _ctx.Registry is NoOpPlatformRegistry || (!OperatingSystem.IsWindows() && !_ctx.IsSandboxActive))
         {
             return null;
         }
@@ -114,31 +114,34 @@ public sealed partial class InstallerEngine
         string uninstallCmd = $"\"{uninstallerPath}\" --uninstall";
         string quietUninstallCmd = $"\"{uninstallerPath}\" --uninstall --silent";
 
-        using RegistryKey? key = Registry.CurrentUser.CreateSubKey(Descriptor.WindowsUninstallRegistrySubKey, writable: true);
-        if (key != null)
-        {
-            key.SetValue("DisplayName", Descriptor.DisplayName, RegistryValueKind.String);
-            key.SetValue("DisplayVersion", InstallerVersion, RegistryValueKind.String);
-            key.SetValue("Publisher", Descriptor.Publisher, RegistryValueKind.String);
-            key.SetValue("InstallLocation", installDir, RegistryValueKind.String);
-            key.SetValue("DisplayIcon", displayIcon, RegistryValueKind.String);
-            key.SetValue("UninstallString", uninstallCmd, RegistryValueKind.String);
-            key.SetValue("QuietUninstallString", quietUninstallCmd, RegistryValueKind.String);
-            key.SetValue("NoModify", 1, RegistryValueKind.DWord);
-            key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
-        }
+        _ctx.Registry.SetValues(
+            PlatformRegistryHive.CurrentUser,
+            Descriptor.WindowsUninstallRegistrySubKey,
+            new Dictionary<string, PlatformRegistryValue>
+            {
+                ["DisplayName"] = new(PlatformRegistryValueKind.String, Descriptor.DisplayName),
+                ["DisplayVersion"] = new(PlatformRegistryValueKind.String, InstallerVersion),
+                ["Publisher"] = new(PlatformRegistryValueKind.String, Descriptor.Publisher),
+                ["InstallLocation"] = new(PlatformRegistryValueKind.String, installDir),
+                ["DisplayIcon"] = new(PlatformRegistryValueKind.String, displayIcon),
+                ["UninstallString"] = new(PlatformRegistryValueKind.String, uninstallCmd),
+                ["QuietUninstallString"] = new(PlatformRegistryValueKind.String, quietUninstallCmd),
+                ["NoModify"] = new(PlatformRegistryValueKind.DWord, 1),
+                ["NoRepair"] = new(PlatformRegistryValueKind.DWord, 1)
+            });
+
         return $"HKCU\\{Descriptor.WindowsUninstallRegistrySubKey}";
     }
 
     private void RemoveUninstallerMetadata(string? recordedLocation)
     {
         _ = recordedLocation;
-        if (_ctx.ShouldSuppressHostMutations || !OperatingSystem.IsWindows())
+        if (_ctx.ShouldSuppressHostMutations || _ctx.Registry is NoOpPlatformRegistry || (!OperatingSystem.IsWindows() && !_ctx.IsSandboxActive))
         {
             return;
         }
 
-        try { Registry.CurrentUser.DeleteSubKeyTree(Descriptor.WindowsUninstallRegistrySubKey, throwOnMissingSubKey: false); } catch { }
+        try { _ctx.Registry.DeleteSubKeyTree(PlatformRegistryHive.CurrentUser, Descriptor.WindowsUninstallRegistrySubKey, throwOnMissingSubKey: false); } catch { }
     }
 
     public Task<string?> CreatePreUpgradeBackupAsync(

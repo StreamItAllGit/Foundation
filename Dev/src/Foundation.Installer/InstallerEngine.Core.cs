@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.InstallerEngine.Core
-// @purpose: Core installer engine state, installation detection, and fail-closed default/explicit install path validation.
-// @depends-on: System, System.Collections.Generic, System.IO, System.Reflection, System.Text.Json, Microsoft.Win32
+// @purpose: Core installer engine state, installation detection, IPlatformRegistry discovery, and fail-closed default/explicit install path validation.
+// @depends-on: System, System.Collections.Generic, System.IO, System.Reflection, System.Text.Json, Foundation.Core
 // @exports: InstallerEngine
 
 using System;
@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
-using Microsoft.Win32;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -83,21 +83,29 @@ public sealed partial class InstallerEngine
         if (!string.IsNullOrWhiteSpace(_ctx.ConfigOverride?.InstallDirectory))
             return Path.GetFullPath(_ctx.ConfigOverride.InstallDirectory);
 
-        if (!string.IsNullOrWhiteSpace(_ctx.DataDirectory))
+        if (_ctx.IsStage1Isolated && !string.IsNullOrWhiteSpace(_ctx.DataDirectory))
             return Path.GetFullPath(Path.Combine(_ctx.DataDirectory, "installed-app"));
 
         string? envInstallDir = Environment.GetEnvironmentVariable($"{Descriptor.EnvPrefix}_INSTALL_DIR");
         if (!string.IsNullOrWhiteSpace(envInstallDir))
             return Path.GetFullPath(envInstallDir.Trim());
 
-        if (!_ctx.ShouldSuppressHostMutations && OperatingSystem.IsWindows())
+        if (!_ctx.ShouldSuppressHostMutations)
         {
             try
             {
-                using RegistryKey? key = Registry.CurrentUser.OpenSubKey(Descriptor.WindowsUninstallRegistrySubKey, writable: false);
-                string? regLoc = key?.GetValue("InstallLocation") as string;
-                if (!string.IsNullOrWhiteSpace(regLoc) && Directory.Exists(regLoc.Trim()))
-                    return Path.GetFullPath(regLoc.Trim());
+                string? regLoc = _ctx.Registry
+                    .GetValue(PlatformRegistryHive.CurrentUser, Descriptor.WindowsUninstallRegistrySubKey, "InstallLocation")
+                    ?.AsString();
+                if (!string.IsNullOrWhiteSpace(regLoc))
+                {
+                    string candidate = Path.GetFullPath(regLoc.Trim());
+                    if ((!_ctx.IsSandboxActive || SandboxEnvironmentSeam.IsPathWithinSandbox(candidate, _ctx.Sandbox)) &&
+                        Directory.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -105,7 +113,7 @@ public sealed partial class InstallerEngine
             }
         }
 
-        return Path.GetFullPath(Descriptor.CanonicalDefaultInstallDir);
+        return Path.GetFullPath(Descriptor.ResolveCanonicalDefaultInstallDir(_ctx.EffectiveSandbox));
     }
 
     public string ValidateAndNormalizeInstallDirectory(string? explicitInstallDir)
@@ -125,10 +133,16 @@ public sealed partial class InstallerEngine
             throw new ArgumentException("Refusing to install directly into a filesystem drive root.", nameof(explicitInstallDir));
         }
 
-        if (_ctx.ShouldSuppressHostMutations && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(resolved))
+        if (_ctx.ShouldSuppressLiveHostMutations &&
+            FileLockRetryHelper.IsCanonicalProductionOrSystemPath(resolved, _ctx.EffectiveSandbox))
         {
-            throw new InvalidOperationException(
+            SandboxEnvironmentSeam.ThrowContainmentViolation(
                 $"Fail-closed isolation violation: refusing to target canonical production or system directory '{resolved}'.");
+        }
+
+        if (_ctx.IsSandboxActive)
+        {
+            resolved = SandboxEnvironmentSeam.AssertSandboxPathIfActive(resolved, _ctx.Sandbox);
         }
 
         _ctx.EnsureDefaultLogDirectory(resolved);

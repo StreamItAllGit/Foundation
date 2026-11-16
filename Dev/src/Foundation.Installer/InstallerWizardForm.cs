@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.UI.Wizard
-// @purpose: Reusable 650x434 (collapsed) / 650x544 (expanded) Dark WinForms Setup/Upgrade/Uninstall Wizard supporting both InstallerEngine and InstallerEngineCore.
-// @depends-on: System, System.Drawing, System.IO, System.Threading, System.Threading.Tasks, System.Windows.Forms
+// @purpose: Reusable 650x460 (collapsed) / 650x570 (expanded) Dark WinForms Setup/Upgrade/Uninstall Wizard supporting both InstallerEngine and InstallerEngineCore.
+// @depends-on: System, System.Drawing, System.IO, System.Threading, System.Threading.Tasks, System.Windows.Forms, Foundation.Core
 // @exports: InstallerWizardForm (partial: constructors, properties, header/destination controls)
 
 using System;
@@ -9,6 +9,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -87,6 +88,8 @@ public sealed partial class InstallerWizardForm : Form
     public Button BrowseButton => _btnBrowse;
     public Button DetailsToggleButton => _btnToggleDetails;
     public Label ModeBadgeLabel => _lblModeBadge;
+    public Label TitleLabel => _lblTitle;
+    public Label SubtitleLabel => _lblSub;
     public TextBox InstallDirTextBox => _txtInstallDir;
     public TextBox LogTextBox => _txtLog;
     public ProgressBar SetupProgressBar => _progressBar;
@@ -191,6 +194,12 @@ public sealed partial class InstallerWizardForm : Form
         string? effectiveSecondary = !string.IsNullOrWhiteSpace(initialSecondaryDir)
             ? initialSecondaryDir
             : _secondaryPickerOptions?.DefaultPath;
+        if (string.IsNullOrWhiteSpace(initialSecondaryDir) &&
+            !string.IsNullOrWhiteSpace(effectiveSecondary) &&
+            _coreEngine.IsSandboxActive)
+        {
+            effectiveSecondary = KnownFolderPaths.MapHostPathToSandbox(effectiveSecondary, _coreEngine.Sandbox);
+        }
         _hasSecondaryPicker = !_isUninstallMode && (_secondaryPickerOptions != null || !string.IsNullOrWhiteSpace(effectiveSecondary));
         _legacyDetectedPath = !_isUninstallMode ? _coreEngine.DetectLegacyFlatInstall() : null;
         _showLegacyMigration = !_isUninstallMode && (showLegacyMigration ?? (theme.AllowLegacyMigration || initialMigrateLegacy || _legacyDetectedPath != null));
@@ -234,26 +243,34 @@ public sealed partial class InstallerWizardForm : Form
 
         int headerTextLeft = extractedIcon != null ? 68 : 22;
 
+        var titleFont = new Font("Segoe UI Semibold", 13.0f, FontStyle.Bold);
+        int titleHeight = Math.Max(28, TextRenderer.MeasureText("Mg", titleFont).Height + 4);
         _lblTitle = new Label
         {
             Text = _isUninstallMode
                 ? $"{_displayName} — Remove Installation"
                 : $"{_displayName} — Setup Wizard",
-            Font = new Font("Segoe UI Semibold", 13.0f, FontStyle.Bold),
+            Font = titleFont,
             ForeColor = TextPrimary,
-            AutoSize = true,
-            Location = new Point(headerTextLeft, 13)
+            AutoSize = false,
+            AutoEllipsis = true,
+            Location = new Point(headerTextLeft, 13),
+            Size = new Size(DefaultClientWidth - headerTextLeft - 150, titleHeight)
         };
 
+        var subFont = new Font("Segoe UI", 8.75f, FontStyle.Regular);
+        int subHeight = Math.Max(20, TextRenderer.MeasureText("Mg", subFont).Height + 4);
         _lblSub = new Label
         {
             Text = _isUninstallMode
                 ? $"Version {_version}  •  Preserves data\\, saves\\, and logs\\ unless purged below"
                 : $"Version {_version}  •  {_subtitle}",
-            Font = new Font("Segoe UI", 8.75f, FontStyle.Regular),
+            Font = subFont,
             ForeColor = TextMuted,
-            AutoSize = true,
-            Location = new Point(headerTextLeft, 43)
+            AutoSize = false,
+            AutoEllipsis = true,
+            Location = new Point(headerTextLeft, 43),
+            Size = new Size(DefaultClientWidth - headerTextLeft - 150, subHeight)
         };
 
         _lblModeBadge = new Label

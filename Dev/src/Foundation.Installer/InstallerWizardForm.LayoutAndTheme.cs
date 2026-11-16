@@ -40,7 +40,19 @@ public sealed partial class InstallerWizardForm
     }
 
     private bool ShouldSuppressModalDialogs =>
-        (_ctx?.ShouldSuppressHostMutations ?? (_coreEngine?.IsIsolatedOverride ?? false)) || !Environment.UserInteractive;
+        (_ctx?.ShouldSuppressHostMutations ?? (_coreEngine?.IsStage1Isolated ?? false)) ||
+        IsTruthyEnvFlag("FOUNDATION_SUPPRESS_MODALS") ||
+        !Environment.UserInteractive;
+
+    private static bool IsTruthyEnvFlag(string name)
+    {
+        string? val = Environment.GetEnvironmentVariable(name);
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        string trimmed = val.Trim();
+        return trimmed.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.Equals("yes", StringComparison.OrdinalIgnoreCase);
+    }
 
     private void RunOnUiThread(Action action)
     {
@@ -344,9 +356,18 @@ public sealed partial class InstallerWizardForm
         int margin = 22;
 
         int headerW = _headerPanel.ClientSize.Width > 0 ? _headerPanel.ClientSize.Width : clientW;
-        int badgeWidth = Math.Max(_lblModeBadge.Width, _lblModeBadge.PreferredWidth);
-        if (badgeWidth <= 0) badgeWidth = 128;
+        int badgeWidth = _lblModeBadge.PreferredWidth > 0
+            ? _lblModeBadge.PreferredWidth
+            : (_lblModeBadge.Width > 0 ? _lblModeBadge.Width : 128);
         _lblModeBadge.Location = new Point(Math.Max(margin, headerW - margin - badgeWidth), 16);
+
+        int titleWidth = Math.Max(40, _lblModeBadge.Left - 12 - _lblTitle.Left);
+        int titleHeight = Math.Max(28, TextRenderer.MeasureText("Mg", _lblTitle.Font).Height + 4);
+        _lblTitle.Size = new Size(titleWidth, titleHeight);
+
+        int subWidth = Math.Max(40, _lblModeBadge.Left - 12 - _lblSub.Left);
+        int subHeight = Math.Max(20, TextRenderer.MeasureText("Mg", _lblSub.Font).Height + 4);
+        _lblSub.Size = new Size(subWidth, subHeight);
 
         int contentW = Math.Max(200, clientW - (margin * 2));
         _btnBrowse.Location = new Point(clientW - margin - _btnBrowse.Width, 112);

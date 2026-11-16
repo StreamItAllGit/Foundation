@@ -1,12 +1,13 @@
 // @module: Foundation.Installer.FileLockRetryHelper
-// @purpose: Bounded backoff retry helper for transient file locks and isolated temp-path safety checks.
-// @depends-on: System, System.IO, System.Threading, System.Threading.Tasks
+// @purpose: Bounded backoff retry helper for transient file locks and isolated/sandbox install-path safety checks.
+// @depends-on: System, System.IO, System.Threading, System.Threading.Tasks, Foundation.Core
 // @exports: FileLockRetryHelper
 
 using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -74,43 +75,58 @@ public static class FileLockRetryHelper
         ex is UnauthorizedAccessException ||
         (ex is IOException && ex is not FileNotFoundException && ex is not DirectoryNotFoundException && ex is not PathTooLongException);
 
-    public static bool IsSafeIsolatedInstallDirectory(string? candidateDir)
+    public static bool IsSafeIsolatedInstallDirectory(string? candidateDir) =>
+        IsSafeIsolatedInstallDirectory(candidateDir, sandbox: null);
+
+    public static bool IsSafeIsolatedInstallDirectory(string? candidateDir, SandboxResolution? sandbox = null)
     {
         if (string.IsNullOrWhiteSpace(candidateDir)) return false;
         try
         {
-            string full = Path.GetFullPath(candidateDir.Trim()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string full = NormalizeCandidatePath(candidateDir);
             string? root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (string.IsNullOrWhiteSpace(root) || string.Equals(full, root, StringComparison.OrdinalIgnoreCase)) return false;
-            if (IsCanonicalProductionOrSystemPath(full)) return false;
+            if (IsCanonicalProductionOrSystemPath(full, sandbox)) return false;
 
-            string tempRoot = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (sandbox is { IsSandboxActive: true })
+                return SandboxEnvironmentSeam.IsPathWithinSandbox(full, sandbox);
+
+            string tempRoot = NormalizeCandidatePath(Path.GetTempPath());
             return full.StartsWith(tempRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
         }
         catch { return false; }
     }
 
-    public static bool IsCanonicalProductionOrSystemPath(string? candidateDir)
+    public static bool IsCanonicalProductionOrSystemPath(string? candidateDir) =>
+        IsCanonicalProductionOrSystemPath(candidateDir, sandbox: null);
+
+    public static bool IsCanonicalProductionOrSystemPath(string? candidateDir, SandboxResolution? sandbox = null)
     {
         if (string.IsNullOrWhiteSpace(candidateDir)) return false;
         try
         {
-            string full = Path.GetFullPath(candidateDir.Trim()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string full = NormalizeCandidatePath(candidateDir);
+            bool insideVerifiedSandbox = sandbox is { IsSandboxActive: true } &&
+                SandboxEnvironmentSeam.IsPathWithinSandbox(full, sandbox);
+
             string[] segments = full.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Length >= 2 && string.Equals(segments[1], "Programs", StringComparison.OrdinalIgnoreCase)) return true;
+            if (!insideVerifiedSandbox && segments.Length >= 2 && string.Equals(segments[1], "Programs", StringComparison.OrdinalIgnoreCase))
+                return true;
 
             string[] protectedRoots =
             {
                 Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs")
             };
 
             foreach (string root in protectedRoots)
             {
                 if (string.IsNullOrWhiteSpace(root)) continue;
-                string fullProtected = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string fullProtected = NormalizeCandidatePath(root);
                 if (string.Equals(full, fullProtected, StringComparison.OrdinalIgnoreCase) ||
                     full.StartsWith(fullProtected + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 {
@@ -120,6 +136,16 @@ public static class FileLockRetryHelper
             return false;
         }
         catch { return false; }
+    }
+
+    private static string NormalizeCandidatePath(string rawPath)
+    {
+        string trimmed = rawPath.Trim().Trim('"');
+        if (trimmed.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+            trimmed = @"\\" + trimmed[8..];
+        else if (trimmed.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[4..];
+        return Path.GetFullPath(trimmed).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 
     private static int ComputeBackoffMs(int retryIndex) => retryIndex switch { 0 => 150, 1 => 250, _ => 500 };
