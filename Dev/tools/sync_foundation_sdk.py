@@ -141,21 +141,17 @@ def _handle_remove_readonly(func, path, exc_info):
     func(path)
 
 
-def stage_clean_release_bundle(version: str = "0.4.1-hf.1", sdk_dir: Path | None = None) -> Path:
+def stage_clean_release_bundle(version: str = "0.4.2", sdk_dir: Path | None = None) -> Path:
     latest_dir = FOUNDATION_ROOT / "Releases" / "Latest"
     latest_dir.mkdir(parents=True, exist_ok=True)
 
-    keep_names = {"README.md", "FEATURES.md", "RELEASE_NOTES.md", "CHANGELOG.md", "LICENSE", "SHA256SUMS.txt"}
+    keep_names = {"README.md", "FEATURES.md", "RELEASE_NOTES.md", "CHANGELOG.md", "SHA256SUMS.txt"}
     for item in list(latest_dir.iterdir()):
         if item.is_dir():
             shutil.rmtree(item, onexc=_handle_remove_readonly)
         elif item.is_file() and item.name not in keep_names and not (item.name.startswith("Foundation-v") and item.name.endswith(".zip")):
             os.chmod(item, stat.S_IWRITE)
             item.unlink()
-
-    license_file = FOUNDATION_ROOT / "LICENSE"
-    if license_file.exists():
-        shutil.copy2(license_file, latest_dir / "LICENSE")
 
     if sdk_dir is not None and sdk_dir.exists() and not os.environ.get("FOUNDATION_SKIP_RELEASE_ZIP"):
         stage_sdk_release_zip(sdk_dir, latest_dir, version)
@@ -169,7 +165,7 @@ def stage_clean_release_bundle(version: str = "0.4.1-hf.1", sdk_dir: Path | None
     return latest_dir
 
 
-def publish_sdk(version: str = "0.4.1-hf.1", ui_version: str = "0.4.1-hf.1", configuration: str = "Release") -> dict[str, object]:
+def publish_sdk(version: str = "0.4.2", ui_version: str = "0.4.2", configuration: str = "Release") -> dict[str, object]:
     clean_ver = version.lstrip("v")
     ver_tag = f"v{clean_ver}"
     ui_dir = DEV_ROOT / "src" / "Foundation.UI"
@@ -222,15 +218,15 @@ def sync_consumer(consumer_root: Path, source_version: str = "Latest", web_dir: 
 
     for stale_root in {dev_lib, target_lib, nested_foundation}:
         if not stale_root.exists(): continue
-        for pat in ("tools/verify_sandbox_universal.py", "*Sandbox*", "*VisibleTest*"):
+        for pat in ("tools/verify_sandbox_universal.py", "Foundation.Sandbox.*", "*VisibleTest*", "*InstallerSandboxContext*"):
             for item in stale_root.rglob(pat):
                 if item.is_file(): item.unlink(missing_ok=True)
     return target_lib
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Foundation SDK Publisher & Consumer Sync Tool")
-    parser.add_argument("--version", default="0.4.1-hf.1", help="Foundation SDK SemVer (default: 0.4.1-hf.1)")
-    parser.add_argument("--ui-version", default="0.4.1-hf.1", help="Foundation.UI SemVer (default: 0.4.1-hf.1)")
+    parser.add_argument("--version", default="0.4.2", help="Foundation SDK SemVer (default: 0.4.2)")
+    parser.add_argument("--ui-version", default="0.4.2", help="Foundation.UI SemVer (default: 0.4.2)")
     parser.add_argument("--configuration", default="Release", help="Build configuration (Release/Debug)")
     parser.add_argument("--publish", action="store_true", help="Publish SDK to SharedLibs and Builds")
     parser.add_argument("--sync-consumer", type=Path, help="Consumer project root to sync from SharedLibs")
