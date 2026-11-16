@@ -83,10 +83,12 @@ def validate_six_file_release_bundle(release_dir: str | Path, allow_sdk_zip: boo
             errors.append(f"Expected exactly 1 Foundation-v*.zip archive, found: {sdk_zips}")
         if setup_exes:
             errors.append(f"Unexpected app setup executable in SDK release bundle: {setup_exes}")
-        allowed = set(REQUIRED_RELEASE_FILES) | set(sdk_zips) | {"LICENSE"}
+        allowed = set(REQUIRED_RELEASE_FILES) | set(sdk_zips)
         extras = sorted(set(files) - allowed)
         if extras:
             errors.append(f"Unexpected files in SDK release bundle: {extras}")
+        if len(files) != 6:
+            errors.append(f"Standard 28 §2 requires strictly 6 files in SDK release bundle, found {len(files)}: {files}")
     else:
         if len(setup_exes) != 1:
             errors.append(f"Expected exactly 1 Setup.exe installer, found: {setup_exes}")
