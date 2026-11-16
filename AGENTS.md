@@ -14,4 +14,4 @@
 ## 3. Governance & Notion ("The Me Hub")
 - **Dev Bible:** [Standard 00](file:///<PROJECTS_ROOT>/_DevBible/00_GLOSSARY.md) | [_DevBible\README.md](file:///<PROJECTS_ROOT>/_DevBible/README.md)
 - **Notion:** `40eb1b97-5a45-81cd-8868-c3e0c431a07e` (`Project = "Foundation"`, `collection://fbbc2263-d731-43c8-bb99-fc8710db5856`)
-- **Commit `/post` Hook:** Every commit & release pushes a `/post` update via `active.state` -> `discordPost` (`secretEnvKey: "DISCORD_WEBHOOK_FOUNDATION"`).
+- **Commit `/post` Hook:** Every commit & release pushes `/post` via `active.state` -> `discordPost` (`DISCORD_WEBHOOK_FOUNDATION`), tagging `@StreamDoesDev`.
