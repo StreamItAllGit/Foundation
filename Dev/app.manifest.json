@@ -6,7 +6,7 @@
   "version": "0.4.1-hf.1",
   "updatedAtUtc": "2026-11-15T23:18:00Z",
   "displayName": "Foundation Shared SDK",
-  "containerTier": "Tier A (5-Folder)",
+  "containerTier": "Tier A (4-Folder)",
   "ecosystemTier": "Tier1_Infrastructure",
   "appArchetype": "SDK",
   "activeMilestone": "0.4.1-hf.1",

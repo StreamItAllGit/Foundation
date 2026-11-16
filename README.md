@@ -10,7 +10,7 @@
 |---|---|---|
 | Looking up a C# class, method, React prop, Python helper, CLI flag, or JSON schema | [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md) | 1-Stop API Dictionary + `@foundation/ui` barrel vs submodule import warning |
 | Copy-paste integration recipes (Tier 1 Installer, Web UI, Python, C# Core) | [`Dev\docs\USER_GUIDE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/USER_GUIDE.md) | Minimal working quickstart snippets for all 8 subprojects |
-| Locating a file by path/LOC (`<= 400 LOC`), assembly graph, SQLite pragmas, or ADRs | [`Dev\docs\ARCHITECTURE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/ARCHITECTURE.md) | Complete module registry, `33` unit test inventory, `ADR-001`..`008` |
+| Locating a file by path/SLOC (`250/400/600` code-only SLOC), assembly graph, SQLite pragmas, or ADRs | [`Dev\docs\ARCHITECTURE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/ARCHITECTURE.md) | Complete module registry, `33` unit test inventory, `ADR-001`..`008` |
 | Building, running `Foundation.Tests`, publishing `SharedLibs`, or calling `Dev\tools\*.py` | [`Dev\docs\OPERATIONS.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/OPERATIONS.md) | Exact build/sync/release commands & installer exit codes |
 | Checking implemented capabilities vs remaining upstream backlog | [`FEATURES.md`](file:///<PROJECTS_ROOT>/Foundation/FEATURES.md) & [`ROADMAP.md`](file:///<PROJECTS_ROOT>/Foundation/ROADMAP.md) | Verified module inventory + milestone roadmap |
 
@@ -48,7 +48,7 @@ python <PROJECTS_ROOT>\Foundation\Dev\tools\sync_foundation_sdk.py --sync-consum
 
 - **Lifecycle State:** [`active.state`](file:///<PROJECTS_ROOT>/Foundation/active.state) (`v0.4.1-hf.1`)
 - **Project Anchor & Roadmap:** [`AGENTS.md`](file:///<PROJECTS_ROOT>/Foundation/AGENTS.md) · [`FEATURES.md`](file:///<PROJECTS_ROOT>/Foundation/FEATURES.md) · [`ROADMAP.md`](file:///<PROJECTS_ROOT>/Foundation/ROADMAP.md) · [`CHANGELOG.md`](file:///<PROJECTS_ROOT>/Foundation/CHANGELOG.md)
-- **Dev Bible Compliance:** Strictly adheres to [`00_CORE_INVARIANTS_AND_GLOSSARY.md`](file:///<PROJECTS_ROOT>/_DevBible/00_CORE_INVARIANTS_AND_GLOSSARY.md) (`<= 400 LOC` cap across `Dev\` sources and docs).
+- **Dev Bible Compliance:** Strictly adheres to [`00_GLOSSARY.md`](file:///<PROJECTS_ROOT>/_DevBible/00_GLOSSARY.md) (`250/400/600` code-only SLOC across `Dev\` sources; Markdown manuals exempt).
 
 ---
 

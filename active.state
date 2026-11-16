@@ -4,27 +4,27 @@
   "name": "Foundation",
   "projectGroup": "Personal",
   "relativePath": "Personal/Foundation",
-  "containerTier": "Tier A (5-Folder)",
+  "containerTier": "Tier A (4-Folder)",
   "ecosystemTier": "Tier1_Infrastructure",
   "appArchetype": "SDK",
   "version": "0.4.1-hf.1",
-  "activeMilestone": "0.4.1-hf.1",
+  "activeMilestone": "0.4.2",
   "goalMajorVersion": "1.0.0",
   "stateChangedDate": "2026-11-04",
   "lastVersionDate": "2026-11-15",
   "productionSubpath": null,
   "supersededBy": null,
   "tasklistDetailLevel": 3,
-  "openTaskCount": 0,
-  "completedTaskCount": 10,
-  "openReportCount": 1,
+  "openTaskCount": 10,
+  "completedTaskCount": 14,
+  "openReportCount": 0,
   "gates": {
     "isGate0ScopePassed": true,
     "isGate1PlanPassed": true,
-    "isGate2BuildPassed": true,
-    "isInspecterVerified": true,
-    "isTessaSynced": true
+    "isGate2BuildPassed": false,
+    "isInspecterVerified": false,
+    "isTessaSynced": false
   },
-  "notes": "Shared ecosystem SDK v0.4.1-hf.1 (Tier A 5-Folder cleanup: removed retired runtime test directory, flags, and harnesses; standardized AppEnvironment with UiPresentationMode.TrayOrBackground, InstallerRuntimeContext, and InstallerEngine.CliAndRegistry; split SevenZipAndZipInspector <= 400 LOC; added stale cleanup in sync_foundation_sdk.py --sync-consumer; 33/33 unit tests, 0 warnings).",
-  "updatedAtUtc": "2026-11-15T23:25:00.000Z"
+  "notes": "Shared ecosystem SDK v0.4.1-hf.1 (v0.4.2 Design Locked against _DevBible v1.6.0 + 14 Standard 18 /define keys registered; awaiting Phase 2 Swarm execution).",
+  "updatedAtUtc": "2026-11-16T21:22:00Z"
 }

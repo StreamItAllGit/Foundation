@@ -113,14 +113,4 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 - **`Foundation.Installer` Fast `<1.5s` Pre-Upgrade Backup & Verification Suite (`InstallerEngineCore.BackupAndVerify.cs`)**.
 - **Shared React 19 `@foundation/ui` (`v0.1.0`) Web Component Library & Python `foundation_core` (`v0.1.0`) Modular Parity**.
 
-## [0.1.2] - 2026-11-05
-### Fixed
-- **SQLite WAL 64 MB Connection Page Cache (`PRAGMA cache_size = -65536` — [`SqliteWalPool.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SqliteWalPool.cs), [`__init__.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/__init__.py))**: Eliminated random 4KB page thrashing across multi-index batch transactions.
-
-## [0.1.1] - 2026-11-04
-### Fixed
-- **SQLite WAL Non-Blocking MVCC Snapshot Isolation (`Cache = SqliteCacheMode.Default` — [`SqliteWalPool.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SqliteWalPool.cs))**: Eliminated `SQLITE_LOCKED` (Error 6) table contention and raised default `busyTimeoutMs` to `15000`.
-
-## [0.1.0] - 2026-11-04
-### Added
-- **Initial `Foundation v0.1.0` Shared SDK Release:** `Foundation.Core.dll` (`IFoundationModule`, `AppEnvironment`, `CrashBundleService`, `SqliteWalPool`, `PidSafeLockfile`, `ToolResolver`, `HeartbeatLogger`, `JobObjectGuard`, `SafeNetworkTransfer`, `HybridModuleLoader`, `GranularSettingsManager`, `DpapiSecretStore`), `Foundation.Installer.dll` (Tier 2 WinForms Setup Wizard), `Foundation.UI.dll` (`ShellBrandingOptions`, web tokens/shell), `Foundation.Tests`, and the 4-document Manual Shelf.
+*(Older 0.1.x history trimmed per Standard 04 3-minor retention; snapshots preserved in Archive\\.)*

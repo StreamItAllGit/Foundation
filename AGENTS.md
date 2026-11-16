@@ -12,5 +12,5 @@
 - **Plans & Reports:** [plans\](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/plans/) | [reports\](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/)
 
 ## 3. Governance & Notion ("The Me Hub")
-- **Dev Bible:** [Standard 00](file:///<PROJECTS_ROOT>/_DevBible/00_CORE_INVARIANTS_AND_GLOSSARY.md) | [_DevBible\README.md](file:///<PROJECTS_ROOT>/_DevBible/README.md)
+- **Dev Bible:** [Standard 00](file:///<PROJECTS_ROOT>/_DevBible/00_GLOSSARY.md) | [_DevBible\README.md](file:///<PROJECTS_ROOT>/_DevBible/README.md)
 - **Notion:** `40eb1b97-5a45-81cd-8868-c3e0c431a07e` (`Project = "Foundation"`, `collection://fbbc2263-d731-43c8-bb99-fc8710db5856`)

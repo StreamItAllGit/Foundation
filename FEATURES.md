@@ -1,6 +1,6 @@
 # Foundation (`v0.4.1-hf.1`) — Feature Matrix & Inventory
 
-> **Verified Against:** `Dev\` source tree (every `.cs` / `.py` / `.ts` / `.tsx` / `.js` / `.css` source file `<= 400 LOC`) and `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\sdk-manifest.json`.
+> **Verified Against:** `Dev\` source tree (all `.cs` / `.py` / `.ts` / `.tsx` / `.js` / `.css` source files pass `250/400/600` code-only SLOC) and `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\sdk-manifest.json`.
 > **For exact method signatures & props:** See [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md).
 
 ---
@@ -67,4 +67,23 @@
 ## 4. Quality & Verification Baseline
 
 - **Unit Tests:** `33` `[Fact]` tests across `6` files in [`Dev\tests\Foundation.Tests\`](file:///<PROJECTS_ROOT>/Foundation/Dev/tests/Foundation.Tests/).
-- **Code Size Compliance:** 100% of `.cs` / `.py` / `.ts` / `.tsx` / `.js` / `.css` source files in `Dev\` comply with `<= 400 LOC` (`SevenZipAndZipInspector` split into two `<= 250 LOC` partials; `InstallerEngineCore.cs` split cleanly into `<= 400 LOC` partials; `sync_foundation_sdk.py` `<= 260 LOC`).
+- **Code Size Compliance:** 100% of `.cs` / `.py` / `.ts` / `.tsx` / `.js` / `.css` source files in `Dev\` comply with `250/400/600` code-only SLOC (`SevenZipAndZipInspector` split into two `<= 250 LOC` partials; `InstallerEngineCore.cs` split cleanly into `<= 400 LOC` partials; `sync_foundation_sdk.py` `<= 260 LOC`).
+
+---
+
+## 5. Planned & Roadmapped Capabilities (`v0.4.2` $\rightarrow$ `v1.0.0`)
+
+| Code | Target | Capability & Guardrails | Status |
+| :--- | :--- | :--- | :--- |
+| `CORE-01` | `v0.4.2` | **`KnownFolderPaths` & `SandboxEnvironmentSeam`:** Deterministic `FOUNDATION_SANDBOX_ROOT` + 4-drive (`SANDBOX_C_DRIVE`/`D`/`REMOVABLE`/`DISC`) shell-folder redirect (`<SandboxCDrive>\Users\Sandbox\...`), Stage 1 vs Stage 2 precedence, `ExitCode = 3` host-escape guard. | `Planned` |
+| `CORE-02` | `v0.4.2` | **`IPlatformRegistry` & `JsonHivePlatformRegistry`:** Cross-process C#/Python atomic JSON pseudo-registry (`HKCU`/`HKLM`/`HKCR`, `Mutex` + `PidSafeLockfile`, `.tmp -> Flush -> .bak -> replace`). | `Planned` |
+| `TOOL-01` | `v0.4.2` | **`sandbox_ctl.py` & `run_sandbox_e2e.py`:** Non-elevated 4-drive orchestrator (`SANDBOX_C_DRIVE`, `SANDBOX_D_DRIVE`, `SANDBOX_REMOVABLE_DRIVE`, `SANDBOX_DISC_DRIVE`) & Standard 02 §4 12-point Stage 2 E2E runner (+ `0.4.1` shortcut `:` & header badge fix). | `Planned` |
+| `INST-01` | `v0.5.0` | **Markup Installer (`installer.manifest.json`) & `LastInstallBaseDir`:** Zero-dep `System.Text.Json` declarative setup UI + smart `HKCU\Software\StreamItAll\LastInstallBaseDir` fresh-install suggestion (post-success write only, `APP_ISOLATED_TEST=1` & reparse-point guarded). | `Roadmapped` |
+| `AUTO-01` | `v0.5.0` | **`Foundation.Automation` Loopback Module:** Opt-in `127.0.0.1` HTTP/JSON (`--automation-port` + ephemeral bearer token + `Host`/`Origin` check) virtual pointer, virtual keyboard, control bounds, and offscreen HWND/WebView PNG snapshot. | `Roadmapped` |
+| `TRAY-01` | `v0.6.0` | **Shared `TrayDaemonHost` (`Foundation.UI` + `foundation_core`):** Unified tray icon, menu, `PidSafeLockfile` zombie-handle cleanup, and daemon lifecycle replacing per-app tray hosts. | `Roadmapped` |
+| `PY-01` | `v0.6.0` | **`foundation_core.server` Auth/SSE Parity:** Python `TieredAuthEngine`, `suite.manifest.json` v2 endpoints, and bounded SSE log-tailing for `Greenroom`, `Redroom`, and `_Goals`. | `Roadmapped` |
+| `LNCH-01` | `v0.6.0` | **Shared Self-Update Check (`Foundation.Launcher`):** GitHub Release check + SHA-256/signature verification + staged update handoff (never auto-overwriting running prod). | `Roadmapped` |
+| `JOB-01` | `v0.7.0` | **Shared `JobQueue`, `IntervalCronScheduler` & `@foundation/ui` Job Drawer:** Unified background queue/cron contracts, retry/deferral metadata, and UI job drawer. | `Roadmapped` |
+| `DOC-01` | `v0.7.0` | **`SystemDoctorAndBackupService`:** Shared SQLite integrity check, `VACUUM INTO` backup, and `10`-snapshot config rotation. | `Roadmapped` |
+| `AOT-01` | `v0.7.0` | **`IsAotCompatible` Core & Automation Subset:** `FoundationCoreJsonContext` (`JsonSerializerContext`) + reflection-free `Foundation.Core` & `Foundation.Automation` subset for `Snowfall` (`.NET 10 NativeAOT`) & `Project26` (Unity 6). | `Roadmapped` |
+| `PKG-01` | `v1.0.0` | **Going Gold (`v1.0.0`) Packaging & Parity:** Local NuGet `.nupkg` + Python wheel feeds, `100%` `pytest` parity suite, and public C#/Python/TS ABI freeze. | `Roadmapped` |
