@@ -36,16 +36,28 @@ public sealed class AppEnvironment
     public bool ManagedByMother { get; }
     public bool SuiteTab { get; }
     public UiPresentationMode PresentationMode { get; }
+    public SandboxResolution Sandbox { get; }
 
     public AppEnvironment(
         string appId,
         IReadOnlyList<string>? args = null,
         string? baseDirectoryOverride = null,
         string? defaultConfigFileName = "settings.json")
+        : this(appId, args, baseDirectoryOverride, defaultConfigFileName, sandboxOverride: null)
+    {
+    }
+
+    public AppEnvironment(
+        string appId,
+        IReadOnlyList<string>? args,
+        string? baseDirectoryOverride,
+        string? defaultConfigFileName,
+        SandboxResolution? sandboxOverride)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         AppId = appId.Trim().ToLowerInvariant();
         string envPrefix = AppId.ToUpperInvariant().Replace('-', '_');
+        Sandbox = sandboxOverride ?? SandboxEnvironmentSeam.ResolveCurrent();
 
         IReadOnlyList<string> cli = args ?? Array.Empty<string>();
         BaseDirectory = Path.GetFullPath(!string.IsNullOrWhiteSpace(baseDirectoryOverride)
@@ -118,6 +130,16 @@ public sealed class AppEnvironment
             parsedPort is > 0 and <= 65535)
         {
             PortOverride = parsedPort;
+        }
+
+        if (Sandbox.IsSandboxActive)
+        {
+            if (!string.IsNullOrWhiteSpace(resolvedData))
+                SandboxEnvironmentSeam.AssertSandboxPathIfActive(DataDirectory, Sandbox);
+            if (!string.IsNullOrWhiteSpace(resolvedConfig))
+                SandboxEnvironmentSeam.AssertSandboxPathIfActive(ConfigFilePath, Sandbox);
+            if (!string.IsNullOrWhiteSpace(resolvedLogs))
+                SandboxEnvironmentSeam.AssertSandboxPathIfActive(LogDirectory, Sandbox);
         }
     }
 
