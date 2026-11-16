@@ -431,8 +431,6 @@ class TestSandboxToolsCli(unittest.TestCase):
             self.assertNotIn("PYTHONPATH", child_env)
 
             prof_dir = sbx_root / "C" / "Users" / "Sandbox"
-            hive_path = sbx_root / "registry" / "registry.hive.json"
-            lock_path = sbx_root / "locks" / "registry.hive.lock"
             mock_installer = tmp_path / "mock_installer.py"
             mock_app_code = (
                 "import sys\n"
@@ -451,7 +449,7 @@ class TestSandboxToolsCli(unittest.TestCase):
                 "if exe.exists(): exe.unlink()\n"
                 "lnk = Path(os.environ['FOUNDATION_SANDBOX_PROFILE_DIR']) / 'Desktop' / 'Mock App.lnk'\n"
                 "if lnk.exists(): lnk.unlink()\n"
-                f"JsonHivePlatformRegistry({repr(str(hive_path))}, {repr(str(sbx_root))}, {repr(str(lock_path))}).delete_key(PlatformRegistryHive.CURRENT_USER, r'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\mockapp')\n"
+                "JsonHivePlatformRegistry.from_sandbox().delete_key(PlatformRegistryHive.CURRENT_USER, r'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\mockapp')\n"
             )
             mock_installer.write_text(
                 "\n".join([
@@ -469,7 +467,7 @@ class TestSandboxToolsCli(unittest.TestCase):
                     "lnk.parent.mkdir(parents=True, exist_ok=True)",
                     "lnk.write_bytes(b'\\x4c\\x00\\x00\\x00' + uuid.UUID('00021401-0000-0000-C000-000000000046').bytes_le + b'\\x00' * 56)",
                     "(inst / 'app' / 'install-manifest.json').write_text(json.dumps({'created_shortcuts': [str(lnk)]}), encoding='utf-8')",
-                    f"JsonHivePlatformRegistry({repr(str(hive_path))}, {repr(str(sbx_root))}, {repr(str(lock_path))}).set_value(PlatformRegistryHive.CURRENT_USER, r'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\mockapp', 'DisplayName', 'Mock App', PlatformRegistryValueKind.STRING)",
+                    "JsonHivePlatformRegistry.from_sandbox().set_value(PlatformRegistryHive.CURRENT_USER, r'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\mockapp', 'DisplayName', 'Mock App', PlatformRegistryValueKind.STRING)",
                 ]) + "\n",
                 encoding="utf-8",
             )
@@ -540,6 +538,70 @@ class TestSandboxToolsCli(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(escape_proc.returncode, 3)
+
+    def test_scrubbed_child_env_interop_with_sandbox_seam_and_from_sandbox(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            sbx_root = tmp_path / "sandbox"
+            c_dir = sbx_root / "C"
+            d_dir = sbx_root / "D"
+            e_dir = sbx_root / "E"
+            disc_dir = sbx_root / "Disc"
+            prof_dir = c_dir / "Users" / "Sandbox"
+            for folder in (prof_dir / "AppData" / "Local" / "Temp", prof_dir / "AppData" / "Roaming", d_dir, e_dir, disc_dir):
+                folder.mkdir(parents=True, exist_ok=True)
+
+            child_env = run_sandbox_e2e.build_sandbox_child_env(
+                {
+                    "sandboxRoot": sbx_root,
+                    "sandboxProfileDir": prof_dir,
+                    "drives": {
+                        "SANDBOX_C_DRIVE": str(c_dir),
+                        "SANDBOX_D_DRIVE": str(d_dir),
+                        "SANDBOX_REMOVABLE_DRIVE": str(e_dir),
+                        "SANDBOX_DISC_DRIVE": str(disc_dir),
+                    },
+                }
+            )
+            self.assertEqual(child_env["USERPROFILE"], str(prof_dir))
+            self.assertEqual(child_env["LOCALAPPDATA"], str(prof_dir / "AppData" / "Local"))
+            self.assertEqual(child_env["APPDATA"], str(prof_dir / "AppData" / "Roaming"))
+
+            child_code = "\n".join([
+                "import os, sys",
+                f"sys.path.insert(0, {repr(str(SRC_ROOT))})",
+                "from foundation_core.sandbox_seam import resolve_sandbox_environment, SandboxContainmentError",
+                "from foundation_core.pseudo_registry import JsonHivePlatformRegistry, PlatformRegistryHive, PlatformRegistryValueKind",
+                "res = resolve_sandbox_environment()",
+                "assert res.is_sandbox_active",
+                "reg = JsonHivePlatformRegistry.from_sandbox(res)",
+                "reg.set_value(PlatformRegistryHive.CURRENT_USER, r'Software\\ChildInterop\\Test', 'ChildWrite', 'ok-child', PlatformRegistryValueKind.STRING)",
+                "assert reg.get_value(PlatformRegistryHive.CURRENT_USER, r'Software\\ChildInterop\\Test', 'ChildWrite') == 'ok-child'",
+                "try:",
+                "    resolve_sandbox_environment(env_override={'FOUNDATION_SANDBOX_ROOT': os.environ['SystemRoot']})",
+                "    raise AssertionError('Expected SandboxContainmentError for SystemRoot')",
+                "except SandboxContainmentError as exc:",
+                "    assert exc.exit_code == 3",
+            ])
+            proc = subprocess.run(
+                [sys.executable, "-B", "-c", child_code],
+                env=child_env,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, f"{proc.stderr}\n{proc.stdout}")
+
+            parent_reg = JsonHivePlatformRegistry(
+                sbx_root / "registry" / "registry.hive.json",
+                sbx_root,
+                sbx_root / "locks" / "registry.hive.lock",
+            )
+            self.assertEqual(
+                parent_reg.get_value(PlatformRegistryHive.CURRENT_USER, r"Software\ChildInterop\Test", "ChildWrite"),
+                "ok-child",
+            )
 
 
 if __name__ == "__main__":
