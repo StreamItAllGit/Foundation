@@ -88,10 +88,10 @@ public sealed class FoundationTerminalDrawerTests
         Assert.Contains("coalesceTerminalLogBatch", indexText);
 
         string pkgText = File.ReadAllText(pkgPath);
-        Assert.Contains("\"version\": \"0.4.1-hf.1\"", pkgText);
+        Assert.Contains("\"version\": \"0.4.2\"", pkgText);
 
         var branding = new ShellBrandingOptions { AppId = "test", DisplayName = "Test" };
-        Assert.Equal("0.4.1-hf.1", branding.SdkVersion);
+        Assert.Equal("0.4.2", branding.SdkVersion);
     }
 
     [Fact]
@@ -147,9 +147,13 @@ public sealed class FoundationTerminalDrawerTests
         string staleVerifyTool = Path.Combine(tempConsumer, "Dev", "lib", "Foundation", "tools", "verify_sandbox_universal.py");
         string staleSandboxDll = Path.Combine(tempConsumer, "Dev", "lib", "Foundation.Sandbox.dll");
         string staleVisibleCs = Path.Combine(tempConsumer, "Dev", "lib", "VisibleTestWindowHelper.cs");
+        string keptSandboxCtl = Path.Combine(tempConsumer, "Dev", "lib", "Foundation", "tools", "sandbox_ctl.py");
+        string keptRunE2e = Path.Combine(tempConsumer, "Dev", "lib", "Foundation", "tools", "run_sandbox_e2e.py");
         File.WriteAllText(staleVerifyTool, "# stale");
         File.WriteAllText(staleSandboxDll, "stale");
         File.WriteAllText(staleVisibleCs, "// stale");
+        File.WriteAllText(keptSandboxCtl, "# keep");
+        File.WriteAllText(keptRunE2e, "# keep");
         try
         {
             var psi = new ProcessStartInfo("python")
@@ -157,8 +161,8 @@ public sealed class FoundationTerminalDrawerTests
                 ArgumentList =
                 {
                     scriptPath,
-                    "--version", "0.4.1-hf.1",
-                    "--ui-version", "0.4.1-hf.1",
+                    "--version", "0.4.2",
+                    "--ui-version", "0.4.2",
                     "--publish",
                     "--sync-consumer", tempConsumer
                 },
@@ -177,7 +181,7 @@ public sealed class FoundationTerminalDrawerTests
 
             foreach (string sharedDir in new[]
             {
-                Path.Combine(tempSharedLibs, "v0.4.1-hf.1"),
+                Path.Combine(tempSharedLibs, "v0.4.2"),
                 Path.Combine(tempSharedLibs, "Latest")
             })
             {
@@ -186,18 +190,27 @@ public sealed class FoundationTerminalDrawerTests
                 Assert.True(File.Exists(Path.Combine(sharedDir, "WebAssets", "foundation-terminal.css")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "WebAssets", "components", "GlobalTerminalDrawer.tsx")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "foundation_core", "__init__.py")));
+                Assert.True(File.Exists(Path.Combine(sharedDir, "foundation_core", "sandbox_seam.py")));
+                Assert.True(File.Exists(Path.Combine(sharedDir, "foundation_core", "pseudo_registry.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "sync_foundation_sdk.py")));
+                Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "sandbox_ctl.py")));
+                Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "run_sandbox_e2e.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "sdk-manifest.json")));
 
                 using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(sharedDir, "sdk-manifest.json")));
-                Assert.Equal("0.4.1-hf.1", doc.RootElement.GetProperty("version").GetString());
-                Assert.Equal("0.4.1-hf.1", doc.RootElement.GetProperty("uiVersion").GetString());
+                Assert.Equal("0.4.2", doc.RootElement.GetProperty("version").GetString());
+                Assert.Equal("0.4.2", doc.RootElement.GetProperty("uiVersion").GetString());
             }
 
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "Foundation.UI.dll")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "WebAssets", "foundation-terminal.js")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "WebAssets", "components", "GlobalTerminalDrawer.tsx")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "foundation_core", "__init__.py")));
+            Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "foundation_core", "sandbox_seam.py")));
+            Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "foundation_core", "pseudo_registry.py")));
+            Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "Foundation", "foundation_core", "sandbox_seam.py")));
+            Assert.True(File.Exists(keptSandboxCtl));
+            Assert.True(File.Exists(keptRunE2e));
             Assert.False(File.Exists(staleVerifyTool));
             Assert.False(File.Exists(staleSandboxDll));
             Assert.False(File.Exists(staleVisibleCs));
