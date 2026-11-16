@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.InstallerContracts
 // @purpose: Parameterized installer descriptor, config overrides, install options, manifest DTOs, and host run result contracts.
-// @depends-on: System, System.Collections.Generic, System.IO, System.Linq, System.Text.Json.Serialization
+// @depends-on: System, System.Collections.Generic, System.IO, System.Linq, System.Text.Json.Serialization, Foundation.Core
 // @exports: InstallerAppDescriptor, InstallerConfigOverride, InstallManifest, InstallerOperationResult, InstallerInstallOptions, InstallerHostRunResult
 
 using System;
@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Serialization;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -56,15 +57,15 @@ public sealed record InstallerAppDescriptor(
             ? Subtitle!
             : $"Clean Release Root ({MainExecutableFileName} + app\\, scripts\\, data\\)";
 
-    public string CanonicalDefaultInstallDir => ResolveCanonicalInstallDir();
+    public string CanonicalDefaultInstallDir => ResolveCanonicalDefaultInstallDir();
 
-    private string ResolveCanonicalInstallDir()
+    public string ResolveCanonicalDefaultInstallDir(SandboxResolution? sandbox = null)
     {
-        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string localAppData = KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox);
         if (string.IsNullOrWhiteSpace(localAppData))
         {
             localAppData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.UserProfile, sandbox),
                 "AppData",
                 "Local");
         }

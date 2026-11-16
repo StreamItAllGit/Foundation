@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.BackupAndVerify
 // @purpose: Fast <1.5s NoCompression pre-upgrade state backup, running daemon shutdown, and fail-closed path containment guards.
-// @depends-on: System, System.Collections.Generic, System.Diagnostics, System.IO, System.IO.Compression, System.Linq, System.Threading, System.Threading.Tasks
+// @depends-on: System, System.Collections.Generic, System.Diagnostics, System.IO, System.IO.Compression, System.Linq, System.Threading, System.Threading.Tasks, Foundation.Core
 // @exports: InstallerEngineCore (partial: CreatePreUpgradeBackupAsync, StopRunningInstancesInDirectory, EnsureWithinDirectory)
 
 using System;
@@ -11,6 +11,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -254,13 +255,24 @@ public sealed partial class InstallerEngineCore
         if (!string.IsNullOrWhiteSpace(legacyBaseDir))
         {
             searchRoot = Path.GetFullPath(legacyBaseDir);
-            if (IsIsolatedOverride && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(searchRoot))
+            if (ShouldSuppressLiveHostMutations && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(searchRoot, EffectiveSandbox))
             {
-                throw new InvalidOperationException(
+                SandboxEnvironmentSeam.ThrowContainmentViolation(
                     $"Fail-closed isolation violation: refusing to scan canonical production or system path '{searchRoot}'.");
             }
+            if (IsSandboxActive)
+            {
+                searchRoot = SandboxEnvironmentSeam.AssertSandboxPathIfActive(searchRoot, Sandbox);
+            }
         }
-        else if (IsIsolatedOverride)
+        else if (IsSandboxActive)
+        {
+            string storageRoot = !string.IsNullOrWhiteSpace(Sandbox.StorageDriveRoot)
+                ? Sandbox.StorageDriveRoot
+                : Path.Combine(Sandbox.SandboxRoot!, "D");
+            searchRoot = Path.Combine(storageRoot, "Programs");
+        }
+        else if (IsStage1Isolated)
         {
             searchRoot = Path.Combine(RuntimeEnvironment.DataDirectory, "legacy-programs");
         }
@@ -306,11 +318,17 @@ public sealed partial class InstallerEngineCore
 
         string fullSource = Path.GetFullPath(legacySourceDir);
         string fullTarget = ResolveTargetInstallDir(targetInstallDir);
-        if (IsIsolatedOverride &&
-            (FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullSource) || FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullTarget)))
+        if (ShouldSuppressLiveHostMutations &&
+            (FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullSource, EffectiveSandbox) ||
+             FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullTarget, EffectiveSandbox)))
         {
-            throw new InvalidOperationException(
+            SandboxEnvironmentSeam.ThrowContainmentViolation(
                 "Fail-closed isolation violation: refusing to migrate canonical production or system directories.");
+        }
+        if (IsSandboxActive)
+        {
+            fullSource = SandboxEnvironmentSeam.AssertSandboxPathIfActive(fullSource, Sandbox);
+            fullTarget = SandboxEnvironmentSeam.AssertSandboxPathIfActive(fullTarget, Sandbox);
         }
 
         if (!Directory.Exists(fullSource))

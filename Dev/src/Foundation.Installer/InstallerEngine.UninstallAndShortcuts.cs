@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.InstallerEngine.UninstallAndShortcuts
-// @purpose: Clean uninstallation and Windows Desktop/Start Menu/Startup .lnk shortcut generation via WindowsShortcutWriter.
-// @depends-on: System, System.Collections.Generic, System.IO, System.Linq, System.Text, System.Text.Json, System.Threading, System.Threading.Tasks
+// @purpose: Clean uninstallation and Windows Desktop/Start Menu/Startup .lnk shortcut generation via WindowsShortcutWriter and KnownFolderPaths.
+// @depends-on: System, System.Collections.Generic, System.IO, System.Linq, System.Text, System.Text.Json, System.Threading, System.Threading.Tasks, Foundation.Core
 // @exports: InstallerEngine (partial: UninstallAsync, CreateApplicationShortcuts)
 
 using System;
@@ -11,6 +11,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -124,6 +125,11 @@ public sealed partial class InstallerEngine
             }
             else if (!_ctx.ShouldSuppressHostMutations && OperatingSystem.IsWindows())
             {
+                if (_ctx.IsSandboxActive)
+                {
+                    SandboxEnvironmentSeam.AssertSandboxPathIfActive(uninstallerPath, _ctx.Sandbox);
+                    SandboxEnvironmentSeam.AssertSandboxPathIfActive(installDir, _ctx.Sandbox);
+                }
                 ScheduleDeferredSelfDelete(uninstallerPath, installDir);
             }
         }
@@ -161,32 +167,7 @@ public sealed partial class InstallerEngine
             }
         }
 
-        if (manifest?.CreatedShortcuts != null)
-        {
-            foreach (string lnk in manifest.CreatedShortcuts)
-            {
-                if (!string.IsNullOrWhiteSpace(lnk) && File.Exists(lnk))
-                {
-                    try
-                    {
-                        if (!_ctx.ShouldSuppressHostMutations || string.IsNullOrWhiteSpace(_ctx.DataDirectory) || IsWithinDirectory(_ctx.DataDirectory, lnk))
-                        {
-                            File.Delete(lnk);
-                            removedFiles++;
-                            string? lnkDir = Path.GetDirectoryName(lnk);
-                            if (!string.IsNullOrEmpty(lnkDir) &&
-                                Directory.Exists(lnkDir) &&
-                                string.Equals(Path.GetFileName(lnkDir), Descriptor.ProductName, StringComparison.OrdinalIgnoreCase) &&
-                                !Directory.EnumerateFileSystemEntries(lnkDir).Any())
-                            {
-                                Directory.Delete(lnkDir, recursive: false);
-                            }
-                        }
-                    }
-                    catch { }
-                }
-            }
-        }
+        removedFiles += RemoveApplicationShortcuts(installDir, manifest);
 
         RemoveUninstallerMetadata(manifest?.UninstallRegistryRecord);
 
@@ -201,15 +182,72 @@ public sealed partial class InstallerEngine
         return new InstallerOperationResult(true, installDir, string.Empty, removedFiles, msg);
     }
 
-    private List<string> CreateApplicationShortcuts(string installDir, bool includeStartupShortcut)
+    private int RemoveApplicationShortcuts(string installDir, InstallManifest? manifest)
     {
-        var created = new List<string>();
-        string mainExe = ResolveInstalledExecutablePath(installDir);
-        if (!File.Exists(mainExe))
+        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (manifest?.CreatedShortcuts != null)
         {
-            return created;
+            foreach (string lnk in manifest.CreatedShortcuts)
+            {
+                if (!string.IsNullOrWhiteSpace(lnk))
+                    candidates.Add(lnk.Trim());
+            }
         }
 
+        (string desktopDir, string startMenuDir, string startupDir) = ResolveShortcutDirectories(installDir, createIfMissing: false);
+        string sanitizedName = $"{WindowsShortcutWriter.SanitizeShortcutFileName(Descriptor.DisplayName)}.lnk";
+        string? rawName = !string.IsNullOrWhiteSpace(Descriptor.DisplayName) &&
+                          Descriptor.DisplayName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 &&
+                          !Descriptor.DisplayName.Contains(':')
+            ? $"{Descriptor.DisplayName}.lnk"
+            : null;
+
+        foreach (string dir in new[] { desktopDir, startMenuDir, startupDir })
+        {
+            candidates.Add(Path.Combine(dir, sanitizedName));
+            if (!string.IsNullOrEmpty(rawName) && !string.Equals(rawName, sanitizedName, StringComparison.OrdinalIgnoreCase))
+                candidates.Add(Path.Combine(dir, rawName));
+        }
+
+        int removed = 0;
+        foreach (string lnk in candidates)
+        {
+            if (_ctx.IsSandboxActive)
+            {
+                SandboxEnvironmentSeam.AssertSandboxPathIfActive(lnk, _ctx.Sandbox);
+            }
+            else if (_ctx.ShouldSuppressHostMutations)
+            {
+                bool allowedInStage1 = (!string.IsNullOrWhiteSpace(_ctx.DataDirectory) && IsWithinDirectory(_ctx.DataDirectory, lnk)) ||
+                                       IsWithinDirectory(installDir, lnk);
+                if (!allowedInStage1) continue;
+            }
+
+            if (!File.Exists(lnk)) continue;
+
+            try
+            {
+                File.Delete(lnk);
+                removed++;
+                string? lnkDir = Path.GetDirectoryName(lnk);
+                if (!string.IsNullOrEmpty(lnkDir) &&
+                    Directory.Exists(lnkDir) &&
+                    string.Equals(Path.GetFileName(lnkDir), Descriptor.ProductName, StringComparison.OrdinalIgnoreCase) &&
+                    !Directory.EnumerateFileSystemEntries(lnkDir).Any())
+                {
+                    if (_ctx.IsSandboxActive)
+                        SandboxEnvironmentSeam.AssertSandboxPathIfActive(lnkDir, _ctx.Sandbox);
+                    Directory.Delete(lnkDir, recursive: false);
+                }
+            }
+            catch { }
+        }
+
+        return removed;
+    }
+
+    private (string DesktopDir, string StartMenuDir, string StartupDir) ResolveShortcutDirectories(string installDir, bool createIfMissing)
+    {
         string desktopDir;
         string startMenuDir;
         string startupDir;
@@ -223,15 +261,39 @@ public sealed partial class InstallerEngine
         }
         else
         {
-            desktopDir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), Descriptor.ProductName);
-            startupDir = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+            SandboxResolution sandbox = _ctx.EffectiveSandbox;
+            desktopDir = KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.DesktopDirectory, sandbox);
+            startMenuDir = Path.Combine(KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.Programs, sandbox), Descriptor.ProductName);
+            startupDir = KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.Startup, sandbox);
+            if (_ctx.IsSandboxActive)
+            {
+                desktopDir = SandboxEnvironmentSeam.AssertSandboxPathIfActive(desktopDir, sandbox);
+                startMenuDir = SandboxEnvironmentSeam.AssertSandboxPathIfActive(startMenuDir, sandbox);
+                startupDir = SandboxEnvironmentSeam.AssertSandboxPathIfActive(startupDir, sandbox);
+            }
         }
 
-        Directory.CreateDirectory(desktopDir);
-        Directory.CreateDirectory(startMenuDir);
+        if (createIfMissing)
+        {
+            Directory.CreateDirectory(desktopDir);
+            Directory.CreateDirectory(startMenuDir);
+        }
 
-        string lnkFileName = $"{Descriptor.DisplayName}.lnk";
+        return (desktopDir, startMenuDir, startupDir);
+    }
+
+    private List<string> CreateApplicationShortcuts(string installDir, bool includeStartupShortcut)
+    {
+        var created = new List<string>();
+        string mainExe = ResolveInstalledExecutablePath(installDir);
+        if (!File.Exists(mainExe))
+        {
+            return created;
+        }
+
+        (string desktopDir, string startMenuDir, string startupDir) = ResolveShortcutDirectories(installDir, createIfMissing: true);
+
+        string lnkFileName = $"{WindowsShortcutWriter.SanitizeShortcutFileName(Descriptor.DisplayName)}.lnk";
         string desktopLnk = Path.Combine(desktopDir, lnkFileName);
         WindowsShortcutWriter.WriteShortcut(
             outputLnkPath: desktopLnk,

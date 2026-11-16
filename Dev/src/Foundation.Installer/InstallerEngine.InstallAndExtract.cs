@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.InstallerEngine.InstallAndExtract
 // @purpose: Atomic payload extraction, protected user state preservation, pre-upgrade backup, and install manifest persistence.
-// @depends-on: System, System.Collections.Generic, System.IO, System.IO.Compression, System.Linq, System.Text, System.Text.Json, System.Threading, System.Threading.Tasks
+// @depends-on: System, System.Collections.Generic, System.IO, System.IO.Compression, System.Linq, System.Text, System.Text.Json, System.Threading, System.Threading.Tasks, Foundation.Core
 // @exports: InstallerEngine (partial: InstallAsync)
 
 using System;
@@ -12,6 +12,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -300,13 +301,14 @@ public sealed partial class InstallerEngine
         string? explicitSecondaryDir,
         string? explicitSecondaryFlagName)
     {
-        bool isolated = _ctx.ShouldSuppressHostMutations;
-        string? reEngineDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.ReEngineInstallDir, isolated);
-        string? suiteDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.SuiteInstallDir, isolated);
+        bool guardLiveHost = _ctx.ShouldSuppressLiveHostMutations;
+        SandboxResolution sandbox = _ctx.EffectiveSandbox;
+        string? reEngineDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.ReEngineInstallDir, guardLiveHost, sandbox);
+        string? suiteDir = NormalizeSecondaryPath(_ctx.ConfigOverride?.SuiteInstallDir, guardLiveHost, sandbox);
 
         if (!string.IsNullOrWhiteSpace(explicitSecondaryDir))
         {
-            string normalizedExplicit = NormalizeSecondaryPath(explicitSecondaryDir, isolated)!;
+            string normalizedExplicit = NormalizeSecondaryPath(explicitSecondaryDir, guardLiveHost, sandbox)!;
             if (string.Equals(explicitSecondaryFlagName, "--reengine-dir", StringComparison.OrdinalIgnoreCase))
             {
                 reEngineDir = normalizedExplicit;
@@ -328,16 +330,20 @@ public sealed partial class InstallerEngine
         return (reEngineDir, suiteDir);
     }
 
-    private static string? NormalizeSecondaryPath(string? rawPath, bool rejectCanonicalProduction)
+    private static string? NormalizeSecondaryPath(string? rawPath, bool guardLiveHost, SandboxResolution sandbox)
     {
         if (string.IsNullOrWhiteSpace(rawPath))
             return null;
 
         string fullPath = Path.GetFullPath(rawPath.Trim());
-        if (rejectCanonicalProduction && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullPath))
+        if (guardLiveHost && FileLockRetryHelper.IsCanonicalProductionOrSystemPath(fullPath, sandbox))
         {
-            throw new InvalidOperationException(
+            SandboxEnvironmentSeam.ThrowContainmentViolation(
                 $"Fail-closed isolation violation: refusing to target canonical production or system secondary directory '{fullPath}'.");
+        }
+        if (sandbox.IsSandboxActive)
+        {
+            fullPath = SandboxEnvironmentSeam.AssertSandboxPathIfActive(fullPath, sandbox);
         }
         return fullPath;
     }

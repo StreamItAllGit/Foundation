@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.StandardInstallerHost
-// @purpose: Turnkey 4-Pillar Single-EXE setup entry point supporting dark GUI wizard and --silent, --verify, --uninstall, and --dry-run CLI flags.
-// @depends-on: System, System.Diagnostics, System.IO, System.Reflection, System.Runtime.InteropServices, System.Threading.Tasks, System.Windows.Forms
+// @purpose: Turnkey 4-Pillar Single-EXE setup entry point supporting dark GUI wizard and --silent, --verify, --uninstall, and --dry-run CLI flags with ExitCode=3 containment.
+// @depends-on: System, System.Diagnostics, System.IO, System.Reflection, System.Runtime.InteropServices, System.Threading.Tasks, System.Windows.Forms, Foundation.Core
 // @exports: StandardInstallerHost
 
 using System;
@@ -8,8 +8,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -87,51 +89,66 @@ public static class StandardInstallerHost
             return new InstallerHostRunResult(0);
         }
 
-        var ctx = new InstallerRuntimeContext(
-            cliDataDir: cli.DataDir,
-            cliConfigPath: cli.ConfigPath,
-            cliLogDir: cli.LogDir,
-            dryRun: cli.DryRun,
-            envPrefix: descriptor.EnvPrefix);
-
-        bool effectiveAutoStart = descriptor.AllowAutoStart && cli.AutoStart;
-        if (cli.AutoStart && !descriptor.AllowAutoStart)
+        InstallerRuntimeContext? ctx = null;
+        try
         {
-            ctx.WriteLog("WARN", $"--autostart ignored for {descriptor.ProductName} because AllowAutoStart is false.");
-            if (!cli.Silent)
+            ctx = new InstallerRuntimeContext(
+                cliDataDir: cli.DataDir,
+                cliConfigPath: cli.ConfigPath,
+                cliLogDir: cli.LogDir,
+                dryRun: cli.DryRun,
+                envPrefix: descriptor.EnvPrefix);
+
+            bool effectiveAutoStart = descriptor.AllowAutoStart && cli.AutoStart;
+            if (cli.AutoStart && !descriptor.AllowAutoStart)
             {
-                Console.WriteLine($"Warning: --autostart ignored because {descriptor.DisplayName} disallows Startup registration.");
+                ctx.WriteLog("WARN", $"--autostart ignored for {descriptor.ProductName} because AllowAutoStart is false.");
+                if (!cli.Silent)
+                {
+                    Console.WriteLine($"Warning: --autostart ignored because {descriptor.DisplayName} disallows Startup registration.");
+                }
             }
+
+            bool explicitMigrate = cli.MigrateLegacy || (ctx.ConfigOverride?.MigrateLegacy ?? false);
+            bool showLegacy = descriptor.AllowLegacyMigration || explicitMigrate;
+            bool isNonInteractive = cli.Silent || ctx.IsIsolatedTestProcess;
+
+            if (!isNonInteractive && !cli.DryRun && !cli.VerifyOnly && string.IsNullOrWhiteSpace(cli.InstallDir) && OperatingSystem.IsWindows())
+            {
+                InitializeWinFormsHost();
+                var guiEngine = new InstallerEngine(descriptor, ctx, resolvedAssembly);
+                using var wizard = new InstallerWizardForm(
+                    engine: guiEngine,
+                    ctx: ctx,
+                    initialInstallDir: cli.InstallDir,
+                    externalPayloadPath: cli.PayloadPath,
+                    isUninstallMode: cli.Uninstall,
+                    initialCreateShortcuts: !cli.NoShortcuts,
+                    initialAutoStart: effectiveAutoStart,
+                    initialLaunchAfter: !cli.NoLaunch,
+                    initialPurgeData: cli.PurgeData,
+                    initialProfileId: cli.ProfileId,
+                    initialSecondaryDir: cli.SecondaryDir,
+                    secondaryFlagName: cli.SecondaryFlagName,
+                    initialMigrateLegacy: explicitMigrate,
+                    showLegacyMigration: showLegacy);
+                Application.Run(wizard);
+                return new InstallerHostRunResult(wizard.ExitCode, ctx.LogDirectory);
+            }
+
+            return SynchronizationContext.Current != null
+                ? Task.Run(() => RunCliFlowAsync(descriptor, ctx, resolvedAssembly, cli, effectiveAutoStart, explicitMigrate)).GetAwaiter().GetResult()
+                : RunCliFlowAsync(descriptor, ctx, resolvedAssembly, cli, effectiveAutoStart, explicitMigrate).GetAwaiter().GetResult();
         }
-
-        bool explicitMigrate = cli.MigrateLegacy || (ctx.ConfigOverride?.MigrateLegacy ?? false);
-        bool showLegacy = descriptor.AllowLegacyMigration || explicitMigrate;
-        bool isNonInteractive = cli.Silent || ctx.IsIsolatedTestProcess;
-
-        if (!isNonInteractive && !cli.DryRun && !cli.VerifyOnly && string.IsNullOrWhiteSpace(cli.InstallDir) && OperatingSystem.IsWindows())
+        catch (Exception ex)
         {
-            InitializeWinFormsHost();
-            var guiEngine = new InstallerEngine(descriptor, ctx, resolvedAssembly);
-            using var wizard = new InstallerWizardForm(
-                engine: guiEngine,
-                ctx: ctx,
-                initialInstallDir: cli.InstallDir,
-                externalPayloadPath: cli.PayloadPath,
-                isUninstallMode: cli.Uninstall,
-                initialCreateShortcuts: !cli.NoShortcuts,
-                initialAutoStart: effectiveAutoStart,
-                initialLaunchAfter: !cli.NoLaunch,
-                initialPurgeData: cli.PurgeData,
-                initialProfileId: cli.ProfileId,
-                initialSecondaryDir: cli.SecondaryDir,
-                secondaryFlagName: cli.SecondaryFlagName,
-                initialMigrateLegacy: explicitMigrate,
-                showLegacyMigration: showLegacy);
-            Application.Run(wizard);
-            return new InstallerHostRunResult(wizard.ExitCode, ctx.LogDirectory);
+            int exitCode = SandboxEnvironmentSeam.IsContainmentViolation(ex)
+                ? SandboxEnvironmentSeam.ContainmentExitCode
+                : 1;
+            ctx?.WriteLog("ERROR", $"Installer host failed (ExitCode={exitCode}): {ex.Message}");
+            Console.Error.WriteLine($"Setup error: {ex.Message}");
+            return new InstallerHostRunResult(exitCode, ctx?.LogDirectory);
         }
-
-        return RunCliFlowAsync(descriptor, ctx, resolvedAssembly, cli, effectiveAutoStart, explicitMigrate).GetAwaiter().GetResult();
     }
 
     private static async Task<InstallerHostRunResult> RunCliFlowAsync(
@@ -184,6 +201,8 @@ public static class StandardInstallerHost
             if ((cli.LaunchAfter || res.WasRunningBeforeInstall) && !cli.NoLaunch && !cli.DryRun && !ctx.ShouldSuppressHostMutations)
             {
                 string installedExe = engine.ResolveInstalledExecutablePath(res.InstallDirectory);
+                if (ctx.IsSandboxActive)
+                    installedExe = SandboxEnvironmentSeam.AssertSandboxPathIfActive(installedExe, ctx.Sandbox);
                 if (File.Exists(installedExe))
                 {
                     Process.Start(new ProcessStartInfo
@@ -199,9 +218,12 @@ public static class StandardInstallerHost
         }
         catch (Exception ex)
         {
-            ctx.WriteLog("ERROR", $"Installer failed: {ex.Message}");
+            int exitCode = SandboxEnvironmentSeam.IsContainmentViolation(ex)
+                ? SandboxEnvironmentSeam.ContainmentExitCode
+                : 1;
+            ctx.WriteLog("ERROR", $"Installer failed (ExitCode={exitCode}): {ex.Message}");
             Console.Error.WriteLine($"Setup error: {ex.Message}");
-            return new InstallerHostRunResult(1, ctx.LogDirectory);
+            return new InstallerHostRunResult(exitCode, ctx.LogDirectory);
         }
     }
 

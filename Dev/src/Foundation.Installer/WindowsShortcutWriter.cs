@@ -1,13 +1,14 @@
 // @module: Foundation.Installer.Shortcuts
-// @purpose: Writes pure-C# MS-SHLLINK (.lnk) shortcuts and HKCU Uninstall/Run registry entries with optional host-mutation suppression.
-// @depends-on: System, System.Buffers.Binary, System.IO, System.Text, Microsoft.Win32
+// @purpose: Writes pure-C# MS-SHLLINK (.lnk) shortcuts with filename sanitization and routes HKCU Uninstall entries through IPlatformRegistry.
+// @depends-on: System, System.Buffers.Binary, System.Collections.Generic, System.IO, System.Text, Foundation.Core
 // @exports: WindowsShortcutWriter
 
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using Microsoft.Win32;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -156,46 +157,94 @@ public static class WindowsShortcutWriter
         return new Guid(data.Slice(4, 16)) == ShellLinkClsid;
     }
 
+    public static string SanitizeShortcutFileName(string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+            return "Application";
+
+        string replaced = displayName.Replace(":", " -", StringComparison.Ordinal);
+        var invalidChars = new HashSet<char>(Path.GetInvalidFileNameChars())
+        {
+            '<', '>', ':', '"', '/', '\\', '|', '?', '*'
+        };
+
+        var sb = new StringBuilder(replaced.Length);
+        bool lastWasSpace = false;
+        foreach (char ch in replaced)
+        {
+            char mapped = invalidChars.Contains(ch) ? '_' : ch;
+            if (char.IsWhiteSpace(mapped))
+            {
+                if (!lastWasSpace && sb.Length > 0)
+                {
+                    sb.Append(' ');
+                    lastWasSpace = true;
+                }
+            }
+            else
+            {
+                sb.Append(mapped);
+                lastWasSpace = false;
+            }
+        }
+
+        string result = sb.ToString().Trim().TrimEnd('.', ' ');
+        return string.IsNullOrWhiteSpace(result) ? "Application" : result;
+    }
+
     public static void RegisterCurrentUserUninstallEntry(
         InstallerThemeOptions theme,
         string installDir,
         string uninstallerExePath,
-        bool suppressHostRegistryWrites = false)
+        bool suppressHostRegistryWrites = false) =>
+        RegisterCurrentUserUninstallEntry(theme, installDir, uninstallerExePath, suppressHostRegistryWrites, registry: null);
+
+    public static void RegisterCurrentUserUninstallEntry(
+        InstallerThemeOptions theme,
+        string installDir,
+        string uninstallerExePath,
+        bool suppressHostRegistryWrites,
+        IPlatformRegistry? registry)
     {
-        if (suppressHostRegistryWrites || !OperatingSystem.IsWindows())
-        {
+        ArgumentNullException.ThrowIfNull(theme);
+        if (suppressHostRegistryWrites)
             return;
-        }
+
+        IPlatformRegistry effectiveRegistry = registry ?? PlatformRegistryFactory.CreateDefault(suppressMutations: suppressHostRegistryWrites);
+        if (effectiveRegistry is NoOpPlatformRegistry)
+            return;
 
         string subKeyPath = $@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{theme.DisplayName}";
-        using RegistryKey? key = Registry.CurrentUser.CreateSubKey(subKeyPath, writable: true);
-        if (key is null)
-        {
-            return;
-        }
-
         string exeName = theme.ExecutableFileName ?? $"{theme.DisplayName}.exe";
-        key.SetValue("DisplayName", theme.DisplayName);
-        key.SetValue("DisplayVersion", theme.Version);
-        key.SetValue("Publisher", "Personal Suite Ecosystem");
-        key.SetValue("InstallLocation", installDir);
-        key.SetValue("DisplayIcon", Path.Combine(installDir, exeName));
-        key.SetValue("UninstallString", $"\"{uninstallerExePath}\" --uninstall");
-        key.SetValue("NoModify", 1, RegistryValueKind.DWord);
-        key.SetValue("NoRepair", 0, RegistryValueKind.DWord);
+        effectiveRegistry.SetValues(PlatformRegistryHive.CurrentUser, subKeyPath, new Dictionary<string, PlatformRegistryValue>
+        {
+            ["DisplayName"] = new(PlatformRegistryValueKind.String, theme.DisplayName),
+            ["DisplayVersion"] = new(PlatformRegistryValueKind.String, theme.Version),
+            ["Publisher"] = new(PlatformRegistryValueKind.String, "Personal Suite Ecosystem"),
+            ["InstallLocation"] = new(PlatformRegistryValueKind.String, installDir),
+            ["DisplayIcon"] = new(PlatformRegistryValueKind.String, Path.Combine(installDir, exeName)),
+            ["UninstallString"] = new(PlatformRegistryValueKind.String, $"\"{uninstallerExePath}\" --uninstall"),
+            ["NoModify"] = new(PlatformRegistryValueKind.DWord, 1),
+            ["NoRepair"] = new(PlatformRegistryValueKind.DWord, 0)
+        });
     }
 
-    public static void RemoveCurrentUserUninstallEntry(string displayName, bool suppressHostRegistryWrites = false)
+    public static void RemoveCurrentUserUninstallEntry(string displayName, bool suppressHostRegistryWrites = false) =>
+        RemoveCurrentUserUninstallEntry(displayName, suppressHostRegistryWrites, registry: null);
+
+    public static void RemoveCurrentUserUninstallEntry(string displayName, bool suppressHostRegistryWrites, IPlatformRegistry? registry)
     {
-        if (suppressHostRegistryWrites || !OperatingSystem.IsWindows())
-        {
+        if (suppressHostRegistryWrites)
             return;
-        }
+
+        IPlatformRegistry effectiveRegistry = registry ?? PlatformRegistryFactory.CreateDefault(suppressMutations: suppressHostRegistryWrites);
+        if (effectiveRegistry is NoOpPlatformRegistry)
+            return;
 
         string subKeyPath = $@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{displayName}";
         try
         {
-            Registry.CurrentUser.DeleteSubKeyTree(subKeyPath, throwOnMissingSubKey: false);
+            effectiveRegistry.DeleteSubKeyTree(PlatformRegistryHive.CurrentUser, subKeyPath, throwOnMissingSubKey: false);
         }
         catch
         {

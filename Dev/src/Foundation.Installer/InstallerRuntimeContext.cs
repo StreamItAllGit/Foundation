@@ -1,12 +1,13 @@
 // @module: Foundation.Installer.InstallerRuntimeContext
-// @purpose: Resolves installer CLI/env runtime path overrides (--data-dir, --config, --log-dir), isolated test safety, and diagnostic logging.
-// @depends-on: System, System.IO, System.Text, System.Text.Json
+// @purpose: Resolves installer CLI/env runtime path overrides (--data-dir, --config, --log-dir), 3-mode sandbox/isolated precedence, IPlatformRegistry, and diagnostic logging.
+// @depends-on: System, System.IO, System.Text, System.Text.Json, Foundation.Core
 // @exports: InstallerRuntimeContext
 
 using System;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using Foundation.Core;
 
 namespace Foundation.Installer;
 
@@ -18,7 +19,13 @@ public sealed class InstallerRuntimeContext
     public string? LogDirectory { get; private set; }
     public bool DryRun { get; }
     public bool IsIsolatedTestProcess { get; }
-    public bool ShouldSuppressHostMutations => IsIsolatedTestProcess || !string.IsNullOrWhiteSpace(DataDirectory);
+    public SandboxResolution Sandbox { get; }
+    public bool IsSandboxActive => Sandbox.IsSandboxActive && !IsIsolatedTestProcess;
+    internal SandboxResolution EffectiveSandbox => IsSandboxActive ? Sandbox : SandboxResolution.Inactive;
+    public bool IsStage1Isolated => IsIsolatedTestProcess || (!IsSandboxActive && !string.IsNullOrWhiteSpace(DataDirectory));
+    public bool ShouldSuppressHostMutations => IsStage1Isolated;
+    public bool ShouldSuppressLiveHostMutations => IsStage1Isolated || IsSandboxActive;
+    public IPlatformRegistry Registry { get; }
     public InstallerConfigOverride? ConfigOverride { get; }
 
     public InstallerRuntimeContext(
@@ -27,9 +34,24 @@ public sealed class InstallerRuntimeContext
         string? cliLogDir = null,
         bool dryRun = false,
         string envPrefix = "APP")
+        : this(cliDataDir, cliConfigPath, cliLogDir, dryRun, envPrefix, sandboxOverride: null, registryOverride: null)
+    {
+    }
+
+    public InstallerRuntimeContext(
+        string? cliDataDir,
+        string? cliConfigPath,
+        string? cliLogDir,
+        bool dryRun,
+        string envPrefix,
+        SandboxResolution? sandboxOverride,
+        IPlatformRegistry? registryOverride = null)
     {
         EnvPrefix = string.IsNullOrWhiteSpace(envPrefix) ? "APP" : envPrefix.Trim().ToUpperInvariant();
         IsIsolatedTestProcess = IsTruthyEnv("APP_ISOLATED_TEST");
+        Sandbox = sandboxOverride ?? SandboxEnvironmentSeam.ResolveCurrent();
+        if (IsSandboxActive)
+            SandboxEnvironmentSeam.ValidateResolution(Sandbox);
 
         string? rawData = FirstNonEmpty(
             cliDataDir,
@@ -55,7 +77,18 @@ public sealed class InstallerRuntimeContext
             ? Path.GetFullPath(rawLog)
             : (!string.IsNullOrWhiteSpace(DataDirectory) ? Path.Combine(DataDirectory, "logs") : null);
 
+        if (IsSandboxActive)
+        {
+            if (!string.IsNullOrWhiteSpace(DataDirectory))
+                DataDirectory = SandboxEnvironmentSeam.AssertSandboxPathIfActive(DataDirectory, Sandbox);
+            if (!string.IsNullOrWhiteSpace(ConfigFilePath))
+                ConfigFilePath = SandboxEnvironmentSeam.AssertSandboxPathIfActive(ConfigFilePath, Sandbox);
+            if (!string.IsNullOrWhiteSpace(LogDirectory))
+                LogDirectory = SandboxEnvironmentSeam.AssertSandboxPathIfActive(LogDirectory, Sandbox);
+        }
+
         DryRun = dryRun || IsTruthyEnv($"{EnvPrefix}_DRY_RUN");
+        Registry = registryOverride ?? PlatformRegistryFactory.CreateDefault(EffectiveSandbox, ShouldSuppressHostMutations);
 
         if (!string.IsNullOrWhiteSpace(ConfigFilePath) && File.Exists(ConfigFilePath))
         {
@@ -70,11 +103,17 @@ public sealed class InstallerRuntimeContext
     public static bool IsSafeIsolatedInstallDirectory(string? candidateDir) =>
         FileLockRetryHelper.IsSafeIsolatedInstallDirectory(candidateDir);
 
+    public static bool IsSafeIsolatedInstallDirectory(string? candidateDir, SandboxResolution? sandbox = null) =>
+        FileLockRetryHelper.IsSafeIsolatedInstallDirectory(candidateDir, sandbox);
+
     public void EnsureDefaultLogDirectory(string installDir)
     {
         if (string.IsNullOrWhiteSpace(LogDirectory) && !string.IsNullOrWhiteSpace(installDir))
         {
-            LogDirectory = Path.Combine(Path.GetFullPath(installDir), "logs");
+            string resolvedLog = Path.Combine(Path.GetFullPath(installDir), "logs");
+            LogDirectory = IsSandboxActive
+                ? SandboxEnvironmentSeam.AssertSandboxPathIfActive(resolvedLog, Sandbox)
+                : resolvedLog;
         }
     }
 
