@@ -90,6 +90,6 @@ Executes the 12-point `Standard 02 §4` matrix (`S2-01`..`S2-12`) with scrubbed 
 ---
 
 ## 5. Runtime Diagnostics (`SQLite WAL`, `Locks`, `Transfers`)
-- **`SqliteWalPool` & `SqliteWalHelper`:** `SqliteCacheMode.Default`, `WAL`, `busy_timeout = 15000`, `synchronous = NORMAL`, `foreign_keys = ON`, `temp_store = MEMORY`, `cache_size = -65536` (`64 MB`).
+- **`SqliteWalPool` (`.NET`) & `open_wal_sqlite` (`Python`):** `SqliteCacheMode.Default`, `WAL`, `busy_timeout = 15000`, `synchronous = NORMAL`, `foreign_keys = ON`, `temp_store = MEMORY`, `cache_size = -65536` (`64 MB`).
 - **Locks & Crash Bundles:** `JsonHivePlatformRegistry` locks `<SandboxRoot>\locks\registry.hive.lock` via named Mutex + `PidSafeLockfile` (`PidSafeLockEnvelope`); unhandled crashes emit `logs\crashes\crash_<appId>_<ts>.json`.
 - **Safe Downloads (`SafeNetworkTransfer`):** `.partial_<jobId>`, `1.2x + 512 MB` reserve, HTTP `416` recovery, `10s` connect / `30s` `ResponseHeadersTimeout` / `30s` read-stall timeouts.

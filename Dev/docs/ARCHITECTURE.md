@@ -76,7 +76,7 @@ Every production source and tool file complies with **Standard 32 `250 / 400 / 6
 |---|---|---|
 | `Dev\Directory.Build.props` | `23` (`24`) | Enforces `.NET 8`, nullable/implicit usings, `Deterministic`, `ContinuousIntegrationBuild`, `Version=0.4.2` (`0.4.2.0`) |
 | `Dev\app.manifest.json` | `28` (`28`) | Standard 40 `standalone-app` manifest (`version: "0.4.2"`, `sdkVersion: "0.4.2"`, `containerTier: "Tier A (4-Folder)"`) |
-| `Dev\.env.example` | `10` (`21`) | Optional SharedLibs, Notion, and empty Stage 2 4-drive sandbox overlay placeholders |
+| `Dev\.env.example` | `17` (`21`) | Optional SharedLibs, Notion, and empty Stage 2 4-drive sandbox overlay placeholders |
 | `Dev\Foundation.sln` | — (`60`) | Solution binding all 7 C# projects + `Foundation.Tests` |
 
 ### 3.2 `Dev\src\Foundation.Core\` (`24` `.cs` files + `.csproj`, `net8.0`)
@@ -132,8 +132,8 @@ Every production source and tool file complies with **Standard 32 `250 / 400 / 6
 | File | SLOC (Raw) | Key Symbols / Purpose |
 |---|---|---|
 | `foundation_core\pyproject.toml` & `__init__.py` | `11` / `62` | `version = "0.4.2"`, `dependencies = []`, `SDK_VERSION = "0.4.2"`, barrel exports |
-| `foundation_core\sandbox_seam.py` | `252` (`301`) | `resolve_sandbox_environment`, `resolve_known_folders`, `assert_sandbox_path_if_active`, `is_path_within_sandbox`, `SandboxContainmentError` (`exit_code = 3`) |
-| `foundation_core\pseudo_registry.py` | `250` (`301`) | `JsonHivePlatformRegistry`, `PlatformRegistryHive`, `PlatformRegistryValueKind`, Windows `msvcrt`/POSIX lock + `.tmp -> fsync -> .bak` |
+| `foundation_core\sandbox_seam.py` | `244` (`303`) | `resolve_sandbox_environment`, `resolve_known_folders`, `assert_sandbox_path_if_active`, `is_path_within_sandbox`, `SandboxContainmentError` (`exit_code = 3`) |
+| `foundation_core\pseudo_registry.py` | `249` (`301`) | `JsonHivePlatformRegistry`, `PlatformRegistryHive`, `PlatformRegistryValueKind`, Windows `msvcrt`/POSIX lock + `.tmp -> fsync -> .bak` |
 | `foundation_core\{cli,settings,logging,crash_dumper,locks,db}.py` | `46`–`68` | CLI overrides, 3-file atomic settings, heartbeats/logs, crash bundles, PID locks, SQLite WAL |
 | `tools\sandbox_ctl.py` | `242` (`301`) | 4-drive orchestrator (`init`, `mount`, `unmount-removable`, `remount-removable`, `mount-disc`, `unmount-disc`, `status`, `snapshot`, `diff-host`, `reset`) |
 | `tools\run_sandbox_e2e.py` | `294` (`342`) | Standard 02 §4 12-point (`S2-01`..`S2-12`) Stage 2 E2E runner & Standard 18 receipt emitter |
@@ -146,5 +146,5 @@ Every production source and tool file complies with **Standard 32 `250 / 400 / 6
 
 - **Production Safety vs. Stage 2 Sandbox (`Standard 02 §4` & `Standard 25`):** Runtime libraries inspect **process environment variables only** (never auto-reading `.secrets\.env`); `APP_ISOLATED_TEST=1` always takes precedence over `FOUNDATION_SANDBOX_ROOT`. All 5 `Foundation.Installer` containment checks gate on `ShouldSuppressLiveHostMutations` so Stage 2 permits verified sandbox targets (`<SandboxDDrive>\Programs\...`) while aborting any host OS/user/host-`Programs` escape with `ExitCode = 3`.
 - **Cross-Language Registry Locking (`C# <-> Python`):** `JsonHivePlatformRegistry` in both `Foundation.Core` and `foundation_core` coordinates `<SandboxRoot>\locks\registry.hive.lock` (`PidSafeLockEnvelope` + OS lock / named Mutex `Local\FoundationSandboxReg_<sha8>`) and atomic `.tmp -> fsync/Flush(true) -> .bak -> replace`.
-- **SQLite & Auth Invariants:** `SqliteWalPool` / `SqliteWalHelper` use `SqliteCacheMode.Default`, `WAL`, `busy_timeout = 15000`, `synchronous = NORMAL`, `foreign_keys = ON`. `TieredAuthEngine` strips localhost bypass when `X-Forwarded-For` is set and signs 30-day HMAC-SHA256 cookies.
+- **SQLite & Auth Invariants:** `SqliteWalPool` (`Foundation.Core`) / `open_wal_sqlite` & `SqliteSchemaMigrationRunner` (`foundation_core`) use `SqliteCacheMode.Default`, `WAL`, `busy_timeout = 15000`, `synchronous = NORMAL`, `foreign_keys = ON`. `TieredAuthEngine` strips localhost bypass when `X-Forwarded-For` is set and signs 30-day HMAC-SHA256 cookies.
 - **ADR Notes:** Zero app-domain coupling (`Foundation` uses caller descriptors), `<= 400 SLOC` partial splits (`250/400/600` rule), consumer read-only fence on `Foundation\` and `SharedLibs\Foundation\`, and `-p:PublishFoundationSdk=true` kept `false` on normal builds/audits.

@@ -161,7 +161,7 @@ public sealed class JsonHivePlatformRegistry : IPlatformRegistry
             if (saveAfter) SaveHiveAtomically(hives);
             return result;
         }
-        finally { if (hasMutex) try { mutex.ReleaseMutex(); } catch { } }
+        finally { if (hasMutex) try { mutex.ReleaseMutex(); } catch { /* best-effort mutex release */ } }
     }
 
     private PidSafeLockfile AcquireLockWithBackoff(Stopwatch sw)
@@ -225,14 +225,14 @@ public sealed class JsonHivePlatformRegistry : IPlatformRegistry
         try
         {
             using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None)) { fs.Write(payload, 0, payload.Length); fs.Flush(true); }
-            if (File.Exists(HiveFilePath)) try { File.Copy(HiveFilePath, BackupFilePath, true); } catch { }
+            if (File.Exists(HiveFilePath)) try { File.Copy(HiveFilePath, BackupFilePath, true); } catch { /* best-effort backup */ }
             for (int attempt = 1; ; attempt++)
             {
                 try { File.Move(tempPath, HiveFilePath, true); break; }
                 catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < 4) { Thread.Sleep(15 * attempt); }
             }
         }
-        finally { if (File.Exists(tempPath)) try { File.Delete(tempPath); } catch { } }
+        finally { if (File.Exists(tempPath)) try { File.Delete(tempPath); } catch { /* best-effort temp cleanup */ } }
     }
 
     private static JsonElement ToElement(PlatformRegistryValue val) => val.Kind switch

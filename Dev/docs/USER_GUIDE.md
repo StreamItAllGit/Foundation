@@ -104,22 +104,21 @@ For Vanilla JS / FastAPI / Razor hosts, include `foundation-tokens.css`, `founda
 ```python
 from foundation_core import (
     CrashDumper,
-    GranularSettingsStore,
     JsonHivePlatformRegistry,
-    PidSafeLock,
-    SqliteWalHelper,
+    PidSentinelLock,
+    SqliteSchemaMigrationRunner,
+    ThreeFileSettingsStore,
     assert_sandbox_path_if_active,
+    open_wal_sqlite,
     parse_standard_cli_flags,
-    resolve_app_paths,
     resolve_known_folders,
     resolve_sandbox_environment,
 )
 
-cli = parse_standard_cli_flags("my_py_app")
-paths = resolve_app_paths("my_py_app")
+cli = parse_standard_cli_flags(app_name="my_py_app", app_version="0.4.2")
 sandbox = resolve_sandbox_environment()
 folders = resolve_known_folders(sandbox)
-reg = JsonHivePlatformRegistry(sandbox.registry_hive_path) if sandbox.is_sandbox_active else None
+reg = JsonHivePlatformRegistry.from_sandbox(sandbox) if sandbox.is_sandbox_active else None
 ```
 
 ---
