@@ -26,5 +26,15 @@
     "isTessaSynced": true
   },
   "notes": "Shipped Foundation v0.4.2 (4-drive SandboxEnvironmentSeam, KnownFolderPaths + GetHostFolderPath, IPlatformRegistry / JsonHivePlatformRegistry, Foundation.Installer 3-mode isolation & 0.4.1 shortcut colon + DPI badge fixes, foundation_core Python parity, sandbox_ctl.py, run_sandbox_e2e.py): 40/40 C# tests PASS (0 warnings), 8/8 Python tests PASS, 12/12 live Stage 2 dogfood E2E PASS (hostDiffCount=0), 54 SDK files published to SharedLibs\\Foundation\\v0.4.2 & Latest, @dean Gate 2 + Delta Gate 2 PASS, @inspecter PASS, @tessa Quartet/Notion synced. Next locked milestone: v0.5.0.",
-  "updatedAtUtc": "2026-11-16T22:28:00Z"
+  "discordPost": {
+    "isEnabled": true,
+    "serverName": null,
+    "guildId": null,
+    "channelName": null,
+    "channelId": null,
+    "deliveryMethod": "webhook",
+    "secretEnvKey": "DISCORD_WEBHOOK_FOUNDATION",
+    "autoPostOnRelease": true
+  },
+  "updatedAtUtc": "2026-11-16T22:38:00Z"
 }
