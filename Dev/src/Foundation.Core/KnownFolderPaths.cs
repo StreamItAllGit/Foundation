@@ -1,11 +1,12 @@
 // @module: Foundation.Core.KnownFolderPaths
 // @purpose: Redirects Environment.SpecialFolder lookups and host paths into active 4-drive sandbox paths while keeping production host paths untouched when inactive.
-// @depends-on: System, System.Collections.Generic, System.IO
+// @depends-on: System, System.Collections.Generic, System.IO, System.Runtime.InteropServices
 // @exports: KnownFolderPaths
 
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace Foundation.Core;
 
@@ -15,6 +16,27 @@ namespace Foundation.Core;
 /// </summary>
 public static class KnownFolderPaths
 {
+    private const uint KfFlagDefaultPath = 0x00000400;
+    private const uint KfFlagDontVerify = 0x00004000;
+
+    private static readonly Guid FolderProfileId = new("5E6C858F-0E22-4760-9AFE-EA3317B67173");
+    private static readonly Guid FolderLocalAppDataId = new("F1B32785-6FBA-4FCF-9D55-7B8E7F157091");
+    private static readonly Guid FolderRoamingAppDataId = new("3EB685DB-65F9-4CF6-A03A-E3EF65729F3D");
+    private static readonly Guid FolderDesktopId = new("B4BFCC3A-DB2C-424C-B029-7FE99A87C641");
+    private static readonly Guid FolderDocumentsId = new("FDD39AD0-238F-46AF-ADB4-6C85480369C7");
+    private static readonly Guid FolderProgramFilesId = new("905E63B6-C1BF-494E-B29C-65B732D3D21A");
+    private static readonly Guid FolderProgramFilesX86Id = new("7C5A40EF-A0FB-4BFC-874A-C0F2E0B9FA8E");
+    private static readonly Guid FolderCommonAppDataId = new("62AB5D82-FDC1-4DC3-A9DD-070D1D495D97");
+    private static readonly Guid FolderCommonProgramsId = new("0139D44E-6AFE-49F2-8690-3DAFCAE6FFB8");
+    private static readonly Guid FolderCommonStartMenuId = new("A4115719-D62E-491D-AA7C-E74B8BE3B067");
+    private static readonly Guid FolderCommonDesktopId = new("C4AA340D-F20F-4863-AFEF-F87EF2E6BA25");
+    private static readonly Guid FolderWindowsId = new("F38BF404-1D43-42F2-9305-67DE0B28FC23");
+    private static readonly Guid FolderSystemId = new("1AC14E77-02E7-4E5D-B744-2EB1AE5198B7");
+    private static readonly Guid FolderSystemX86Id = new("D65231B0-B2F1-4857-A4CE-A8E7C6EA7D27");
+
+    [DllImport("shell32.dll", ExactSpelling = true)]
+    private static extern int SHGetKnownFolderPath(in Guid rfid, uint dwFlags, IntPtr hToken, out IntPtr ppszPath);
+
     private static readonly Environment.SpecialFolder[] PrefixRemapOrder =
     [
         Environment.SpecialFolder.Startup,
@@ -58,6 +80,52 @@ public static class KnownFolderPaths
     public static string ResolveLocalProgramsDirectory(SandboxResolution? sandbox = null) =>
         Path.Combine(GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox), "Programs");
 
+    /// <summary>
+    /// Resolves the true host Windows SpecialFolder path unaffected by child-process sandbox env redirection
+    /// (USERPROFILE, LOCALAPPDATA, APPDATA), falling back to Environment.GetFolderPath on non-Windows hosts.
+    /// </summary>
+    public static string GetHostFolderPath(Environment.SpecialFolder folder)
+    {
+        if (!OperatingSystem.IsWindows())
+            return Environment.GetFolderPath(folder);
+
+        string? direct = TryGetWinKnownFolder(folder);
+        if (!string.IsNullOrWhiteSpace(direct))
+            return direct;
+
+        string raw = Environment.GetFolderPath(folder);
+        if (folder is Environment.SpecialFolder.Programs or Environment.SpecialFolder.StartMenu or Environment.SpecialFolder.Startup)
+        {
+            string? hostAppData = TryGetWinKnownFolder(Environment.SpecialFolder.ApplicationData);
+            string? envAppData = Environment.GetEnvironmentVariable("APPDATA");
+            if (!string.IsNullOrWhiteSpace(hostAppData))
+            {
+                string normHostApp = SandboxEnvironmentSeam.NormalizePath(hostAppData);
+                if (!string.IsNullOrWhiteSpace(envAppData))
+                {
+                    string normEnvApp = SandboxEnvironmentSeam.NormalizePath(envAppData);
+                    if (!string.Equals(normHostApp, normEnvApp, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!string.IsNullOrWhiteSpace(raw) &&
+                            TryRemapPrefix(SandboxEnvironmentSeam.NormalizePath(raw), normEnvApp, normHostApp, out string unmapped))
+                        {
+                            return unmapped;
+                        }
+                        string startMenu = Path.Combine(normHostApp, "Microsoft", "Windows", "Start Menu");
+                        return folder switch
+                        {
+                            Environment.SpecialFolder.StartMenu => startMenu,
+                            Environment.SpecialFolder.Programs => Path.Combine(startMenu, "Programs"),
+                            _ => Path.Combine(startMenu, "Programs", "Startup")
+                        };
+                    }
+                }
+            }
+        }
+
+        return raw;
+    }
+
     public static string MapHostPathToSandbox(string hostPath, SandboxResolution? sandbox = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
@@ -68,7 +136,7 @@ public static class KnownFolderPaths
 
         foreach (Environment.SpecialFolder sf in PrefixRemapOrder)
         {
-            string rawHost = Environment.GetFolderPath(sf);
+            string rawHost = GetHostFolderPath(sf);
             if (string.IsNullOrWhiteSpace(rawHost)) continue;
             string hostPrefix = SandboxEnvironmentSeam.NormalizePath(rawHost);
             string targetPrefix = ResolveSandboxFolder(sf, res);
@@ -92,6 +160,41 @@ public static class KnownFolderPaths
         SandboxEnvironmentSeam.ThrowContainmentViolation(
             $"Fail-Closed Sandbox Containment Violation: Host path '{normInput}' cannot be mapped safely inside sandbox '{res.SandboxRoot}'.");
         return normInput;
+    }
+
+    private static string? TryGetWinKnownFolder(Environment.SpecialFolder folder)
+    {
+        (Guid guid, uint flags)? entry = folder switch
+        {
+            Environment.SpecialFolder.UserProfile => (FolderProfileId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.LocalApplicationData => (FolderLocalAppDataId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.ApplicationData => (FolderRoamingAppDataId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.DesktopDirectory or Environment.SpecialFolder.Desktop => (FolderDesktopId, KfFlagDontVerify),
+            Environment.SpecialFolder.MyDocuments or Environment.SpecialFolder.Personal => (FolderDocumentsId, KfFlagDontVerify),
+            Environment.SpecialFolder.ProgramFiles => (FolderProgramFilesId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.ProgramFilesX86 => (FolderProgramFilesX86Id, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.CommonApplicationData => (FolderCommonAppDataId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.CommonPrograms => (FolderCommonProgramsId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.CommonStartMenu => (FolderCommonStartMenuId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.CommonDesktopDirectory => (FolderCommonDesktopId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.Windows => (FolderWindowsId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.System => (FolderSystemId, KfFlagDefaultPath | KfFlagDontVerify),
+            Environment.SpecialFolder.SystemX86 => (FolderSystemX86Id, KfFlagDefaultPath | KfFlagDontVerify),
+            _ => null
+        };
+        if (entry is null) return null;
+        (Guid guid, uint flags) = entry.Value;
+
+        IntPtr ptr = IntPtr.Zero;
+        try
+        {
+            int hr = SHGetKnownFolderPath(in guid, flags, IntPtr.Zero, out ptr);
+            return hr == 0 && ptr != IntPtr.Zero ? Marshal.PtrToStringUni(ptr) : null;
+        }
+        finally
+        {
+            if (ptr != IntPtr.Zero) Marshal.FreeCoTaskMem(ptr);
+        }
     }
 
     private static bool TryRemapPrefix(string normInput, string hostPrefix, string targetPrefix, out string mapped)

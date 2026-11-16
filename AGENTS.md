@@ -1,6 +1,6 @@
 # Project Context: Foundation (`<PROJECTS_ROOT>\Foundation\`)
 
-- **Role:** Shared SDK (`v0.4.1-hf.1`: `Core`, `Retro`, `Sidecars`, `Server`, `Launcher`, `UI`, `Installer`, `@foundation/ui`, `foundation_core`).
+- **Role:** Shared SDK (`v0.4.2`: `Core`, `Retro`, `Sidecars`, `Server`, `Launcher`, `UI`, `Installer`, `@foundation/ui`, `foundation_core`).
 - **Agent Fast-Path:** `README.md` (Routing Matrix) -> `Dev\docs\INTERFACES.md` (1-Stop API Dictionary) -> `Dev\docs\ARCHITECTURE.md` (File Registry).
 - **Workspace & Hub:** [`Dev\`](file:///<PROJECTS_ROOT>/Foundation/Dev/) | Read-Only Hub: `<PROJECTS_ROOT>\SharedLibs\Foundation\`
 

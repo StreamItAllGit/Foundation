@@ -7,6 +7,26 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-16
+### Added
+- **`Foundation.Core` 4-Drive Sandbox Seams & Atomic JSON Pseudo-Registry:**
+  - [`KnownFolderPaths.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/KnownFolderPaths.cs): Added `GetFolderPath`, `GetHostFolderPath` (Win32 `SHGetKnownFolderPath` + `APPDATA` unmapping for child-env isolation), `ResolveLocalProgramsDirectory`, and `MapHostPathToSandbox`.
+  - [`SandboxEnvironmentSeam.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SandboxEnvironmentSeam.cs) & [`AppEnvironment.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/AppEnvironment.cs): Added `FOUNDATION_SANDBOX_ROOT` and `SANDBOX_*_DRIVE` process-env resolution (`APP_ISOLATED_TEST=1` beats `FOUNDATION_SANDBOX_ROOT`), `ExitCode = 3` containment guards, and `AppEnvironment.Sandbox`.
+  - [`IPlatformRegistry.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/IPlatformRegistry.cs), [`WindowsPlatformRegistry.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/WindowsPlatformRegistry.cs), and [`JsonHivePlatformRegistry.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/JsonHivePlatformRegistry.cs): Added 1-file atomic `.tmp -> .bak` JSON pseudo-registry supporting `DWORD`, `QWORD`, `String`, `ExpandString`, `MultiString`, and `Binary`, Windows `Reg*` `1223` error semantics, PID-safe `.lock`, and `PlatformRegistryFactory`.
+  - [`SandboxDriveController.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SandboxDriveController.cs): Added explicit opt-in `.secrets\.env` / `Dev\.env` and `subst` resolver.
+- **Python `foundation_core` (`0.4.2`) Parity & Stage 2 Sandbox Tooling:**
+  - [`sandbox_seam.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/sandbox_seam.py) & [`pseudo_registry.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/pseudo_registry.py): Added pure-stdlib Python modules with 1:1 C# Stage 2 & hive parity.
+  - [`sandbox_ctl.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sandbox_ctl.py) & [`run_sandbox_e2e.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/run_sandbox_e2e.py): Added 4-drive sandbox orchestrator and 12-point `S2-01`..`S2-12` Stage 2 E2E runner.
+- **Automated & Live Stage 2 Dogfood Tests:**
+  - Added [`FoundationSandboxAndRegistryTests.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/tests/Foundation.Tests/FoundationSandboxAndRegistryTests.cs) and [`test_sandbox_and_registry.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tests/foundation_core/test_sandbox_and_registry.py); verified `40/40` C# tests (`0` warnings), `8/8` Python tests (`unittest` & `pytest`), and `12/12` live Stage 2 4-drive dogfood checks (`DogfoodSample-Setup.exe`, `hostDiffCount=0`, `ExitCode=0`).
+
+### Changed
+- **`Foundation.Installer` 3-Mode Isolation & Seam Wiring:** Wired 3-mode isolation (`ShouldSuppressHostMutations` = Stage 1, `ShouldSuppressLiveHostMutations` = Stage 1 || Stage 2), `KnownFolderPaths` shortcuts, `IPlatformRegistry` ARP uninstall metadata, `FileLockRetryHelper` (`<SandboxDDrive>\Programs` allowed under `IsSandboxActive`), and `FOUNDATION_SUPPRESS_MODALS=1` modal suppression.
+- **Dev Bible v1.6.0 Schema, SDK Publish & Strict 6-File Release Packaging:** Registered 14 sandbox/registry columns in Standard 18 (`18_DATA_DICTIONARY.md`); narrowed [`sync_foundation_sdk.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sync_foundation_sdk.py) (`54` SDK files published to `SharedLibs\Foundation\v0.4.2\` and `Latest\`); aligned [`build_release_universal.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/build_release_universal.py) `--allow-sdk-zip` strict 6-file validation (no loose `LICENSE` in `Releases\`); bumped `v0.4.2` across `.csproj`s, `@foundation/ui v0.4.2`, `foundation_core 0.4.2`, `ShellBrandingOptions`, `AGENTS.md`, Root Quartet, and Manual Shelf.
+
+### Fixed
+- **Shortcut Colon Sanitization & DPI-Safe Header Badge Clamping (`Foundation.Installer`):** Added `WindowsShortcutWriter.SanitizeShortcutFileName` (`:` -> ` -`) and DPI-safe `_lblTitle`/`_lblSub` clamping preserving `650x460`/`650x570` `ClientSize` (resolving archived [`0.4.1.2026-11-15.-.installer-shortcut-colon-and-header-badge-overlap.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/archive/0.4.1.2026-11-15.-.installer-shortcut-colon-and-header-badge-overlap.md)).
+
 ## [0.4.1-hf.1] - 2026-11-15
 ### Removed
 - **Retired Runtime Test Harnesses & Flags (`Foundation`, Tier A 5-Folder Normalization):**

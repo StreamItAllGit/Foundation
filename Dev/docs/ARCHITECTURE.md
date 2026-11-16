@@ -86,7 +86,7 @@ Every production source and tool file complies with **Standard 32 `250 / 400 / 6
 | `Foundation.Core.csproj` | `12` (`13`) | `net8.0`, `Microsoft.Data.Sqlite 8.0.11`, `ProtectedData 8.0.0`, in-box `Microsoft.Win32.Registry` |
 | `AppEnvironment.cs` | `212` (`254`) | `UiPresentationMode`, `AppEnvironment` (`Sandbox`, 4-arg ABI + 5-arg `sandboxOverride`), `AssertPathContained`, `NormalizeLongPath` |
 | `SandboxEnvironmentSeam.cs` | `227` (`271`) | `SandboxMountSpec`, `SandboxResolution`, `SandboxEnvironmentSeam` (`ContainmentExitCode = 3`, process-env resolve, `AssertSandboxPathIfActive`, `subst` backing resolution) |
-| `KnownFolderPaths.cs` | `123` (`145`) | `KnownFolderPaths` (`GetFolderPath`, `ResolveLocalProgramsDirectory`, `MapHostPathToSandbox`) |
+| `KnownFolderPaths.cs` | `213` (`248`) | `KnownFolderPaths` (`GetFolderPath`, `GetHostFolderPath`, `ResolveLocalProgramsDirectory`, `MapHostPathToSandbox`) |
 | `IPlatformRegistry.cs` | `157` (`181`) | `PlatformRegistryHive`, `PlatformRegistryValueKind`, `PlatformRegistryValue`, `IPlatformRegistry`, `NoOpPlatformRegistry` |
 | `WindowsPlatformRegistry.cs` | `169` (`202`) | `WindowsPlatformRegistry` (`[SupportedOSPlatform("windows")]` in-box registry wrapper) |
 | `JsonHivePlatformRegistry.cs` | `233` (`269`) | `JsonHivePlatformRegistry` (Standard 18 JSON hive, Mutex + `PidSafeLockfile`, `.tmp -> .bak`), `PlatformRegistryFactory` |

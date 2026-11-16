@@ -115,12 +115,12 @@ public static class FileLockRetryHelper
 
             string[] protectedRoots =
             {
-                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-                Environment.GetFolderPath(Environment.SpecialFolder.System),
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs")
+                KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.Windows),
+                KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.System),
+                KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.ProgramFiles),
+                KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                Path.Combine(KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs")
             };
 
             foreach (string root in protectedRoots)

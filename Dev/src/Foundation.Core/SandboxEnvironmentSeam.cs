@@ -222,16 +222,16 @@ public static class SandboxEnvironmentSeam
         bool insideTemp = tempRoot is not null && IsChildPath(normPath, tempRoot, false);
 
         foreach (var sf in SystemProtectedFolders)
-            if (TryNormalize(Environment.GetFolderPath(sf)) is { } r && (IsChildPath(r, normPath, true) || IsChildPath(normPath, r, true))) return true;
+            if (TryNormalize(KnownFolderPaths.GetHostFolderPath(sf)) is { } r && (IsChildPath(r, normPath, true) || IsChildPath(normPath, r, true))) return true;
 
-        if (TryNormalize(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)) is { } localApp)
+        if (TryNormalize(KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.LocalApplicationData)) is { } localApp)
         {
             string localPrograms = NormalizePath(Path.Combine(localApp, "Programs"));
             if (IsChildPath(localPrograms, normPath, true) || IsChildPath(normPath, localPrograms, true)) return true;
         }
 
         foreach (var uf in UserProtectedFolders)
-            if (TryNormalize(Environment.GetFolderPath(uf)) is { } uRoot && (IsChildPath(uRoot, normPath, true) || (!insideTemp && IsChildPath(normPath, uRoot, true)))) return true;
+            if (TryNormalize(KnownFolderPaths.GetHostFolderPath(uf)) is { } uRoot && (IsChildPath(uRoot, normPath, true) || (!insideTemp && IsChildPath(normPath, uRoot, true)))) return true;
 
         if (Path.GetPathRoot(normPath) is { Length: > 0 } driveRoot)
         {

@@ -544,6 +544,53 @@ public sealed class FoundationSandboxAndRegistryTests : IDisposable
         Assert.False(mounts[3].IsEnabled);
     }
 
+    [Fact]
+    public void RedirectedProfileEnvVars_StillResolveSandbox_And_MapHostStartMenuPrograms()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        (SandboxResolution res, string root, string cDrive, _, _, _) = CreateIsolatedFourDriveLayout("redirected-env");
+        string sandboxProfile = Path.Combine(cDrive, "Users", "Sandbox");
+        string sandboxAppData = Path.Combine(sandboxProfile, "AppData", "Roaming");
+        string sandboxLocalAppData = Path.Combine(sandboxProfile, "AppData", "Local");
+        Directory.CreateDirectory(sandboxAppData);
+        Directory.CreateDirectory(sandboxLocalAppData);
+
+        string? prevProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        string? prevAppData = Environment.GetEnvironmentVariable("APPDATA");
+        string? prevLocal = Environment.GetEnvironmentVariable("LOCALAPPDATA");
+        try
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", sandboxProfile);
+            Environment.SetEnvironmentVariable("APPDATA", sandboxAppData);
+            Environment.SetEnvironmentVariable("LOCALAPPDATA", sandboxLocalAppData);
+
+            SandboxResolution resolved = SandboxEnvironmentSeam.Resolve(new Dictionary<string, string?>
+            {
+                [SandboxEnvironmentSeam.EnvSandboxRoot] = root,
+                [SandboxEnvironmentSeam.EnvSandboxCDrive] = cDrive,
+                [SandboxEnvironmentSeam.EnvSandboxProfileDir] = sandboxProfile
+            });
+
+            Assert.True(resolved.IsSandboxActive);
+            string hostPrograms = KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.Programs);
+            Assert.False(hostPrograms.StartsWith(sandboxProfile, StringComparison.OrdinalIgnoreCase));
+
+            string hostShortcut = Path.Combine(hostPrograms, "ProbeApp", "ProbeApp.lnk");
+            string mapped = KnownFolderPaths.MapHostPathToSandbox(hostShortcut, res);
+            Assert.StartsWith(sandboxAppData, mapped, StringComparison.OrdinalIgnoreCase);
+            Assert.False(FileLockRetryHelper.IsCanonicalProductionOrSystemPath(
+                Path.Combine(sandboxLocalAppData, "Programs", "ProbeApp"), resolved));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", prevProfile);
+            Environment.SetEnvironmentVariable("APPDATA", prevAppData);
+            Environment.SetEnvironmentVariable("LOCALAPPDATA", prevLocal);
+        }
+    }
+
     private (SandboxResolution Resolution, string Root, string CDrive, string DDrive, string RemDrive, string DiscDrive) CreateIsolatedFourDriveLayout(string label)
     {
         string root = Path.Combine(_tempDir, label);

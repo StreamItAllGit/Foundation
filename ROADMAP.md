@@ -1,6 +1,6 @@
-# Foundation (`v0.4.1-hf.1`) — Strategic Roadmap
+# Foundation (`v0.4.2`) — Strategic Roadmap
 
-> **Active Version:** `v0.4.1-hf.1` (Unified SemVer across all 7 C# assemblies, `@foundation/ui v0.4.1-hf.1`, and `foundation_core v0.4.1-hf.1`)
+> **Active Version:** `v0.4.2` (Unified SemVer across all 7 C# assemblies, `@foundation/ui v0.4.2`, and `foundation_core v0.4.2`)
 > **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`
 
 ---
@@ -44,31 +44,31 @@
 ### ✅ `v0.4.1-hf.1` — Ecosystem Unit-Test-Only Runtime Hygiene Purge & Tier A 4-Folder Normalization
 - **Runtime Harness & Flag Purge:** Removed retired isolated runtime test directories, flags, and harnesses; standardized [`AppEnvironment`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/AppEnvironment.cs) (`UiPresentationMode.TrayOrBackground`), [`InstallerRuntimeContext`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/InstallerRuntimeContext.cs), and [`InstallerEngine.CliAndRegistry.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/InstallerEngine.CliAndRegistry.cs); split [`SevenZipAndZipInspector`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Sidecars/SevenZipAndZipInspector.cs) & [`InstallerEngineCore`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/InstallerEngineCore.cs) cleanly under `<= 400 LOC`; added stale consumer test-harness cleanup in [`sync_foundation_sdk.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sync_foundation_sdk.py); verified `33/33` `[Fact]` unit tests with `0` warnings.
 
+### ✅ `v0.4.2` — Shared 4-Drive Sandbox Seams, Atomic Pseudo-Registry & Stage 2 E2E Runner *(2026-11-16)*
+- **Blueprint:** [`Dev\docs\plans\0.4.2.2026-11-15.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/plans/0.4.2.2026-11-15.md).
+- **`Foundation.Core` (`24` files):** Added [`KnownFolderPaths`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/KnownFolderPaths.cs) (`GetFolderPath`, `GetHostFolderPath` via Win32 `SHGetKnownFolderPath` + `APPDATA` unmapping, `ResolveLocalProgramsDirectory`, `MapHostPathToSandbox`), [`SandboxEnvironmentSeam`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SandboxEnvironmentSeam.cs) (`FOUNDATION_SANDBOX_ROOT`, `SANDBOX_*_DRIVE`, `APP_ISOLATED_TEST=1` beats `FOUNDATION_SANDBOX_ROOT`, `ExitCode = 3` containment guards), [`IPlatformRegistry`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/IPlatformRegistry.cs) / [`WindowsPlatformRegistry`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/WindowsPlatformRegistry.cs) / [`JsonHivePlatformRegistry`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/JsonHivePlatformRegistry.cs) (1-file atomic `.tmp -> .bak` JSON pseudo-registry implementing `DWORD`, `QWORD`, `String`, `ExpandString`, `MultiString`, `Binary` + Windows `Reg*` 1223 semantics + PID-safe `.lock`), [`SandboxDriveController`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/SandboxDriveController.cs) (opt-in `.secrets\.env` / `Dev\.env` + `subst` resolver), and `AppEnvironment.Sandbox` + `PlatformRegistryFactory`.
+- **`Foundation.Installer` (`17` files):** Wired 3-mode isolation (`ShouldSuppressHostMutations` = Stage 1, `ShouldSuppressLiveHostMutations` = Stage 1 || Stage 2), `KnownFolderPaths` shortcuts, `IPlatformRegistry` ARP uninstall metadata, `FileLockRetryHelper` (`<SandboxDDrive>\Programs` allowed under `IsSandboxActive`), `WindowsShortcutWriter.SanitizeShortcutFileName` (`:` -> ` -`), DPI-safe `_lblTitle`/`_lblSub` clamping preserving `650x460`/`650x570` `ClientSize`, and `FOUNDATION_SUPPRESS_MODALS=1` modal suppression (resolving the archived `v0.4.1` shortcut `:` & header badge report).
+- **Python `foundation_core` (`0.4.2`), Dev Bible v1.6.0 & Packaging:** Added pure-stdlib [`sandbox_seam.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/sandbox_seam.py) and [`pseudo_registry.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/pseudo_registry.py) (`1:1` C# Stage 2 & hive parity), [`sandbox_ctl.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sandbox_ctl.py), [`run_sandbox_e2e.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/run_sandbox_e2e.py) (12-point `S2-01`..`S2-12`), narrowed [`sync_foundation_sdk.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sync_foundation_sdk.py) (`54` SDK files published to `SharedLibs\Foundation\v0.4.2\` & `Latest\`), aligned `build_release_universal.py --allow-sdk-zip` strict 6-file validation (no loose `LICENSE` in `Releases\`), and registered 14 sandbox/registry columns in Standard 18 (`18_DATA_DICTIONARY.md`).
+- **Verification & Compliance:** `dotnet test Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` (`40/40` passed, `0` warnings), Python `unittest` & `pytest` (`8/8` passed), `audit_scanner.py` (`P0: 0, P1: 0, P2: 45, P3: 0`), live Stage 2 4-drive E2E dogfood (`run_sandbox_e2e.py` with `DogfoodSample-Setup.exe`: `12/12` passed, `S2-01`..`S2-12`, `hostDiffCount=0`, `ExitCode=0`), `@dean` Gate 2 + Delta Gate 2 `PASS`, and `@inspecter` Phase 3 + 2-tier log sweep `PASS`.
+
 ---
 
-## Upcoming Horizons (`v0.4.2` $\rightarrow$ `v1.0.0` Going Gold)
+## Upcoming Horizons (`v0.5.0` $\rightarrow$ `v1.0.0` Going Gold)
 
 ```
-v0.4.1-hf.1 (Live) ─▶ v0.4.2 (Locked: 4-Drive Sandbox & Stage 2 E2E)
-                         │
-                         ▼
-                      v0.5.0 (Markup Installer + LastInstallBaseDir + Foundation.Automation)
-                         │
-                         ▼
-                      v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
-                         │
-                         ▼
-                      v0.7.0 (JobQueue/Scheduler + Doctor/Backup + NativeAOT Core Subset)
-                         │
-                         ▼
-                      v1.0.0 (Going Gold: Local NuGet/PyPI Feeds, Full pytest Parity & ABI Freeze)
+v0.4.2 (Live) ─▶ v0.5.0 (Locked: Markup Installer + LastInstallBaseDir + Foundation.Automation)
+                   │
+                   ▼
+                v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
+                   │
+                   ▼
+                v0.7.0 (JobQueue/Scheduler + Doctor/Backup + NativeAOT Core Subset)
+                   │
+                   ▼
+                v1.0.0 (Going Gold: Local NuGet/PyPI Feeds, Full pytest Parity & ABI Freeze)
 ```
 
-### 🔒 `v0.4.2` — Shared 4-Drive Sandbox Seams, Atomic Pseudo-Registry & Stage 2 E2E Runner *(Locked Plan)*
-- **Blueprint:** [`Dev\docs\plans\0.4.2.2026-11-15.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/plans/0.4.2.2026-11-15.md) (`T1a`, `T1`–`T10`, `5`-slice Phase 2 Swarm).
-- **Deliverables:** `KnownFolderPaths`, `SandboxEnvironmentSeam`, `IPlatformRegistry` + `JsonHivePlatformRegistry`, `Foundation.Installer` seam wiring + `ShouldSuppressLiveHostMutations` + `0.4.1` shortcut `:` & header badge fix, `foundation_core` Python parity, `SandboxDriveController` + `sandbox_ctl.py` (`SANDBOX_C_DRIVE` / `D` / `REMOVABLE` / `DISC`), `run_sandbox_e2e.py` (Standard 02 §4 12-point runner), `sync_foundation_sdk.py#L225` fix, and 6-file `Releases\`.
-
-### 🎯 `v0.5.0` — Declarative Markup Installer & `Foundation.Automation` Loopback
+### 🎯 `v0.5.0` — Declarative Markup Installer & `Foundation.Automation` Loopback *(Locked)*
 - **Cornerstone Theme:** Eliminate per-app `InstallerWizardForm.cs` duplication (`ShadowLibrary`, `Housekeeping`, `Redroom`, `uStation`, `StreamEngine`) and enable focus-free visual Stage 2 E2E across apps and games.
 - **Deliverables:**
   - `InstallerManifestStore.cs` (`installer.manifest.json`, zero new deps via `System.Text.Json`) + `HKCU\Software\StreamItAll\LastInstallBaseDir` fresh-install suggestion (post-success write only; guarded against `APP_ISOLATED_TEST=1`, temp paths, and reparse points).
