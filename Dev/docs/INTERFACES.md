@@ -1,7 +1,7 @@
-# Foundation (`v0.4.1-hf.1`) — 1-Stop Interfaces & Agent API Reference
+# Foundation (`v0.4.2`) — 1-Stop Interfaces & Agent API Reference
 
 > **Purpose:** Single lookup reference for **every exported C# class/method, React/TS component (`@foundation/ui`), Vanilla JS/CSS asset, Python helper (`foundation_core`), `Dev\tools\*.py` CLI, and file/JSON schema** in `<PROJECTS_ROOT>\Foundation\`.
-> **Snapshot Baseline:** Unified SDK `0.4.1-hf.1` (`.NET 8`, `@foundation/ui v0.4.1-hf.1`, `foundation_core v0.4.1-hf.1`).
+> **Snapshot Baseline:** Unified SDK `0.4.2` (`.NET 8`, `@foundation/ui v0.4.2`, `foundation_core v0.4.2`).
 
 ---
 
@@ -9,124 +9,83 @@
 
 | If you need... | Use this symbol / file | Exact import / CLI / path |
 |---|---|---|
-| CLI path overrides (`--data-dir`, `--config`, `--log-dir`, `--port`), path containment, UI mode | `AppEnvironment`, `UiPresentationMode` | `using Foundation.Core;` |
-| High-res FPS frame pacer (`timeBeginPeriod(1)`, unlocked `0`, P99) | `HighResFramePacer` | `using Foundation.Core;` |
-| Lock-free SPSC PCM audio ring buffer + underrun ramp-to-zero | `AudioRingBuffer` | `using Foundation.Core;` |
-| 16-bit RIFF/WAV capture, pure-.NET RGBA PNG, 5×7 HUD canvas | `WavCaptureWriter`, `RgbaPngWriter`, `PixelOverlayCanvas`, `RgbaColor` | `using Foundation.Core;` |
-| CLI flags / options / positionals / bounded logs | `CliArgumentHelper`, `BoundedTailStream`, `CappedSharedLogSink` | `using Foundation.Core;` |
-| Atomic JSON settings + self-heal + 20 snapshots | `GranularSettingsManager` | `using Foundation.Core;` |
-| Windows DPAPI secret storage (`data\secrets.dpapi`) | `DpapiSecretStore` | `using Foundation.Core;` |
-| SQLite WAL (`busy_timeout=15000`, `VACUUM INTO`) | `SqliteWalPool` | `using Foundation.Core;` |
-| PID + `processStartTimeUtc` lockfiles | `PidSafeLockfile`, `HkLockSentinel` | `using Foundation.Core;` / `Foundation.Sidecars;` |
-| `<= 15s` telemetry heartbeats + `\r\x1b[K` ANSI | `HeartbeatLogger` | `using Foundation.Core;` |
-| Unhandled JSON crash bundles | `CrashBundleService` | `using Foundation.Core;` |
-| Windows Job Object + Stop Current vs Stop All | `JobObjectGuard`, `DualJobCancellationCoordinator` | `using Foundation.Core;` |
-| Safe downloads (`Range` resume, 1.2x+512 MB disk preflight) | `SafeNetworkTransfer` | `using Foundation.Core;` |
-| 4-tier tool discovery (`settings -> app\tools\ -> PATH`) | `ToolResolver` | `using Foundation.Core;` |
-| In-assembly slices + external DLL plugin loader | `HybridModuleLoader`, `IFoundationModule` | `using Foundation.Core;` / `Foundation.Core.Contracts;` |
-| 41-platform catalog, filename normalizer, DAT parser, headerless, soft-patch | `ConsoleSystemCatalog`, `DatTitleNormalizer`, `NoIntroRedumpDatParser`, `HeaderlessRomStripper`, `MagicBytePlatformDetector`, `SoftPatchEngine` | `using Foundation.Retro;` |
-| BYO `.iso`/`.bin`+`.cue`/`.chd`/`.7z`/`.zip` extractor + SHA-256 | `MediaContainerExtractor`, `MediaContainerFormat`, `MediaExtractionOptions`, `MediaExtractionResult` | `using Foundation.Retro;` |
-| Static recomp host/module/timing/render/AOT & `.decomp` contracts | `IRecompHost`, `IRecompGameModule`, `IRecompModuleManifest`, `IRecompRenderBackend`, `RecompExecutionTierMode`, `RecompRenderBackendIds`, `IDecompPackageManifest`, `RecompRuntimeTelemetrySnapshot`, `AotCacheLayoutHelper` | `using Foundation.Retro;` |
+| CLI path overrides, path containment, UI presentation mode | `AppEnvironment`, `UiPresentationMode` | `using Foundation.Core;` |
+| 4-drive external sandbox resolution, `subst` discovery, `ExitCode = 3` containment | `SandboxEnvironmentSeam`, `SandboxResolution`, `SandboxMountSpec`, `KnownFolderPaths`, `SandboxDriveController` | `using Foundation.Core;` |
+| Host or atomic JSON pseudo-registry (`HKCU`/`HKLM`/`HKCR`, 6 `REG_*` kinds) | `IPlatformRegistry`, `WindowsPlatformRegistry`, `JsonHivePlatformRegistry`, `PlatformRegistryFactory` | `using Foundation.Core;` |
+| Frame pacer, SPSC audio, WAV/PNG/RGBA overlay, CLI, settings, DPAPI, SQLite WAL, PID locks, heartbeats, crash bundles, jobs, safe HTTP, tools, modules | `HighResFramePacer`, `AudioRingBuffer`, `WavCaptureWriter`, `RgbaPngWriter`, `PixelOverlayCanvas`, `CliArgumentHelper`, `GranularSettingsManager`, `DpapiSecretStore`, `SqliteWalPool`, `PidSafeLockfile`, `HeartbeatLogger`, `CrashBundleService`, `JobObjectGuard`, `SafeNetworkTransfer`, `ToolResolver`, `HybridModuleLoader` | `using Foundation.Core;` |
+| 41-platform catalog, DAT parser, headerless stripper, soft-patch, BYO media, AOT/recomp contracts | `ConsoleSystemCatalog`, `DatTitleNormalizer`, `NoIntroRedumpDatParser`, `HeaderlessRomStripper`, `SoftPatchEngine`, `MediaContainerExtractor`, `IRecompHost`, `AotCacheLayoutHelper` | `using Foundation.Retro;` |
 | Single-pass hash, ZIP/7z `-slt`, `.hash` v1, `.hklock` | `SinglePassStreamHasher`, `SevenZipAndZipInspector`, `HashSidecarService`, `HkLockSentinel` | `using Foundation.Sidecars;` |
 | Kestrel tiered auth + `/suite/manifest` endpoints | `TieredAuthEngine`, `FoundationTieredAuthMiddleware`, `SisterAppStandardEndpoints` | `using Foundation.Server;` |
 | Clean-root Win32 `AttachConsole(-1)` launcher shim | `RootLauncherHost` | `using Foundation.Launcher;` |
-| WinForms WebView2 host, STA dialogs, tray helpers | `DisposableWebViewHostForm`, `StaNativeDialogBridgeBase`, `TrayIconBadgeHelper` | `using Foundation.UI.Desktop;` |
-| Full dark WinForms + CLI Setup/Uninstall Wizard (`v0.4.1-hf.1`) | **`StandardInstallerHost`** (`Run`, `RunWithResult`), `InstallerAppDescriptor` (`AllowLegacyMigration`), `InstallerRuntimeContext`, `InstallerInstallOptions`, `InstallerHostRunResult`, `InstallerWizardForm.CaptureWizardPreviewBitmap` | `using Foundation.Installer;` |
-| Low-level app-dir & suite registry helper (`v0.4.1-hf.1`) | `InstallerEngineCore` + `InstallerThemeOptions` (`InstallerProfileKind`, `SecondaryPathPickerOptions`, `AllowLegacyMigration`, `AllowAutoStart`) | `using Foundation.Installer;` |
-| React components (`@foundation/ui v0.4.1-hf.1`) | 7 barrel exports from `@foundation/ui`; **3 direct submodule imports** | `@foundation/ui` vs `@foundation/ui/components/<Name>` |
-| Vanilla HTML/JS terminal drawer & Python SDK | `FoundationTerminalDrawer` (`WebAssets\`), `foundation_core` (`Dev\src\foundation_core\`) | `Dev\src\Foundation.UI\WebAssets\` |
+| WinForms WebView2 host, STA dialogs, tray helpers, branding | `DisposableWebViewHostForm`, `StaNativeDialogBridgeBase`, `TrayIconBadgeHelper`, `ShellBrandingOptions` | `using Foundation.UI;` / `.Desktop` |
+| Full dark WinForms + CLI Setup/Uninstall Wizard (`v0.4.2`) | `StandardInstallerHost`, `InstallerAppDescriptor`, `InstallerRuntimeContext`, `WindowsShortcutWriter`, `FileLockRetryHelper`, `InstallerWizardForm` | `using Foundation.Installer;` |
+| Low-level app-dir & suite registry helper (`v0.4.2`) | `InstallerEngineCore`, `InstallerThemeOptions` | `using Foundation.Installer;` |
+| React components (`@foundation/ui v0.4.2`) & Vanilla terminal | 7 barrel exports + 3 direct submodule imports; Vanilla `FoundationTerminalDrawer` | `@foundation/ui` vs `@foundation/ui/components/<Name>` |
+| Python SDK (`foundation_core`) & Sandbox E2E tools | `foundation_core` (`sandbox_seam`, `pseudo_registry`), `sandbox_ctl.py`, `run_sandbox_e2e.py`, `sync_foundation_sdk.py` | `Dev\src\foundation_core\` / `Dev\tools\` |
 
 ### Top Import & Caller Pitfalls
 1. **React Barrel vs. Direct Submodule Imports (`Dev\src\Foundation.UI\Web\index.ts`):** `CoexistenceWarningBanner`, `HybridPathPicker`, and `SidebarNavRail` are NOT in the `@foundation/ui` barrel—import via `@foundation/ui/components/<Name>`.
 2. **Two Installer Tiers:** Do not mix `InstallerAppDescriptor` + `StandardInstallerHost` (Tier 1) with `InstallerThemeOptions` + `InstallerEngineCore` (Tier 2).
-3. **TFM Split:** `Foundation.Core`, `Foundation.Retro`, and `Foundation.Sidecars` target pure `net8.0` (zero WinForms/GDI+); `Foundation.Installer`, `Foundation.UI`, `Foundation.Server`, and `Foundation.Launcher` target `net8.0-windows`.
+3. **TFM Split:** `Foundation.Core`, `Foundation.Retro`, `Foundation.Sidecars`, and `Foundation.Server` target pure `net8.0` (zero WinForms/GDI+); `Foundation.Installer`, `Foundation.UI`, and `Foundation.Launcher` target `net8.0-windows`.
+4. **3-Mode Sandbox Safety (`v0.4.2`):** Runtime libraries read process env ONLY (`APP_ISOLATED_TEST=1` beats `FOUNDATION_SANDBOX_ROOT`). Gate containment guards on `ShouldSuppressLiveHostMutations` (`IsStage1Isolated || IsSandboxActive`), NOT `ShouldSuppressHostMutations` (`IsStage1Isolated` only).
 
 ---
 
-## 1. C# Shared Libraries
+## 1. C# Shared Libraries (`v0.4.2`)
 
-### 1.1 `Foundation.Core` (`Dev\src\Foundation.Core\`, `net8.0`, `v0.4.1-hf.1`)
-Depends on: `Microsoft.Data.Sqlite 8.0.11`, `System.Security.Cryptography.ProtectedData 8.0.0`.
+### 1.1 `Foundation.Core` (`Dev\src\Foundation.Core\`, `net8.0`, `v0.4.2`)
 
-#### `AppEnvironment` (`AppEnvironment.cs`)
-- `UiPresentationMode { DesktopWindow, LocalBrowser, SuiteTab, TrayOrBackground }`
-- `AppEnvironment(string appId, IReadOnlyList<string>? args = null, string? baseDirectoryOverride = null, string? defaultConfigFileName = "settings.json")`
-- Properties: `AppId`, `BaseDirectory`, `DataDirectory`, `ConfigFilePath`, `LogDirectory`, `PortOverride`, `DryRun`, `TrayOnly`, `ManagedByMother`, `SuiteTab`, `PresentationMode`.
-- Static helpers: `AssertPathContained(string candidatePath, string allowedRoot)`, `NormalizeLongPath(string path)`.
+#### 4-Drive Sandbox Seam & Known-Folder Redirection (`v0.4.2`)
+- **`SandboxMountSpec(string DriveRole, string DriveMount, string? DirectoryPath, bool IsEnabled)`**
+- **`SandboxResolution(bool IsSandboxActive, string? SandboxRoot, string? SystemDriveRoot, string? StorageDriveRoot, string? RemovableDriveRoot, string? DiscDriveRoot, string? SandboxProfileDir, string? RegistryHivePath, string? RegistryBaselinePath, string? RegistryLockPath)`** (+ `SandboxResolution.Inactive`)
+- **`SandboxEnvironmentSeam` (`SandboxEnvironmentSeam.cs`):** `ContainmentExitCode = 3`, `ResolveCurrent()`, `Resolve(IReadOnlyDictionary<string, string?>? envOverride)`, `ValidateResolution(SandboxResolution)`, `AssertSandboxPathIfActive(string candidatePath, SandboxResolution? sandbox = null)`, `IsPathWithinSandbox(string? candidatePath, SandboxResolution? sandbox = null)`, `IsContainmentViolation(Exception?)`, `ThrowContainmentViolation(string message, Exception? inner = null)`, `TryResolveSubstBackingDirectory(string? driveOrPath)`, `GetProcessEnvironment()`.
+- **`KnownFolderPaths` (`KnownFolderPaths.cs`):** `GetFolderPath(SpecialFolder, SandboxResolution? = null)`, `GetFolderPath(SpecialFolder, SpecialFolderOption, SandboxResolution? = null)`, `ResolveLocalProgramsDirectory(SandboxResolution? = null)`, `MapHostPathToSandbox(string, SandboxResolution? = null)`. Maps `UserProfile`, `LocalApplicationData`, `ApplicationData`, `Desktop`/`DesktopDirectory`, `Personal`/`MyDocuments`, `Programs`, `StartMenu`, `Startup`, `ProgramFiles`, `ProgramFilesX86`, `CommonApplicationData`, `Windows`.
+- **`SandboxDriveController` (`SandboxDriveController.cs`):** Explicit opt-in tooling controller (never called by `AppEnvironment`/`SandboxEnvironmentSeam`): `GetDefaultUserSecretsEnvPath()`, `LoadEnvStore(...)`, `ParseEnvFile(string)`, `GetSubstMappings()`, `ParseSubstOutput(string?)`, `InferSandboxRoot(...)`, `ResolveDriveMounts(...)`, `ValidateNoHostCollisions(...)`.
 
-#### Timing, Audio, PNG & Overlay Primitives (`v0.3.1`)
-- **`HighResFramePacer` (`HighResFramePacer.cs`):** `IDisposable` (`TargetFps` where `<= 0` = unlocked), Windows `winmm.dll` `timeBeginPeriod(1)`/`timeEndPeriod(1)` guarded by `OperatingSystem.IsWindows()`, `WaitForNextFrame()`, `Reset()`, `TotalFrames`, `CurrentFps`, `AverageFrameMs`, `P99FrameMs`, `IsHighResolutionTimerActive`.
-- **`AudioRingBuffer` (`AudioRingBuffer.cs`):** Lock-free SPSC (`capacitySamples, channels = 2`), `Write(ReadOnlySpan<float|short>)`, `Read(Span<float|short>)`, `Clear()`, `CapacitySamples`, `BufferedSamples`, `AvailableWriteSamples`, `FillRatio`, `UnderrunCount`; smooth 32-frame ramp-to-zero attenuation on underrun.
-- **`WavCaptureWriter` (`WavCaptureWriter.cs`):** `IDisposable` (`outputPath, sampleRate = 44100, channels = 2`), `WriteInterleavedSamples(ReadOnlySpan<short|float>)`, `Flush()`, patches RIFF/data byte lengths on `Dispose()`.
-- **`RgbaPngWriter` (`RgbaPngWriter.cs`):** Pure-.NET lossless RGBA PNG via `ZLibStream` + IEEE CRC32: `Encode(int width, int height, ReadOnlySpan<byte> rgba)`, `WritePng(string filePath, int width, int height, ReadOnlySpan<byte> rgba)`.
-- **`PixelOverlayCanvas` (`PixelOverlayCanvas.cs`):** `RgbaColor(R, G, B, A = 255)`, `Clear`, `BlendSrcOver` (Porter-Duff `SrcOver`), `FillRect`, `StrokeRect`, `MeasureText`, `DrawText` (built-in 5×7 printable ASCII font), `ToPngBytes()`, `SavePng(string filePath)`.
+#### Shared Atomic JSON Pseudo-Registry (`v0.4.2`)
+- **`PlatformRegistryHive` (`CurrentUser`, `LocalMachine`, `ClassesRoot`)**, **`PlatformRegistryValueKind` (`String`, `ExpandString`, `MultiString`, `DWord`, `QWord`, `Binary`)**, **`PlatformRegistryValue(Kind, Data)`** (`AsString()`, `AsInt32()`, `AsInt64()`, `AsMultiString()`, `AsBinary()`).
+- **`IPlatformRegistry`:** `SubKeyExists`, `CreateSubKey`, `DeleteSubKeyTree`, `GetValue`, `SetValue`, `SetValues`, `DeleteValue`, `GetSubKeyNames`, `GetValueNames`, `GetValues`.
+- **Implementations:** `NoOpPlatformRegistry.Instance`, `WindowsPlatformRegistry` (`[SupportedOSPlatform("windows")]` in-box registry), `JsonHivePlatformRegistry(hiveFilePath, sandboxRoot?, lockFilePath?, lockTimeout?)` (`EnsureInitialized()`, Mutex `Local\FoundationSandboxReg_<sha8>` + `PidSafeLockfile` + `.tmp -> Flush(true) -> .bak -> File.Move`), and `PlatformRegistryFactory.CreateDefault(SandboxResolution? sandbox = null, bool suppressMutations = false)`.
 
-#### Core Infrastructure (`v0.1.0`–`v0.4.1-hf.1`)
+#### Runtime Environment & Core Primitives (`v0.1.0`–`v0.4.2`)
 | Class (`File`) | Key Public Signatures | Contract |
 |---|---|---|
-| `CliArgumentHelper`, `BoundedTailStream`, `CappedSharedLogSink` (`CliAndProcessPrimitives.cs`) | `HasFlag`, `GetOption`, `GetPositional`, `FormatBytes`; `BoundedTailStream(65536)` | CLI parsing + 64 KB ring / 4 MB log cap |
-| `GranularSettingsManager` (`GranularSettingsManager.cs`) | `LoadOrSelfHeal<T>(fileName, defaultFactory)`, `SaveAtomically<T>(fileNameOrPath, value)` | `.tmp -> .bak -> File.Replace`, 20 history snapshots |
-| `DpapiSecretStore` (`DpapiSecretStore.cs`) | `SetSecret(key, val)`, `GetSecret(key)`, `RemoveSecret(key)` | `ProtectedData` `CurrentUser` encrypted store |
-| `SqliteWalPool` (`SqliteWalPool.cs`) | `OpenConnection()`, `OpenConnectionAsync()`, `ApplyStandardPragmas(conn, 15000)`, `VacuumIntoAsync(dest)` | `SqliteCacheMode.Default`, `WAL`, `busy_timeout=15000`, `cache_size=-65536` |
-| `PidSafeLockfile` (`PidSafeLockfile.cs`) | `Acquire(path, appId, op, lease?)`, `TryAcquire(..., out handle, out holder)` | Compares `pid` + `processStartTimeUtc` |
-| `HeartbeatLogger` (`HeartbeatLogger.cs`) | `ReportProgress(done, total, item?, forceEmit = false)` | `<= 15s` heartbeats + `\r\x1b[K` TTY flush |
-| `CrashBundleService` (`CrashBundleService.cs`) | `RegisterGlobalHandlers(logDir, appId, version, ...)`, `TryWriteCrashBundle(...)` | Writes `logs\crashes\crash_<appId>_<ts>.json` |
-| `DualJobCancellationCoordinator`, `JobObjectGuard` (`JobObjectGuard.cs`) | `BeginJobScope`, `StopCurrentJob`, `StopAllJobs`, `EndJobScope` | Dual-scope cancel + `KILL_ON_JOB_CLOSE` |
-| `SafeNetworkTransfer` (`SafeNetworkTransfer.cs`) | `AssertSufficientDiskSpace`, `DownloadFileAsync(uri, dest, options?, handler?, ct?)` | `Range` resume via `.partial_<jobId>`, 1.2x + 512 MB reserve |
-| `ToolResolver` (`ToolResolver.cs`) | `ResolveTool(toolId, exeNames, explicitOverride?, baseDir?, extraDirs?)` | Override -> `app\tools\` -> `PATH`/extra -> `MissingFallback` |
-| `HybridModuleLoader`, `IFoundationModule` (`HybridModuleLoader.cs`, `IFoundationModule.cs`) | `RegisterModule`, `DiscoverFromAssemblies`, `DiscoverExternalDllModules` | `FolderSlice` & `*.Module.*.dll` plugin loader |
+| `AppEnvironment` (`AppEnvironment.cs`) | `AppEnvironment(appId, args?, baseDir?, defaultConfig?)` + 5-arg `sandboxOverride`; `Sandbox`, `AssertPathContained`, `NormalizeLongPath` | CLI `--data-dir`/`--config`/`--log-dir`/`--port`/4 UI modes + sandbox seam |
+| `HighResFramePacer`, `AudioRingBuffer`, `WavCaptureWriter`, `RgbaPngWriter`, `PixelOverlayCanvas` | `WaitForNextFrame()`, `Write`/`Read`, `WriteInterleavedSamples`, `WritePng`, `DrawText`/`SavePng` | Timing (`timeBeginPeriod(1)`), lock-free SPSC audio, WAV/PNG/HUD |
+| `CliArgumentHelper`, `BoundedTailStream`, `CappedSharedLogSink` | `HasFlag`, `GetOption`, `GetPositional`, `FormatBytes` | CLI parsing + 64 KB ring / 4 MB log cap |
+| `GranularSettingsManager`, `DpapiSecretStore` | `LoadOrSelfHeal<T>`, `SaveAtomically<T>`, `SetSecret`/`GetSecret` | `.tmp -> .bak`, 20 snapshots; Windows DPAPI `CurrentUser` |
+| `SqliteWalPool`, `PidSafeLockfile` | `OpenConnection()`, `VacuumIntoAsync()`, `Acquire`/`TryAcquire` | `WAL`, `busy_timeout=15000`; `pid` + `processStartTimeUtc` locks |
+| `HeartbeatLogger`, `CrashBundleService`, `JobObjectGuard`, `SafeNetworkTransfer`, `ToolResolver`, `HybridModuleLoader` | `ReportProgress`, `RegisterGlobalHandlers`, `BeginJobScope`/`StopAllJobs`, `DownloadFileAsync`, `ResolveTool`, `DiscoverExternalDllModules` | `<= 15s` `\r\x1b[K` heartbeats, crash JSON, `KILL_ON_JOB_CLOSE`, `Range` resume, 4-tier tools, plugins |
+
+### 1.2 `Foundation.Retro`, `Foundation.Sidecars`, `Foundation.Server` & `Foundation.Launcher`
+- **`Foundation.Retro` (`net8.0`):** `ConsoleSystemCatalog`, `DatTitleNormalizer`, `NoIntroRedumpDatParser`, `HeaderlessRomStripper`, `MagicBytePlatformDetector`, `SoftPatchEngine`, `MediaContainerExtractor`, `RecompContracts`, `RecompTierAndBackendContracts`.
+- **`Foundation.Sidecars` (`net8.0`):** `SinglePassStreamHasher`, `SevenZipAndZipInspector`, `HashSidecarService`, `HkLockSentinel`.
+- **`Foundation.Server` (`net8.0`):** `TieredAuthEngine`, `FoundationTieredAuthMiddleware`, `SisterAppStandardEndpoints`.
+- **`Foundation.Launcher` (`net8.0-windows`):** `RootLauncherHost.ResolveTargetExecutable`, `RootLauncherHost.Run` (`AttachConsole(-1)` + self-spawn guard).
+
+### 1.3 `Foundation.Installer` (`net8.0-windows`, `v0.4.2`) & `Foundation.UI` (`v0.4.2`)
+- **3-Mode `InstallerRuntimeContext`:** `Sandbox`, `IsSandboxActive` (`Sandbox.IsSandboxActive && !IsIsolatedTestProcess`), `IsStage1Isolated`, `ShouldSuppressHostMutations => IsStage1Isolated`, `ShouldSuppressLiveHostMutations => IsStage1Isolated || IsSandboxActive`, `Registry` (`IPlatformRegistry`), ABI-intact 5-arg ctor + 7-arg override ctor.
+- **Tier 1 (`StandardInstallerHost` + `InstallerAppDescriptor`) & Tier 2 (`InstallerEngineCore`):**
+  - `InstallerAppDescriptor.ResolveCanonicalDefaultInstallDir(SandboxResolution? sandbox = null)` routes via `KnownFolderPaths`; `StandardInstallerHost` maps `SandboxEnvironmentSeam.IsContainmentViolation(ex)` to `ExitCode = 3`.
+  - `FileLockRetryHelper.IsSafeIsolatedInstallDirectory` & `IsCanonicalProductionOrSystemPath` add trailing `SandboxResolution? sandbox = null`, permitting verified `<SandboxDDrive>\Programs\...` while blocking raw host OS/user/host-`Programs` targets (`ExitCode = 3`).
+  - `WindowsShortcutWriter.SanitizeShortcutFileName(string? displayName)` normalizes `:` -> ` -` and replaces `Path.GetInvalidFileNameChars()` with `_`; `RegisterCurrentUserUninstallEntry`/`RemoveCurrentUserUninstallEntry` accept trailing `IPlatformRegistry?`.
+  - `InstallerWizardForm`: `_lblTitle` & `_lblSub` clamp `AutoEllipsis = true` cleanly before `_lblModeBadge.Left - 12` with DPI-safe `Height >= 28` (`650x460`/`650x570` default `ClientSize`); `ShouldSuppressModalDialogs` honors `FOUNDATION_SUPPRESS_MODALS=1`.
+- **`Foundation.UI`:** `ShellBrandingOptions` (`SdkVersion = "0.4.2"`), `DisposableWebViewHostForm`, `StaNativeDialogBridgeBase`, `TrayIconBadgeHelper`, `@foundation/ui` (`Web\index.ts` + 3 submodule components + `WebAssets\*`).
 
 ---
 
-### 1.2 `Foundation.Retro` (`Dev\src\Foundation.Retro\`, `net8.0`, `v0.4.1-hf.1`)
-Depends on: `Foundation.Core`. Zero external NuGet packages.
+## 2. Python `foundation_core` (`v0.4.2`), `Dev\tools\*.py` & Standard 18 Contracts
 
-| Class / Contract (`File`) | Key Public Signatures | Purpose |
-|---|---|---|
-| `ConsoleSystemCatalog` (`ConsoleSystemCatalog.cs`) | `BuildDefaultPlatforms()`, `BuildDefaultHeaderSkipRules()`, `BuildDefaultProvenanceTagRules()`, `ResolvePlatformId`, `ResolveTier2PlatformId` | 41 platforms, BIOS specs (`IsVerifiedReferenceHash`), copier header rules, provenance tags |
-| `DatTitleNormalizer` (`DatTitleNormalizer.cs`) | `ParseFilename(path, rules?)`, `HealMalformedTagSyntax(...)` | Extracts clean title, region, languages, revision, serial, disc |
-| `NoIntroRedumpDatParser` (`NoIntroRedumpDatParser.cs`) | `ParseDatFile(datPath, ...)` → `(Catalog, Entries)` | Logiqx/Redump/RA XML, ClrMamePro, `.sfv`/`.md5`/`.sha1` |
-| `HeaderlessRomStripper`, `MagicBytePlatformDetector` (`HeaderlessRomStripper.cs`) | `DetectHeaderSkipLength(...)`, `InspectBinaryMagic(filePath)` | Skips `ines-16`/`smc-512`/etc., sniffs 20 binary magics |
-| `SoftPatchEngine` (`SoftPatchEngine.cs`) | `ComputeCrc32UInt32`, `ApplyIpsPatchInMemory`, `ApplyBpsPatchInMemory`, UPS | Pure managed IPS / BPS1 / UPS1 patchers |
-| `MediaContainerExtractor` (`MediaContainerExtractor.cs`) | `DetectFormat(path)`, `ExtractOrVerifyAsync(srcPath, destDir, MediaExtractionOptions?, ct)` → `MediaExtractionResult` | Extracts/verifies `.iso`, `.bin`+`.cue`, `.chd` (`chdman`), `.7z` (`7z`/`7za`), `.zip` (`AssertPathContained` + SHA-256) |
-| `RecompContracts` (`RecompContracts.cs`) | `DiscChecksumEntry`, `IRecompModuleManifest`, `RecompTimingMode`, `RecompPatchDescriptor`, `RecompHostOptions`, `RecompFrameStats`, `IRecompRenderBackend`, `IRecompHost`, `IRecompGameModule` | Pure-.NET static recomp host/module/timing/render contracts |
-| `RecompTierAndBackendContracts` (`RecompTierAndBackendContracts.cs`) | `RecompExecutionTierMode` (`AotPrimary`, `JitBringup`, `ThreadedIr`), `RecompRenderBackendIds` (`software`, `opengl`, `IsSupported`), `IDecompPackageManifest`, `RecompRuntimeTelemetrySnapshot`, `AotCacheLayoutHelper` | AOT-primary execution tier modes, render backend IDs, `.decomp` manifest & `<dataDir>\cache\` AOT path layout |
-
----
-
-### 1.3 `Foundation.Sidecars`, `Foundation.Server` & `Foundation.Launcher`
-- **`Foundation.Sidecars` (`net8.0`):** `SinglePassStreamHasher` (`HashFileSinglePassAsync`, `HashStreamSinglePassAsync`), `SevenZipAndZipInspector` (`ListArchiveEntriesFastAsync`, `ExtractSingleArchiveEntryToFileAsync`, `CreateDeterministicZipAsync`), `HashSidecarService` (`.hash` v1 + `COMPOSITE_SHA1`), `HkLockSentinel` (`.hklock` + `.coexistence.json` v2).
-- **`Foundation.Server` (`net8.0-windows`):** `TieredAuthEngine` (loopback, Tailscale CGNAT/ULA, PBKDF2-SHA256 100k, 30-day HMAC-SHA256 cookies), `FoundationTieredAuthMiddleware`, `SisterAppStandardEndpoints` (`/api/v1/suite/manifest`, `/api/suite/manifest`, `/suite.manifest.json`).
-- **`Foundation.Launcher` (`net8.0-windows`):** `RootLauncherHost.ResolveTargetExecutable(rootDir, relPath, selfPath?)`, `RootLauncherHost.Run(relPath, displayName, args)` (`AttachConsole(-1)` + fail-closed self-spawn guard).
-
----
-
-### 1.4 `Foundation.Installer` (`Dev\src\Foundation.Installer\`, `net8.0-windows`, `v0.4.1-hf.1`)
-Depends on: `Foundation.Core`, `UseWindowsForms = true`.
-- **Tier 1 (`StandardInstallerHost` + `InstallerAppDescriptor`, Recommended):**
-  - `InstallerAppDescriptor` (`ProductName`, `DisplayName`, `Publisher`, `Version`, `MainExecutableRelativePath = ""`, `Subtitle = null`, `EmbeddedPayloadResourceName = null`, `BrandAccentHex = null`, `AllowAutoStart = true`, `StudioName = "StreamItAll"`, `SuiteName = null`, `UmbrellaSubpath = null`, `DefaultProfile = "lightweight"`, `AllowLegacyMigration = false`).
-  - `InstallerRuntimeContext` resolves `--data-dir` / `DATA_DIR` / `APP_HOME`, `--config`, `--log-dir`, and `ShouldSuppressHostMutations` (`IsIsolatedTestProcess` via `APP_ISOLATED_TEST=1` or non-empty `DataDirectory`).
-  - `StandardInstallerHost.Run(InstallerAppDescriptor descriptor, string[] args, Assembly? payloadAssembly = null)` & `StandardInstallerHost.RunWithResult(...)` (`InstallerHostRunResult`).
-  - `InstallerEngine.InstallAsync` retains 6-arg compatibility overload + adds `InstallAsync(InstallerInstallOptions options, CancellationToken ct = default, IProgress<string>? progress = null)` & 10-arg convenience overload persisting `InstallProfile`, `ReEngineInstallDir`, `SuiteInstallDir`, `UmbrellaSubpath`, and `MigrateLegacy` into `InstallManifest`.
-  - CLI Flags: `--install-dir <dir>`, `--target-dir <dir>`, `--payload <path>`, `--data-dir <dir>`, `--config <path>`, `--log-dir <dir>`, `--profile <id>`, `--reengine-dir <dir>`, `--suite-dir <dir>`, `--migrate-legacy`, `--uninstall`, `--purge-data`, `--verify`, `--no-shortcuts`, `--autostart`, `--launch`, `--no-launch` / `--no-restart`, `--silent` / `--quiet`, `--dry-run`, `--version` / `-v`, `--help` / `-h` / `/?` / `help`.
-  - **Studio/Suite Default Root:** Resolves `%LOCALAPPDATA%\Programs\<Studio>\<Suite?>\<App>\` (HKCU / `*HOME` discovery first; opt-in `--migrate-legacy` for legacy flat `<PROGRAMS_ROOT>\<App>`).
-  - **`AllowAutoStart = false`:** Hides & disables `_chkAutoStart` in `InstallerWizardForm`, vertically rebalances `_chkShortcuts` & `_chkLaunchAfter`, and clamps `--autostart` / `ConfigOverride.AutoStart` with a logged warning.
-  - **`FileLockRetryHelper`:** Bounded 10-attempt retry (`150ms -> 250ms -> 500ms`) around `File.Move`, `File.Copy`, `File.Delete`, and `ZipArchiveEntry.ExtractToFile` (`MoveWithOverwrite`, `CopyWithOverwrite`, `DeleteIfExists`, `ExecuteWithRetry`, `IsSafeIsolatedInstallDirectory`, `IsCanonicalProductionOrSystemPath`).
-- **Tier 2 (`InstallerEngineCore` + `InstallerThemeOptions`):** `InstallerThemeOptions` adds `StudioName`, `SuiteName`, `UmbrellaSubpath`, `AvailableProfiles`, `DefaultProfileId`, `SecondaryPathPicker`, `AllowLegacyMigration`, and `AllowAutoStart = true`; `InstallerWizardForm` preserves 14-arg & 8-arg ctors plus overloads accepting decoupled `bool showLegacyMigration`.
-
----
-
-### 1.5 `Foundation.UI` Desktop & Web (`@foundation/ui v0.4.1-hf.1`)
-- **Desktop (`net8.0-windows`, WebView2):** `ShellBrandingOptions` (`SdkVersion = "0.4.1-hf.1"`), `DisposableWebViewHostForm` (optional `AppEnvironment` ctor, DWM dark frame, composite `CapturePreviewBitmap`), `StaNativeDialogBridgeBase`, `TrayIconBadgeHelper`.
-- **React `@foundation/ui` (`Dev\src\Foundation.UI\Web\`):** Barrel (`index.ts`) exports `GlobalTerminalDrawer`, `TerminalToolbarAndFilters`, `StyledTooltip`, `ModalDialog`, `ConfirmActionModal`, `ResponsiveTable`, `UniversalDataTable`, `SchemaSettingsRenderer`, `terminalDrawerCore`. Direct submodule imports required for `CoexistenceWarningBanner`, `HybridPathPicker`, and `SidebarNavRail`.
-- **Vanilla Assets (`Dev\src\Foundation.UI\WebAssets\`):** `foundation-tokens.css`, `foundation-shell.ts`, `foundation-terminal.js` (`mountFoundationTerminalDrawer`, `window.FoundationTerminalDrawer`), `foundation-terminal.css`.
-
----
-
-## 2. Python `foundation_core` (`v0.4.1-hf.1`), `Dev\tools\*.py` & JSON Contracts
-- **Python `foundation_core` (`Dev\src\foundation_core\`):** `SDK_VERSION = "0.4.1-hf.1"`; `cli.py` (`StandardCliOptions`, `parse_standard_cli_flags`, `resolve_app_paths`, `assert_path_contained`), `settings.py` (`GranularSettingsStore`), `logging.py` (`HeartbeatTracker`, `CappedLogFile`), `crash_dumper.py` (`CrashDumper`), `locks.py` (`PidSafeLock`), `db.py` (`SqliteWalHelper`).
+- **Python `foundation_core` (`Dev\src\foundation_core\`, `SDK_VERSION = "0.4.2"`):**
+  - `sandbox_seam.py`: `CONTAINMENT_EXIT_CODE = 3`, `SandboxContainmentError`, `is_containment_violation`, `SandboxMountSpec`, `SandboxResolution`, `get_subst_mappings`, `resolve_sandbox_environment(env_override=None)` (process env only; `APP_ISOLATED_TEST=1` overrides), `resolve_known_folders`, `get_known_folder`, `is_path_within_sandbox`, `assert_sandbox_path_if_active`, `map_host_path_to_sandbox`.
+  - `pseudo_registry.py`: `REGISTRY_HIVE_SCHEMA_URI`, `REGISTRY_HIVE_SCHEMA_VERSION = 1`, `PlatformRegistryHive`, `PlatformRegistryValueKind`, `JsonHivePlatformRegistry` (Standard 18 JSON + PID-safe OS file lock + `.tmp -> fsync -> .bak -> os.replace`).
+  - Existing modules: `cli.py`, `settings.py`, `logging.py`, `crash_dumper.py`, `locks.py`, `db.py`.
 - **Tools (`Dev\tools\`):**
-  - `sync_foundation_sdk.py`: `--version` (`0.4.1-hf.1`), `--ui-version` (`0.4.1-hf.1`), `--configuration` (`Release`), `--publish` (also stages `Releases\Latest\Foundation-v<Ver>.zip` unless `FOUNDATION_SKIP_RELEASE_ZIP` is set), `--sync-consumer <Root>` (also purges stale retired test-harness artifacts from consumer `Dev\lib\`), `--source-version` (`Latest`), `--web-dir <Dir>`.
-  - `build_release_universal.py`: `stage_sdk_release_zip`, `generate_sha256sums`, `validate_six_file_release_bundle(..., allow_sdk_zip)` + CLI `--regen-sums`, `--allow-sdk-zip`.
-  - `notion_task_helper.py`: Standard 16 Notion Task Backbone helpers (`resolve_notion_ids` via `FOUNDATION_NOTION_TASK_BACKBONE_ID` / `FOUNDATION_NOTION_PROJECTS_HUB_ID` or `<dataDir>\notion.config.json`).
-- **On-Disk Contracts:** `sdk-manifest.json` (`version`, `uiVersion`, `publishedAtUtc`, `fileCount`, `files[]`); Tier 1 `install-manifest.json` (`product_name`, `version`, `installed_relative_files[]`, `created_shortcuts[]`, `install_profile`, `reengine_install_dir`, `suite_install_dir`, `umbrella_subpath`, `migrate_legacy`); Tier 2 `install-manifest.json` (`FoundationInstallManifest`); `--config` (`install_dir`, `create_shortcuts`, `autostart`, `install_profile`, `reengine_install_dir`, `suite_install_dir`, `migrate_legacy`); `PidSafeLockEnvelope`; `HkLockEnvelope`; `.hash` v1; `CrashBundlePayload`; `suite.manifest.json`.
+  - `sandbox_ctl.py`: 4-drive orchestrator (`init`, `mount`, `unmount-removable`, `remount-removable`, `mount-disc`, `unmount-disc`, `status`, `snapshot`, `diff-host`, `reset`), resolving `CLI -> env -> Dev\.env -> %USERPROFILE%\.gemini\.secrets\.env` + dynamic `subst`, exit `3` on host collisions.
+  - `run_sandbox_e2e.py`: Standard 02 §4 12-point (`S2-01`..`S2-12`) Stage 2 E2E runner with scrubbed child env (`FOUNDATION_SUPPRESS_MODALS=1`), hooks, removable toggle, 2-tier log sweep, and `hostDiffCount == 0`.
+  - `sync_foundation_sdk.py`: `--version 0.4.2`, `--ui-version 0.4.2`, `--publish` (strict 6-file `Releases\Latest\` without loose `LICENSE`; `app\LICENSE` in `Builds\` & `.zip`), `--sync-consumer` (narrowed legacy cleanup globs preserving `sandbox_seam.py`/`sandbox_ctl.py`/`run_sandbox_e2e.py`).
+  - `build_release_universal.py`: `validate_six_file_release_bundle(..., allow_sdk_zip=...)` enforcing strictly 6 files (no loose `LICENSE`).
+- **Standard 18 / 40 Sandbox JSON Schemas:**
+  - `registry.hive.json` (`<SandboxRoot>\registry\registry.hive.json`): `$schema` (`"https://schemas.local/registry-hive.v1.json"`), `schemaVersion: 1`, `sandboxRoot`, `updatedAtUtc`, `registryHives: { HKCU, HKLM, HKCR }` with entries `{ registryValueKind, registryValueData }` (`REG_BINARY` lowercase hex).
+  - `sandbox.manifest.json` (`<SandboxRoot>\sandbox.manifest.json`): `$schema`, `schemaVersion: 2`, `appId: "foundation-sandbox"`, `version`, `updatedAtUtc` (Standard 40 header omitting `manifestType`), `sandboxRoot`, `sandboxProfileDir`, `registryHivePath`, `sandboxMounts[]` (`{ driveRole, driveMount, directoryPath, isEnabled }`).
+  - Stage 2 E2E Receipt (`<SandboxRoot>\runs\<appId>-v<Ver>-<ts>.json`): `$schema`, `schemaVersion: 1`, `id`, `appId`, `version`, `status`, `isPassed`, `isStage2SandboxPassed`, `hostDiffCount`, `sandboxRoot`, `sandboxProfileDir`, `registryHivePath`, `sandboxMounts`, `filePath`, `directoryPath`, `startedAtUtc`, `completedAtUtc`, `verifiedAtUtc`, `durationMs`, `exitCode`, `errorCode`, `errorMessage`, `errorRemedy`, `notes`, `checklistResults[]` (`{ id, title, isPassed, durationMs, notes }`).
