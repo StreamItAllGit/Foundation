@@ -15,6 +15,8 @@ namespace Foundation.Installer;
 public sealed partial class InstallerEngine
 {
     public const string InstallManifestFileName = "install-manifest.json";
+    public const string SharedStreamItAllRegistrySubKey = @"Software\StreamItAll";
+    public const string LastInstallBaseDirValueName = "LastInstallBaseDir";
     private const long MaxArchiveExpandedBytes = 2L * 1024 * 1024 * 1024;
 
     private static readonly HashSet<string> ProtectedRuntimeNames = new(StringComparer.OrdinalIgnoreCase)
@@ -37,6 +39,7 @@ public sealed partial class InstallerEngine
 
     public InstallerAppDescriptor Descriptor { get; }
     public InstallerRuntimeContext Context => _ctx;
+    internal Assembly PayloadAssembly => _payloadAssembly;
     public string InstallerVersion => Descriptor.Version;
     public string UninstallerExeName => Descriptor.UninstallerExeName;
 
@@ -106,6 +109,15 @@ public sealed partial class InstallerEngine
                         return candidate;
                     }
                 }
+
+                if (TryResolveSuggestedInstallDirFromHistory(
+                    _ctx.Registry,
+                    Descriptor.GetEffectiveUmbrellaSubpath(),
+                    _ctx.EffectiveSandbox,
+                    out string suggestedDir))
+                {
+                    return suggestedDir;
+                }
             }
             catch (Exception ex)
             {
@@ -114,6 +126,171 @@ public sealed partial class InstallerEngine
         }
 
         return Path.GetFullPath(Descriptor.ResolveCanonicalDefaultInstallDir(_ctx.EffectiveSandbox));
+    }
+
+    public static bool TryResolveSuggestedInstallDirFromHistory(
+        IPlatformRegistry registry,
+        string umbrellaSubpath,
+        SandboxResolution sandbox,
+        out string suggestedInstallDir)
+    {
+        suggestedInstallDir = string.Empty;
+        ArgumentNullException.ThrowIfNull(registry);
+        if (string.IsNullOrWhiteSpace(umbrellaSubpath)) return false;
+
+        string? rawBase = registry.GetValue(
+            PlatformRegistryHive.CurrentUser,
+            SharedStreamItAllRegistrySubKey,
+            LastInstallBaseDirValueName)?.AsString();
+
+        if (!TryValidateLastInstallBaseDir(rawBase, sandbox, out string validBase))
+            return false;
+
+        string cleanUmbrella = umbrellaSubpath.Trim().Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        suggestedInstallDir = Path.GetFullPath(Path.Combine(validBase, cleanUmbrella));
+        return true;
+    }
+
+    public static bool TrySaveLastInstallBaseDir(
+        IPlatformRegistry registry,
+        string installDir,
+        string umbrellaSubpath,
+        SandboxResolution sandbox,
+        bool suppressHostMutations)
+    {
+        if (suppressHostMutations || registry is NoOpPlatformRegistry || string.IsNullOrWhiteSpace(installDir))
+            return false;
+
+        string baseDir = ExtractInstallBaseDirectory(installDir, umbrellaSubpath);
+        if (!TryValidateLastInstallBaseDir(baseDir, sandbox, out string validBase))
+            return false;
+
+        try
+        {
+            registry.SetValue(
+                PlatformRegistryHive.CurrentUser,
+                SharedStreamItAllRegistrySubKey,
+                LastInstallBaseDirValueName,
+                validBase,
+                PlatformRegistryValueKind.String);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _ = ex; // Best-effort LastInstallBaseDir persistence must not block completed setup.
+            return false;
+        }
+    }
+
+    internal static string ExtractInstallBaseDirectory(string installDir, string umbrellaSubpath)
+    {
+        string full = Path.GetFullPath(installDir.Trim()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string[] segments = (umbrellaSubpath ?? string.Empty)
+            .Trim()
+            .Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+
+        string current = full;
+        for (int i = segments.Length - 1; i >= 0; i--)
+        {
+            if (!string.Equals(Path.GetFileName(current), segments[i], StringComparison.OrdinalIgnoreCase))
+                break;
+
+            string? parent = Path.GetDirectoryName(current);
+            if (string.IsNullOrEmpty(parent))
+                break;
+
+            current = TrimNonRootDirectorySeparator(parent);
+        }
+
+        if (string.Equals(current, full, StringComparison.OrdinalIgnoreCase))
+        {
+            string? fallbackParent = Path.GetDirectoryName(full);
+            return string.IsNullOrEmpty(fallbackParent) ? string.Empty : TrimNonRootDirectorySeparator(fallbackParent);
+        }
+
+        return current;
+    }
+
+    private static string TrimNonRootDirectorySeparator(string path)
+    {
+        string? root = Path.GetPathRoot(path);
+        return string.Equals(path, root, StringComparison.OrdinalIgnoreCase)
+            ? path
+            : path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    public static bool TryValidateLastInstallBaseDir(string? rawBase, SandboxResolution sandbox, out string validBase)
+    {
+        validBase = string.Empty;
+        if (string.IsNullOrWhiteSpace(rawBase)) return false;
+
+        string trimmed = rawBase.Trim();
+        if (!Path.IsPathFullyQualified(trimmed)) return false;
+
+        string full;
+        try { full = Path.GetFullPath(trimmed).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+        catch (Exception ex) { _ = ex; return false; }
+
+        string? root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (string.IsNullOrEmpty(root) || string.Equals(full, root, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (sandbox.IsSandboxActive)
+        {
+            if (!SandboxEnvironmentSeam.IsPathWithinSandbox(full, sandbox)) return false;
+            string sandboxTemp = Path.Combine(
+                KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox),
+                "Temp");
+            if (IsSameOrChildPath(full, sandboxTemp)) return false;
+        }
+        else if (IsSameOrChildPath(full, Path.GetTempPath()))
+        {
+            return false;
+        }
+
+        if (HasReparsePointInExistingHierarchy(full, sandbox))
+            return false;
+
+        validBase = full;
+        return true;
+    }
+
+    private static bool HasReparsePointInExistingHierarchy(string fullPath, SandboxResolution sandbox)
+    {
+        string? root = Path.GetPathRoot(fullPath)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string? stopBoundary = sandbox.IsSandboxActive && !string.IsNullOrWhiteSpace(sandbox.SandboxRoot)
+            ? Path.GetFullPath(sandbox.SandboxRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            : root;
+
+        for (string? cur = fullPath; !string.IsNullOrEmpty(cur); cur = Path.GetDirectoryName(cur))
+        {
+            string norm = cur.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(norm, root, StringComparison.OrdinalIgnoreCase))
+                break;
+
+            if (Directory.Exists(norm))
+            {
+                try
+                {
+                    if ((File.GetAttributes(norm) & FileAttributes.ReparsePoint) != 0)
+                        return true;
+                }
+                catch (Exception ex) { _ = ex; return true; }
+            }
+
+            if (stopBoundary is not null && string.Equals(norm, stopBoundary, StringComparison.OrdinalIgnoreCase))
+                break;
+        }
+        return false;
+    }
+
+    private static bool IsSameOrChildPath(string candidate, string parent)
+    {
+        if (string.IsNullOrWhiteSpace(parent)) return false;
+        string normParent = Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.Equals(candidate, normParent, StringComparison.OrdinalIgnoreCase) ||
+               candidate.StartsWith(normParent + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
     public string ValidateAndNormalizeInstallDirectory(string? explicitInstallDir)

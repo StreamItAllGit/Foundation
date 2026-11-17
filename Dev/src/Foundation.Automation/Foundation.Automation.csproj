@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Foundation.Automation</AssemblyName>
+    <RootNamespace>Foundation.Automation</RootNamespace>
+    <Title>Foundation Opt-In Loopback UI Automation, Virtual Input &amp; Snapshot Module</Title>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Foundation.Core\Foundation.Core.csproj" />
+    <ProjectReference Include="..\Foundation.UI\Foundation.UI.csproj" />
+  </ItemGroup>
+</Project>

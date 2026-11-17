@@ -1,6 +1,6 @@
-# Foundation (`v0.4.2`) — Strategic Roadmap
+# Foundation (`v0.5.0`) — Strategic Roadmap
 
-> **Active Version:** `v0.4.2` (Unified SemVer across all 7 C# assemblies, `@foundation/ui v0.4.2`, and `foundation_core v0.4.2`)
+> **Active Version:** `v0.5.0` (Unified SemVer across all 8 C# assemblies, `@foundation/ui v0.5.0`, and `foundation_core v0.5.0`)
 > **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`
 
 ---
@@ -51,15 +51,19 @@
 - **Python `foundation_core` (`0.4.2`), Dev Bible v1.6.0 & Packaging:** Added pure-stdlib [`sandbox_seam.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/sandbox_seam.py) and [`pseudo_registry.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/foundation_core/pseudo_registry.py) (`1:1` C# Stage 2 & hive parity), [`sandbox_ctl.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sandbox_ctl.py), [`run_sandbox_e2e.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/run_sandbox_e2e.py) (12-point `S2-01`..`S2-12`), narrowed [`sync_foundation_sdk.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sync_foundation_sdk.py) (`54` SDK files published to `SharedLibs\Foundation\v0.4.2\` & `Latest\`), aligned `build_release_universal.py --allow-sdk-zip` strict 6-file validation (no loose `LICENSE` in `Releases\`), and registered 14 sandbox/registry columns in Standard 18 (`18_DATA_DICTIONARY.md`).
 - **Verification & Compliance:** `dotnet test Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` (`40/40` passed, `0` warnings), Python `unittest` & `pytest` (`8/8` passed), `audit_scanner.py` (`P0: 0, P1: 0, P2: 45, P3: 0`), live Stage 2 4-drive E2E dogfood (`run_sandbox_e2e.py` with `DogfoodSample-Setup.exe`: `12/12` passed, `S2-01`..`S2-12`, `hostDiffCount=0`, `ExitCode=0`), `@dean` Gate 2 + Delta Gate 2 `PASS`, and `@inspecter` Phase 3 + 2-tier log sweep `PASS`.
 
+### ✅ `v0.5.0` — Declarative Markup Installer, `Foundation.Automation` Loopback & Pre-Public Readiness *(2026-11-16)*
+- **Cornerstone Theme:** Eliminated per-app `InstallerWizardForm.cs` duplication via declarative `installer.manifest.json` (`schemaVersion: 2`), added shared `HKCU\Software\StreamItAll\LastInstallBaseDir` precedence, added non-focus-stealing `Foundation.Automation` loopback + PNG snapshot capture, and staged pre-public OSS hygiene (`SECURITY.md`, public `README.md` Quickstart, human-review gate report).
+- **Deliverables:**
+  - `InstallerManifestStore.cs` (`"single-line"`/`"multi-line"`, `"lightweight"`/`"full"`/`"custom"`, 2-line tooltips, theme/button/asset overrides, `secondaryPickers`, `allowAutoStart`) + `LastInstallBaseDir` registry precedence (`IPlatformRegistry` / `APP_ISOLATED_TEST=1` / reparse-point safe).
+  - `Foundation.Automation` (`net8.0-windows`): `AutomationLoopbackServer` (`127.0.0.1`, Host/Origin `403`, constant-time Bearer `401`, UI-thread dispatch), `AutomationCliHelper`, `Win32VirtualInputDriver` (`WM_*` pointer/keyboard, zero `SendInput`), and `WindowSnapshotService` (`IRenderSurfaceSnapshotProvider` + `RgbaPngWriter` + `CapturePreviewBitmap`).
+- **Verification & Compliance:** `dotnet test Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` (`45/45` passed, `0` warnings), Python `unittest` (`8/8` OK), `audit_scanner.py` (`P0: 0, P1: 0, P2: 45, P3: 0`), `57` SDK files published + strict 6-file `Releases\v0.5.0\` / `Latest\` bundle validated (`build_release_universal.py --allow-sdk-zip`), `@dean` Gate 2 `PASS`, `@inspecter` Phase 3 `PASS`.
+
 ---
 
-## Upcoming Horizons (`v0.5.0` $\rightarrow$ `v1.0.0` Going Gold)
+## Upcoming Horizons (`v0.6.0` $\rightarrow$ `v1.0.0` Going Gold)
 
 ```
-v0.4.2 (Live) ─▶ v0.5.0 (Locked: Markup Installer + LastInstallBaseDir + Foundation.Automation)
-                   │
-                   ▼
-                v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
+v0.5.0 (Live) ─▶ v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
                    │
                    ▼
                 v0.7.0 (JobQueue/Scheduler + Doctor/Backup + NativeAOT Core Subset)
@@ -67,13 +71,6 @@ v0.4.2 (Live) ─▶ v0.5.0 (Locked: Markup Installer + LastInstallBaseDir + Fou
                    ▼
                 v1.0.0 (Going Gold: Local NuGet/PyPI Feeds, Full pytest Parity & ABI Freeze)
 ```
-
-### 🎯 `v0.5.0` — Declarative Markup Installer & `Foundation.Automation` Loopback *(Locked)*
-- **Cornerstone Theme:** Eliminate per-app `InstallerWizardForm.cs` duplication (`ShadowLibrary`, `Housekeeping`, `Redroom`, `uStation`, `StreamEngine`) and enable focus-free visual Stage 2 E2E across apps and games.
-- **Deliverables:**
-  - `InstallerManifestStore.cs` (`installer.manifest.json`, zero new deps via `System.Text.Json`) + `HKCU\Software\StreamItAll\LastInstallBaseDir` fresh-install suggestion (post-success write only; guarded against `APP_ISOLATED_TEST=1`, temp paths, and reparse points).
-  - `Foundation.Automation` (`<= 250 LOC` slices): opt-in `127.0.0.1` HTTP/JSON loopback (`--automation-port` + ephemeral bearer token + `Host`/`Origin` validation) for virtual pointer, virtual keyboard, control bounds, and offscreen HWND/WebView PNG snapshots.
-- **Gate 0 & Verification:** Register `installer-manifest` in Std 40 and `lastInstallBaseDir` / `targetInstallDir` / `automationPort` / `snapshotFormat` in Std 18 via `/define`. Verify `401`/`403` token/Origin rejection and `0` host focus steal in `Foundation.Tests`.
 
 ### 🎯 `v0.6.0` — Shared Tray Daemon Host, Python Server/SSE Parity & Self-Update Check
 - **Cornerstone Theme:** Unify daemon tray lifecycles (`Mother`, `ShadowLibrary`, `Housekeeping`, `uStation`, `Greenroom`, `Redroom`), Python web/SSE auth, and launcher update checks.

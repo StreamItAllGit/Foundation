@@ -28,6 +28,18 @@ public sealed record InstallerAppDescriptor(
     string DefaultProfile = "lightweight",
     bool AllowLegacyMigration = false)
 {
+    public string LayoutMode { get; init; } = "single-line";
+    public IReadOnlyList<string>? SupportedProfiles { get; init; }
+    public string? LogoPath { get; init; }
+    public string? IconPath { get; init; }
+    public string? SurfaceBackdropHex { get; init; }
+    public string? SurfaceCardHex { get; init; }
+    public string? TextPrimaryHex { get; init; }
+    public string? BorderHex { get; init; }
+    public InstallerMarkupButtons? Buttons { get; init; }
+    public IReadOnlyDictionary<string, InstallerMarkupTooltip>? Tooltips { get; init; }
+    public IReadOnlyList<SecondaryPathPickerOptions>? SecondaryPickers { get; init; }
+
     public string EffectiveMainExecutableRelativePath =>
         !string.IsNullOrWhiteSpace(MainExecutableRelativePath)
             ? MainExecutableRelativePath
@@ -59,6 +71,26 @@ public sealed record InstallerAppDescriptor(
 
     public string CanonicalDefaultInstallDir => ResolveCanonicalDefaultInstallDir();
 
+    public string GetEffectiveUmbrellaSubpath()
+    {
+        if (!string.IsNullOrWhiteSpace(UmbrellaSubpath))
+        {
+            string trimmed = UmbrellaSubpath.Trim().Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string[] segments = trimmed.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length > 0)
+            {
+                return string.Equals(segments[^1], ProductName, StringComparison.OrdinalIgnoreCase)
+                    ? Path.Combine(segments)
+                    : Path.Combine(segments.Concat(new[] { ProductName }).ToArray());
+            }
+        }
+
+        string effectiveStudio = string.IsNullOrWhiteSpace(StudioName) ? "StreamItAll" : StudioName.Trim();
+        return !string.IsNullOrWhiteSpace(SuiteName)
+            ? Path.Combine(effectiveStudio, SuiteName.Trim(), ProductName)
+            : Path.Combine(effectiveStudio, ProductName);
+    }
+
     public string ResolveCanonicalDefaultInstallDir(SandboxResolution? sandbox = null)
     {
         string localAppData = KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox);
@@ -71,23 +103,7 @@ public sealed record InstallerAppDescriptor(
         }
 
         string programsRoot = Path.Combine(localAppData, "Programs");
-        if (!string.IsNullOrWhiteSpace(UmbrellaSubpath))
-        {
-            string trimmed = UmbrellaSubpath.Trim().Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            string[] segments = trimmed.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Length > 0)
-            {
-                string combined = Path.Combine(new[] { programsRoot }.Concat(segments).ToArray());
-                return string.Equals(segments[^1], ProductName, StringComparison.OrdinalIgnoreCase)
-                    ? combined
-                    : Path.Combine(combined, ProductName);
-            }
-        }
-
-        string effectiveStudio = string.IsNullOrWhiteSpace(StudioName) ? "StreamItAll" : StudioName.Trim();
-        return !string.IsNullOrWhiteSpace(SuiteName)
-            ? Path.Combine(programsRoot, effectiveStudio, SuiteName.Trim(), ProductName)
-            : Path.Combine(programsRoot, effectiveStudio, ProductName);
+        return Path.Combine(programsRoot, GetEffectiveUmbrellaSubpath());
     }
 }
 
@@ -183,3 +199,35 @@ public sealed record InstallerHostRunResult(
     int ExitCode,
     string? LogDirectory = null,
     InstallerOperationResult? OperationResult = null);
+
+public sealed record InstallerMarkupTheme(
+    [property: JsonPropertyName("background")] string? Background = null,
+    [property: JsonPropertyName("surface")] string? Surface = null,
+    [property: JsonPropertyName("accent")] string? Accent = null,
+    [property: JsonPropertyName("text")] string? Text = null,
+    [property: JsonPropertyName("border")] string? Border = null);
+
+public sealed record InstallerMarkupButtons(
+    [property: JsonPropertyName("installText")] string? InstallText = null,
+    [property: JsonPropertyName("upgradeText")] string? UpgradeText = null,
+    [property: JsonPropertyName("uninstallText")] string? UninstallText = null,
+    [property: JsonPropertyName("cancelText")] string? CancelText = null);
+
+public sealed record InstallerMarkupTooltip(
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("description")] string Description)
+{
+    public string FormatTwoLine()
+    {
+        string t = Title?.Trim() ?? string.Empty;
+        string d = Description?.Trim() ?? string.Empty;
+        return string.IsNullOrEmpty(t) ? d : (string.IsNullOrEmpty(d) ? t : $"{t}{Environment.NewLine}{d}");
+    }
+}
+
+public sealed record InstallerMarkupSecondaryPicker(
+    [property: JsonPropertyName("flagName")] string FlagName,
+    [property: JsonPropertyName("label")] string Label,
+    [property: JsonPropertyName("defaultPath")] string? DefaultPath = null,
+    [property: JsonPropertyName("placeholder")] string? Placeholder = null,
+    [property: JsonPropertyName("tooltip")] string? Tooltip = null);

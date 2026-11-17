@@ -1,6 +1,6 @@
-# Foundation (`v0.4.2`) — Operations, Build & CLI Runbook
+# Foundation (`v0.5.0`) — Operations, Build & CLI Runbook
 
-> **Audience:** Engineers maintaining `Foundation` itself or running `Dev\tools\*.py`, `sandbox_ctl.py`, `run_sandbox_e2e.py`, or `StandardInstallerHost` CLIs.
+> **Audience:** Engineers maintaining `Foundation` itself or running `Dev\tools\*.py`, `sandbox_ctl.py`, `run_sandbox_e2e.py`, `Foundation.Automation`, or `StandardInstallerHost` CLIs.
 > **Full Symbol Reference:** [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md)
 
 ---
@@ -10,11 +10,11 @@
 | Command | Purpose | Notes |
 |---|---|---|
 | `dotnet test <PROJECTS_ROOT>\Foundation\Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` | Compiles all assemblies + runs all C# xUnit tests | Zero-warning build (`PublishFoundationSdk` defaults to `false`) |
-| `C:\Python313\python.exe -m unittest discover -s Dev\tests\foundation_core -v` | Runs pure-stdlib Python `foundation_core` & tools tests | Zero external dependencies |
+| `python -m unittest discover -s Dev\tests\foundation_core -v` | Runs pure-stdlib Python `foundation_core` & tools tests | Zero external dependencies |
 | `pytest Dev\tests\foundation_core -q` | Runs the same Python suite via Pytest | Uses isolated `TemporaryDirectory()` fixtures |
 
 ### ⚠️ MSBuild Post-Build Side Effect Note (`Foundation.UI.csproj`)
-Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.4.2 --ui-version 0.4.2 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
+Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.5.0 --ui-version 0.5.0 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
 
 ---
 
@@ -23,11 +23,11 @@ Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\
 ### 2.1 `sync_foundation_sdk.py` (`Dev\tools\sync_foundation_sdk.py`, `<= 260` raw lines)
 | Flag | Default / Type | Description |
 |---|---|---|
-| `--publish` | bool | Publishes Release binaries, `@foundation/ui` (`0.4.2`), `foundation_core` (`0.4.2`), and `Dev\tools\` to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus strict 6-file `Releases\Latest\` (without loose `LICENSE`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
+| `--publish` | bool | Publishes Release binaries, `@foundation/ui` (`0.5.0`), `foundation_core` (`0.5.0`), and `Dev\tools\` to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus strict 6-file `Releases\Latest\` (without loose `LICENSE`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
 | `--sync-consumer` | `<ProjectRoot>` | Copies pinned SDK DLLs, `WebAssets`, and `foundation_core` into consumer `Dev\lib\` and removes only retired legacy test globs (`tools/verify_sandbox_universal.py`, `Foundation.Sandbox.*`, `*VisibleTest*`, `*InstallerSandboxContext*`) so `sandbox_seam.py`, `sandbox_ctl.py`, and `run_sandbox_e2e.py` survive |
-| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.4.2`) |
+| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.5.0`) |
 | `--web-dir` | Path (optional) | Optional consumer frontend directory target for `WebAssets` |
-| `--version` / `--ui-version` | `0.4.2` | Foundation SDK / `@foundation/ui` SemVer |
+| `--version` / `--ui-version` | `0.5.0` | Foundation SDK / `@foundation/ui` SemVer |
 | `--configuration` | `Release` | Build configuration (`Release`/`Debug`) |
 
 ### 2.2 `build_release_universal.py` (`Dev\tools\build_release_universal.py`)
@@ -70,7 +70,7 @@ Executes the 12-point `Standard 02 §4` matrix (`S2-01`..`S2-12`) with scrubbed 
 
 ---
 
-## 4. `StandardInstallerHost` CLI Reference (`Foundation.Installer v0.4.2`)
+## 4. `StandardInstallerHost` (`v0.5.0`) & `Foundation.Automation` CLI Reference
 
 | Switch / Alias | Argument | Behavior |
 |---|---|---|
@@ -87,9 +87,37 @@ Executes the 12-point `Standard 02 §4` matrix (`S2-01`..`S2-12`) with scrubbed 
 - **`2`**: CLI argument parsing failure (unknown option or missing value).
 - **`3`**: Production/Sandbox Containment Violation (`SandboxEnvironmentSeam.IsContainmentViolation` — host OS/user/host-`Programs` escape aborted fail-closed).
 
+- **`--automation-port <port>` & `--automation-token <token>` (`Foundation.Automation`):** Opt-in `127.0.0.1` loopback HTTP/JSON control surface (`AutomationCliHelper.TryCreateFromArgs`); defaults to disabled unless `--automation-port` is supplied. Falls back to `FOUNDATION_AUTOMATION_TOKEN` or a CSPRNG 32-hex bearer token.
+
 ---
 
 ## 5. Runtime Diagnostics (`SQLite WAL`, `Locks`, `Transfers`)
 - **`SqliteWalPool` (`.NET`) & `open_wal_sqlite` (`Python`):** `SqliteCacheMode.Default`, `WAL`, `busy_timeout = 15000`, `synchronous = NORMAL`, `foreign_keys = ON`, `temp_store = MEMORY`, `cache_size = -65536` (`64 MB`).
 - **Locks & Crash Bundles:** `JsonHivePlatformRegistry` locks `<SandboxRoot>\locks\registry.hive.lock` via named Mutex + `PidSafeLockfile` (`PidSafeLockEnvelope`); unhandled crashes emit `logs\crashes\crash_<appId>_<ts>.json`.
 - **Safe Downloads (`SafeNetworkTransfer`):** `.partial_<jobId>`, `1.2x + 512 MB` reserve, HTTP `416` recovery, `10s` connect / `30s` `ResponseHeadersTimeout` / `30s` read-stall timeouts.
+
+---
+
+## 6. Security Policy, Pre-Public History Scrub & Public-Repo Human-Review Push Gate
+
+> [!CAUTION]
+> Never execute destructive history rewrites (`git-filter-repo`, `git push --force`) or flip GitHub repository visibility (`gh repo edit --visibility public`) without explicit human confirmation from Stream.
+
+### Pre-Public Human-Gated `git-filter-repo` Checklist
+1. **Verify working tree cleanliness (`0` PII / secret / workstation-path leaks):**
+   ```powershell
+   python "%USERPROFILE%\.gemini\config\skills\audit\scripts\audit_scanner.py" "<PROJECTS_ROOT>\Foundation\Dev" --format markdown
+   git -C "<PROJECTS_ROOT>\Foundation" grep -iE "(D:\\Projects|C:\\Users|ghp_|aiza|sk-|discord\.com/api/webhooks)"
+   ```
+2. **Optional commit-history audit & scrub (human-only, on a verified clone + `.7z` backup):**
+   ```powershell
+   # Inspect historical commits for any pre-v0.4.0 workstation paths or Notion IDs before publishing
+   git log --all -S "C:\\Users\\" --oneline
+   # If historical paths must be scrubbed before flipping public:
+   # pip install git-filter-repo
+   # git filter-repo --replace-text expressions.txt --force
+   # git push origin --force --all && git push origin --force --tags
+   ```
+3. **Flip visibility after Stream review sign-off & enforce public-repo push gate:**
+   - Set `"isPublicRepo": true` and `"requireHumanReviewBeforePush": true` in `active.state` once flipped (`gh repo edit <owner>/Foundation --visibility public --accept-visibility-change-consequences`).
+   - Once a repository is public (`isPublicRepo: true` / `isPrivate == false`), **every** subsequent `git push` or `gh release create` requires explicit human approval via `ask_question` first.

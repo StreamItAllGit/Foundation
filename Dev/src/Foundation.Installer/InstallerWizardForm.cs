@@ -4,8 +4,11 @@
 // @exports: InstallerWizardForm (partial: constructors, properties, header/destination controls)
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -36,6 +39,15 @@ public sealed partial class InstallerWizardForm : Form
     private readonly bool _hasSecondaryPicker;
     private readonly bool _showLegacyMigration;
     private readonly string? _legacyDetectedPath;
+    private readonly string _layoutMode;
+    private readonly IReadOnlyList<string> _supportedProfiles;
+    private readonly string? _logoPath;
+    private readonly string? _iconPath;
+    private readonly Color _textPrimary;
+    private readonly Color _borderSubtle;
+    private readonly InstallerMarkupButtons? _buttonOverrides;
+    private readonly IReadOnlyDictionary<string, InstallerMarkupTooltip>? _tooltips;
+    private readonly Assembly _payloadAssembly;
 
     private Panel _headerPanel = null!;
     private Panel _bodyPanel = null!;
@@ -53,6 +65,8 @@ public sealed partial class InstallerWizardForm : Form
     private Label _lblProfileHeader = null!;
     private RadioButton _rbProfileLightweight = null!;
     private RadioButton _rbProfileFull = null!;
+    private RadioButton _rbProfileCustom = null!;
+    private ToolTip _wizardToolTip = null!;
     private CheckBox _chkShortcuts = null!;
     private CheckBox _chkAutoStart = null!;
     private CheckBox _chkLaunchAfter = null!;
@@ -100,8 +114,15 @@ public sealed partial class InstallerWizardForm : Form
     public CheckBox MigrateLegacyCheckBox => _chkMigrateLegacy;
     public RadioButton LightweightProfileRadioButton => _rbProfileLightweight;
     public RadioButton FullProfileRadioButton => _rbProfileFull;
+    public RadioButton CustomProfileRadioButton => _rbProfileCustom;
     public TextBox SecondaryDirTextBox => _txtSecondaryDir;
-    public string SelectedProfileId => _rbProfileFull.Checked ? "full" : "lightweight";
+    public string LayoutMode => _layoutMode;
+    public IReadOnlyList<string> SupportedProfiles => _supportedProfiles;
+    public string? GetControlTooltip(Control control) => _wizardToolTip?.GetToolTip(control);
+    public string SelectedProfileId =>
+        _rbProfileCustom.Checked ? "custom"
+        : (_rbProfileFull.Checked ? "full"
+        : (_rbProfileLightweight.Checked ? "lightweight" : (_supportedProfiles.FirstOrDefault() ?? "lightweight")));
     public string SecondaryInstallDir => _hasSecondaryPicker ? _txtSecondaryDir.Text.Trim() : string.Empty;
     public bool MigrateLegacyChecked => _showLegacyMigration && _chkMigrateLegacy.Checked;
     public bool IsAutoStartAllowed => _allowAutoStart;
@@ -121,10 +142,12 @@ public sealed partial class InstallerWizardForm : Form
         string? initialSecondaryDir = null,
         string? secondaryFlagName = null,
         bool initialMigrateLegacy = false,
-        bool? showLegacyMigration = null)
+        bool? showLegacyMigration = null,
+        Assembly? payloadAssembly = null)
     {
         _fullEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         _ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
+        _payloadAssembly = payloadAssembly ?? _fullEngine.PayloadAssembly;
         _externalPayloadPath = externalPayloadPath;
         _isUninstallMode = isUninstallMode;
 
@@ -134,8 +157,16 @@ public sealed partial class InstallerWizardForm : Form
         _subtitle = desc.EffectiveSubtitle;
         _allowAutoStart = desc.AllowAutoStart;
         _accentColor = InstallerWizardControls.ParseHexColor(desc.BrandAccentHex, Color.FromArgb(14, 165, 233));
-        _bgPrimary = Color.FromArgb(14, 17, 23);
-        _bgCard = Color.FromArgb(22, 27, 36);
+        _bgPrimary = InstallerWizardControls.ParseHexColor(desc.SurfaceBackdropHex, Color.FromArgb(14, 17, 23));
+        _bgCard = InstallerWizardControls.ParseHexColor(desc.SurfaceCardHex, Color.FromArgb(22, 27, 36));
+        _textPrimary = InstallerWizardControls.ParseHexColor(desc.TextPrimaryHex, TextPrimary);
+        _borderSubtle = InstallerWizardControls.ParseHexColor(desc.BorderHex, BorderSubtle);
+        _layoutMode = InstallerManifestStore.NormalizeLayoutMode(desc.LayoutMode);
+        _supportedProfiles = InstallerManifestStore.NormalizeSupportedProfiles(desc.SupportedProfiles);
+        _logoPath = desc.LogoPath;
+        _iconPath = desc.IconPath;
+        _buttonOverrides = desc.Buttons;
+        _tooltips = desc.Tooltips;
 
         string effectiveProfile = initialProfileId ?? ctx.ConfigOverride?.InstallProfile ?? desc.DefaultProfile;
         string? effectiveSecondary = initialSecondaryDir
@@ -148,6 +179,15 @@ public sealed partial class InstallerWizardForm : Form
                 ? "Companion reEngine Directory:"
                 : "Companion Suite Directory:";
             _secondaryPickerOptions = new SecondaryPathPickerOptions(flag, label, effectiveSecondary);
+        }
+        else if (desc.SecondaryPickers is { Count: > 0 })
+        {
+            _secondaryPickerOptions = desc.SecondaryPickers[0];
+            effectiveSecondary = _secondaryPickerOptions.DefaultPath;
+        }
+        if (string.IsNullOrWhiteSpace(initialSecondaryDir) && !string.IsNullOrWhiteSpace(effectiveSecondary) && ctx.IsSandboxActive)
+        {
+            effectiveSecondary = KnownFolderPaths.MapHostPathToSandbox(effectiveSecondary, ctx.Sandbox);
         }
         _hasSecondaryPicker = !_isUninstallMode && _secondaryPickerOptions != null;
         _showLegacyMigration = !_isUninstallMode && (showLegacyMigration ?? (initialMigrateLegacy || (ctx.ConfigOverride?.MigrateLegacy ?? false) || desc.AllowLegacyMigration));
@@ -175,9 +215,11 @@ public sealed partial class InstallerWizardForm : Form
         string? initialProfileId = null,
         string? initialSecondaryDir = null,
         bool initialMigrateLegacy = false,
-        bool? showLegacyMigration = null)
+        bool? showLegacyMigration = null,
+        Assembly? payloadAssembly = null)
     {
         _coreEngine = engine ?? throw new ArgumentNullException(nameof(engine));
+        _payloadAssembly = payloadAssembly ?? Assembly.GetEntryAssembly() ?? typeof(InstallerWizardForm).Assembly;
         _isUninstallMode = isUninstallMode;
         _customInstallAction = customInstallAction;
 
@@ -189,8 +231,17 @@ public sealed partial class InstallerWizardForm : Form
         _accentColor = InstallerWizardControls.ParseHexColor(theme.BrandAccentHex, Color.FromArgb(14, 165, 233));
         _bgPrimary = InstallerWizardControls.ParseHexColor(theme.SurfaceBackdropHex, Color.FromArgb(14, 17, 23));
         _bgCard = InstallerWizardControls.ParseHexColor(theme.SurfaceCardHex, Color.FromArgb(22, 27, 36));
+        _textPrimary = InstallerWizardControls.ParseHexColor(theme.TextPrimaryHex, TextPrimary);
+        _borderSubtle = InstallerWizardControls.ParseHexColor(theme.BorderHex, BorderSubtle);
+        _layoutMode = InstallerManifestStore.NormalizeLayoutMode(theme.LayoutMode);
+        _supportedProfiles = InstallerManifestStore.NormalizeSupportedProfiles(
+            theme.SupportedProfiles ?? (theme.AvailableProfiles.Count > 0 ? theme.AvailableProfiles.Select(p => p.Id) : null));
+        _logoPath = theme.HeaderLogoResource;
+        _iconPath = theme.WindowIconResource;
+        _buttonOverrides = theme.Buttons;
+        _tooltips = theme.Tooltips;
 
-        _secondaryPickerOptions = theme.SecondaryPathPicker;
+        _secondaryPickerOptions = theme.SecondaryPathPicker ?? theme.SecondaryPickers?.FirstOrDefault();
         string? effectiveSecondary = !string.IsNullOrWhiteSpace(initialSecondaryDir)
             ? initialSecondaryDir
             : _secondaryPickerOptions?.DefaultPath;
@@ -228,20 +279,21 @@ public sealed partial class InstallerWizardForm : Form
             Padding = new Padding(22, 14, 22, 12)
         };
 
+        Image? logoImage = InstallerWizardControls.TryLoadImage(_logoPath, _payloadAssembly)
+            ?? extractedIcon?.ToBitmap();
         _picAppIcon = new PictureBox
         {
             Size = new Size(36, 36),
             Location = new Point(22, 20),
             SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = Color.Transparent,
-            Visible = extractedIcon != null
+            Visible = logoImage != null,
+            Image = logoImage
         };
-        if (extractedIcon != null)
-        {
-            _picAppIcon.Image = extractedIcon.ToBitmap();
-        }
 
-        int headerTextLeft = extractedIcon != null ? 68 : 22;
+        int headerTextLeft = logoImage != null ? 68 : 22;
+        bool isMultiLine = string.Equals(_layoutMode, "multi-line", StringComparison.OrdinalIgnoreCase);
+        if (isMultiLine) _headerPanel.Height = 90;
 
         var titleFont = new Font("Segoe UI Semibold", 13.0f, FontStyle.Bold);
         int titleHeight = Math.Max(28, TextRenderer.MeasureText("Mg", titleFont).Height + 4);
@@ -251,7 +303,7 @@ public sealed partial class InstallerWizardForm : Form
                 ? $"{_displayName} — Remove Installation"
                 : $"{_displayName} — Setup Wizard",
             Font = titleFont,
-            ForeColor = TextPrimary,
+            ForeColor = _textPrimary,
             AutoSize = false,
             AutoEllipsis = true,
             Location = new Point(headerTextLeft, 13),
@@ -259,7 +311,8 @@ public sealed partial class InstallerWizardForm : Form
         };
 
         var subFont = new Font("Segoe UI", 8.75f, FontStyle.Regular);
-        int subHeight = Math.Max(20, TextRenderer.MeasureText("Mg", subFont).Height + 4);
+        int baseSubHeight = Math.Max(20, TextRenderer.MeasureText("Mg", subFont).Height + 4);
+        int subHeight = isMultiLine ? baseSubHeight * 2 : baseSubHeight;
         _lblSub = new Label
         {
             Text = _isUninstallMode
@@ -268,7 +321,7 @@ public sealed partial class InstallerWizardForm : Form
             Font = subFont,
             ForeColor = TextMuted,
             AutoSize = false,
-            AutoEllipsis = true,
+            AutoEllipsis = !isMultiLine,
             Location = new Point(headerTextLeft, 43),
             Size = new Size(DefaultClientWidth - headerTextLeft - 150, subHeight)
         };
@@ -299,7 +352,7 @@ public sealed partial class InstallerWizardForm : Form
         {
             Text = _isUninstallMode ? "Installed Location:" : "Destination Folder:",
             Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold),
-            ForeColor = TextPrimary,
+            ForeColor = _textPrimary,
             AutoSize = true,
             Location = new Point(22, 90)
         };
@@ -311,7 +364,7 @@ public sealed partial class InstallerWizardForm : Form
             Width = 502,
             Height = 29,
             BackColor = BgInput,
-            ForeColor = TextPrimary,
+            ForeColor = _textPrimary,
             BorderStyle = BorderStyle.FixedSingle,
             Font = new Font("Consolas", 9.5f, FontStyle.Regular),
             Anchor = AnchorStyles.Top | AnchorStyles.Left
@@ -325,11 +378,11 @@ public sealed partial class InstallerWizardForm : Form
             Size = new Size(96, 29),
             FlatStyle = FlatStyle.Flat,
             BackColor = _bgCard,
-            ForeColor = TextPrimary,
+            ForeColor = _textPrimary,
             Cursor = Cursors.Hand,
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
-        _btnBrowse.FlatAppearance.BorderColor = BorderSubtle;
+        _btnBrowse.FlatAppearance.BorderColor = _borderSubtle;
         _btnBrowse.Click += OnBrowseClicked;
 
         InitializeSecondaryDestinationControls(initialSecondaryDir);

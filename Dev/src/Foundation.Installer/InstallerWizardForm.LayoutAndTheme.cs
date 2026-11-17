@@ -4,7 +4,9 @@
 // @exports: InstallerWizardForm (partial: InitializeOptionsAndFooterControls, UpdateLayoutBounds, ToggleDetailsDrawer, SetDetailsExpanded)
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace Foundation.Installer;
@@ -17,6 +19,7 @@ public sealed partial class InstallerWizardForm
         {
             _cts?.Dispose();
             _cts = null;
+            _wizardToolTip?.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -86,8 +89,8 @@ public sealed partial class InstallerWizardForm
             new Point(532, 170),
             new Size(96, 29),
             _bgCard,
-            TextPrimary,
-            BorderSubtle);
+            _textPrimary,
+            _borderSubtle);
         _btnSecondaryBrowse.Visible = _hasSecondaryPicker;
         _btnSecondaryBrowse.Click += OnSecondaryBrowseClicked;
     }
@@ -117,20 +120,30 @@ public sealed partial class InstallerWizardForm
             Location = new Point(16, 10)
         };
 
-        bool isFullProfile = string.Equals(initialProfileId, "full", StringComparison.OrdinalIgnoreCase);
+        bool supportsLightweight = _supportedProfiles.Contains("lightweight", StringComparer.OrdinalIgnoreCase);
+        bool supportsFull = _supportedProfiles.Contains("full", StringComparer.OrdinalIgnoreCase);
+        bool supportsCustom = _supportedProfiles.Contains("custom", StringComparer.OrdinalIgnoreCase);
+        string selectedProfile = _supportedProfiles.FirstOrDefault(p => string.Equals(p, initialProfileId, StringComparison.OrdinalIgnoreCase))
+            ?? _supportedProfiles.FirstOrDefault()
+            ?? "lightweight";
+        bool isCustomProfile = supportsCustom && string.Equals(selectedProfile, "custom", StringComparison.OrdinalIgnoreCase);
+        bool isFullProfile = supportsFull && string.Equals(selectedProfile, "full", StringComparison.OrdinalIgnoreCase);
+        bool isLightweightProfile = supportsLightweight && string.Equals(selectedProfile, "lightweight", StringComparison.OrdinalIgnoreCase);
         _lblProfileHeader = new Label
         {
             Text = "Profile:",
             Font = new Font("Segoe UI Semibold", 9.0f, FontStyle.Bold),
-            ForeColor = TextPrimary,
+            ForeColor = _textPrimary,
             AutoSize = true,
             Location = new Point(16, 34),
             Visible = !_isUninstallMode
         };
-        _rbProfileLightweight = InstallerWizardControls.CreateDarkRadioButton("Lightweight (Core)", 82, 32, !isFullProfile);
-        _rbProfileLightweight.Visible = !_isUninstallMode;
-        _rbProfileFull = InstallerWizardControls.CreateDarkRadioButton("Full (All Components)", 228, 32, isFullProfile);
-        _rbProfileFull.Visible = !_isUninstallMode;
+        _rbProfileLightweight = InstallerWizardControls.CreateDarkRadioButton("Lightweight (Core)", 82, 32, isLightweightProfile, _textPrimary);
+        _rbProfileLightweight.Visible = !_isUninstallMode && supportsLightweight;
+        _rbProfileFull = InstallerWizardControls.CreateDarkRadioButton("Full (All Components)", 228, 32, isFullProfile, _textPrimary);
+        _rbProfileFull.Visible = !_isUninstallMode && supportsFull;
+        _rbProfileCustom = InstallerWizardControls.CreateDarkRadioButton("Custom", 394, 32, isCustomProfile, _textPrimary);
+        _rbProfileCustom.Visible = !_isUninstallMode && supportsCustom;
 
         int nextY = 62;
         _chkShortcuts = new CheckBox
@@ -138,7 +151,7 @@ public sealed partial class InstallerWizardForm
             Text = $"Create Desktop and Start Menu shortcuts for {_displayName}",
             Checked = initialCreateShortcuts,
             AutoSize = true,
-            ForeColor = TextPrimary,
+            ForeColor = _textPrimary,
             Location = new Point(16, nextY),
             Visible = !_isUninstallMode
         };
@@ -150,7 +163,7 @@ public sealed partial class InstallerWizardForm
             Checked = _allowAutoStart && initialAutoStart,
             Enabled = !_isUninstallMode && _allowAutoStart,
             AutoSize = true,
-            ForeColor = TextPrimary,
+            ForeColor = _textPrimary,
             Location = new Point(16, nextY),
             Visible = !_isUninstallMode && _allowAutoStart
         };
@@ -161,7 +174,7 @@ public sealed partial class InstallerWizardForm
             Text = $"Launch {_displayName} immediately after setup completes",
             Checked = initialLaunchAfter,
             AutoSize = true,
-            ForeColor = TextPrimary,
+            ForeColor = _textPrimary,
             Location = new Point(16, nextY),
             Visible = !_isUninstallMode
         };
@@ -171,7 +184,8 @@ public sealed partial class InstallerWizardForm
             "Migrate legacy <PROGRAMS_ROOT>\\ installation (opt-in)",
             16,
             nextY,
-            initialMigrateLegacy);
+            initialMigrateLegacy,
+            _textPrimary);
         _chkMigrateLegacy.Visible = _showLegacyMigration;
         if (_showLegacyMigration) nextY += 26;
 
@@ -191,20 +205,23 @@ public sealed partial class InstallerWizardForm
         _optionsPanel.Controls.Add(_lblProfileHeader);
         _optionsPanel.Controls.Add(_rbProfileLightweight);
         _optionsPanel.Controls.Add(_rbProfileFull);
+        _optionsPanel.Controls.Add(_rbProfileCustom);
         _optionsPanel.Controls.Add(_chkShortcuts);
         _optionsPanel.Controls.Add(_chkAutoStart);
         _optionsPanel.Controls.Add(_chkLaunchAfter);
         _optionsPanel.Controls.Add(_chkMigrateLegacy);
         _optionsPanel.Controls.Add(_chkPurgeData);
 
+        bool isMultiLine = string.Equals(_layoutMode, "multi-line", StringComparison.OrdinalIgnoreCase);
         _lblStatus = new Label
         {
             Text = _isUninstallMode
                 ? $"Ready to uninstall {_displayName}."
                 : $"Ready to install or upgrade {_displayName}.",
             AutoSize = false,
+            AutoEllipsis = !isMultiLine,
             Location = new Point(22, 294),
-            Size = new Size(606, 22),
+            Size = new Size(606, isMultiLine ? 38 : 22),
             ForeColor = TextMuted,
             Font = new Font("Segoe UI", 9.0f, FontStyle.Regular),
             Anchor = AnchorStyles.Top | AnchorStyles.Left
@@ -262,22 +279,24 @@ public sealed partial class InstallerWizardForm
 
         _btnCancel = new Button
         {
-            Text = "Cancel",
+            Text = _buttonOverrides?.CancelText ?? "Cancel",
             Size = new Size(104, 34),
             Location = new Point(376, 11),
             FlatStyle = FlatStyle.Flat,
             BackColor = _bgPrimary,
-            ForeColor = TextPrimary,
+            ForeColor = _textPrimary,
             Font = new Font("Segoe UI", 9.5f, FontStyle.Regular),
             Cursor = Cursors.Hand,
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
-        _btnCancel.FlatAppearance.BorderColor = BorderSubtle;
+        _btnCancel.FlatAppearance.BorderColor = _borderSubtle;
         _btnCancel.Click += OnCancelClicked;
 
         _btnPrimary = new Button
         {
-            Text = _isUninstallMode ? "Uninstall" : "Install Now",
+            Text = _isUninstallMode
+                ? (_buttonOverrides?.UninstallText ?? "Uninstall")
+                : (_buttonOverrides?.InstallText ?? "Install Now"),
             Size = new Size(138, 34),
             Location = new Point(490, 11),
             FlatStyle = FlatStyle.Flat,
@@ -289,6 +308,21 @@ public sealed partial class InstallerWizardForm
         };
         _btnPrimary.FlatAppearance.BorderSize = 0;
         _btnPrimary.Click += async (_, _) => await OnPrimaryActionClickedAsync();
+
+        _wizardToolTip = InstallerWizardControls.CreateDarkTooltipController();
+        InstallerWizardControls.ApplyTooltips(_wizardToolTip, _tooltips, new Dictionary<string, Control>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["installDir"] = _txtInstallDir,
+            ["secondaryDir"] = _txtSecondaryDir,
+            ["profile"] = _lblProfileHeader,
+            ["shortcuts"] = _chkShortcuts,
+            ["autoStart"] = _chkAutoStart,
+            ["launchAfter"] = _chkLaunchAfter,
+            ["migrateLegacy"] = _chkMigrateLegacy,
+            ["primaryButton"] = _btnPrimary,
+            ["cancelButton"] = _btnCancel,
+            ["detailsToggle"] = _btnToggleDetails
+        });
 
         _footerPanel.Controls.Add(_btnCancel);
         _footerPanel.Controls.Add(_btnPrimary);
@@ -331,7 +365,8 @@ public sealed partial class InstallerWizardForm
 
     private int ComputeTargetClientHeight(bool expanded)
     {
-        int baseBottom = (_hasSecondaryPicker ? 212 : 154) + _optionsPanel.Height + 12 + 78;
+        int extraStatus = string.Equals(_layoutMode, "multi-line", StringComparison.OrdinalIgnoreCase) ? 16 : 0;
+        int baseBottom = (_hasSecondaryPicker ? 212 : 154) + _optionsPanel.Height + 12 + 78 + extraStatus;
         int collapsed = Math.Max(CollapsedClientHeight, baseBottom + 64);
         return expanded ? collapsed + 110 : collapsed;
     }
@@ -366,7 +401,8 @@ public sealed partial class InstallerWizardForm
         _lblTitle.Size = new Size(titleWidth, titleHeight);
 
         int subWidth = Math.Max(40, _lblModeBadge.Left - 12 - _lblSub.Left);
-        int subHeight = Math.Max(20, TextRenderer.MeasureText("Mg", _lblSub.Font).Height + 4);
+        int subHeight = Math.Max(20, TextRenderer.MeasureText("Mg", _lblSub.Font).Height + 4)
+            * (string.Equals(_layoutMode, "multi-line", StringComparison.OrdinalIgnoreCase) ? 2 : 1);
         _lblSub.Size = new Size(subWidth, subHeight);
 
         int contentW = Math.Max(200, clientW - (margin * 2));
@@ -386,16 +422,17 @@ public sealed partial class InstallerWizardForm
         _optionsPanel.Location = new Point(margin, optionsY);
         _optionsPanel.Width = contentW;
 
+        int statusOffset = string.Equals(_layoutMode, "multi-line", StringComparison.OrdinalIgnoreCase) ? 16 : 0;
         int belowOptionsY = optionsY + _optionsPanel.Height + 12;
         _lblStatus.Location = new Point(margin, belowOptionsY);
         _lblStatus.Width = contentW;
 
-        _progressBar.Location = new Point(margin, belowOptionsY + 24);
+        _progressBar.Location = new Point(margin, belowOptionsY + 24 + statusOffset);
         _progressBar.Width = contentW;
 
-        _btnToggleDetails.Location = new Point(margin, belowOptionsY + 48);
+        _btnToggleDetails.Location = new Point(margin, belowOptionsY + 48 + statusOffset);
 
-        _txtLog.Location = new Point(margin, belowOptionsY + 78);
+        _txtLog.Location = new Point(margin, belowOptionsY + 78 + statusOffset);
         _txtLog.Size = new Size(contentW, 102);
 
         int targetH = ComputeTargetClientHeight(_isDetailsExpanded);

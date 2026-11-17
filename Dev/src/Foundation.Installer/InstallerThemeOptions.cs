@@ -5,6 +5,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace Foundation.Installer;
 
@@ -120,4 +122,46 @@ public sealed record InstallerThemeOptions
 
     /// <summary>Whether the wizard offers opt-in migration from legacy flat &lt;PROGRAMS_ROOT&gt;\ installations.</summary>
     public bool AllowLegacyMigration { get; init; } = false;
+
+    /// <summary>Wizard header/status layout mode ("single-line" or "multi-line").</summary>
+    public string LayoutMode { get; init; } = "single-line";
+
+    /// <summary>Optional primary text hex override from installer.manifest.json.</summary>
+    public string TextPrimaryHex { get; init; } = "#ECF0F8";
+
+    /// <summary>Optional border hex override from installer.manifest.json.</summary>
+    public string BorderHex { get; init; } = "#2A3344";
+
+    /// <summary>Optional supported profile list ("lightweight", "full", "custom").</summary>
+    public IReadOnlyList<string>? SupportedProfiles { get; init; }
+
+    /// <summary>Optional wizard button label overrides.</summary>
+    public InstallerMarkupButtons? Buttons { get; init; }
+
+    /// <summary>Optional 2-line tooltip overrides keyed by control role.</summary>
+    public IReadOnlyDictionary<string, InstallerMarkupTooltip>? Tooltips { get; init; }
+
+    /// <summary>Optional list of secondary directory pickers loaded from installer.manifest.json.</summary>
+    public IReadOnlyList<SecondaryPathPickerOptions>? SecondaryPickers { get; init; }
+
+    public string GetEffectiveUmbrellaSubpath()
+    {
+        if (!string.IsNullOrWhiteSpace(UmbrellaSubpath))
+        {
+            string trimmed = UmbrellaSubpath.Trim().Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string[] segments = trimmed.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length > 0)
+            {
+                return string.Equals(segments[^1], DisplayName, StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(segments[^1], AppId, StringComparison.OrdinalIgnoreCase)
+                    ? Path.Combine(segments)
+                    : Path.Combine(segments.Concat(new[] { DisplayName }).ToArray());
+            }
+        }
+
+        string studio = string.IsNullOrWhiteSpace(StudioName) ? "StreamItAll" : StudioName.Trim();
+        return !string.IsNullOrWhiteSpace(SuiteName)
+            ? Path.Combine(studio, SuiteName.Trim(), DisplayName)
+            : Path.Combine(studio, DisplayName);
+    }
 }

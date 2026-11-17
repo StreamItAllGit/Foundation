@@ -258,6 +258,12 @@ public sealed partial class InstallerEngine
         }
 
         string? registryRecord = RegisterUninstallerMetadata(installDir, uninstallerPath);
+        TrySaveLastInstallBaseDir(
+            _ctx.Registry,
+            installDir,
+            Descriptor.GetEffectiveUmbrellaSubpath(),
+            _ctx.EffectiveSandbox,
+            _ctx.ShouldSuppressHostMutations);
 
         var manifest = new InstallManifest
         {

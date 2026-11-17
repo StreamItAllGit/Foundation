@@ -49,6 +49,12 @@ public static class StandardInstallerHost
         ArgumentNullException.ThrowIfNull(descriptor);
         args ??= Array.Empty<string>();
         Assembly resolvedAssembly = payloadAssembly ?? Assembly.GetCallingAssembly();
+        InstallerMarkupManifest? markup = InstallerManifestStore.TryLoadFromDirectoryOrAssembly(
+            AppContext.BaseDirectory,
+            resolvedAssembly);
+        InstallerAppDescriptor effectiveDescriptor = markup is not null
+            ? InstallerManifestStore.ApplyToDescriptor(descriptor, markup)
+            : descriptor;
 
         if (args.Length > 0 && OperatingSystem.IsWindows())
         {
@@ -68,7 +74,7 @@ public static class StandardInstallerHost
         InstallerCliOptions cli;
         try
         {
-            cli = InstallerEngine.ParseCliArgs(args, descriptor);
+            cli = InstallerEngine.ParseCliArgs(args, effectiveDescriptor);
         }
         catch (Exception parseEx)
         {
@@ -78,14 +84,14 @@ public static class StandardInstallerHost
 
         if (cli.ShowVersion)
         {
-            Console.WriteLine(descriptor.Version);
+            Console.WriteLine(effectiveDescriptor.Version);
             return new InstallerHostRunResult(0);
         }
 
         if (cli.ShowHelp)
         {
-            PrintBanner(descriptor);
-            PrintUsage(descriptor);
+            PrintBanner(effectiveDescriptor);
+            PrintUsage(effectiveDescriptor);
             return new InstallerHostRunResult(0);
         }
 
@@ -97,26 +103,26 @@ public static class StandardInstallerHost
                 cliConfigPath: cli.ConfigPath,
                 cliLogDir: cli.LogDir,
                 dryRun: cli.DryRun,
-                envPrefix: descriptor.EnvPrefix);
+                envPrefix: effectiveDescriptor.EnvPrefix);
 
-            bool effectiveAutoStart = descriptor.AllowAutoStart && cli.AutoStart;
-            if (cli.AutoStart && !descriptor.AllowAutoStart)
+            bool effectiveAutoStart = effectiveDescriptor.AllowAutoStart && cli.AutoStart;
+            if (cli.AutoStart && !effectiveDescriptor.AllowAutoStart)
             {
-                ctx.WriteLog("WARN", $"--autostart ignored for {descriptor.ProductName} because AllowAutoStart is false.");
+                ctx.WriteLog("WARN", $"--autostart ignored for {effectiveDescriptor.ProductName} because AllowAutoStart is false.");
                 if (!cli.Silent)
                 {
-                    Console.WriteLine($"Warning: --autostart ignored because {descriptor.DisplayName} disallows Startup registration.");
+                    Console.WriteLine($"Warning: --autostart ignored because {effectiveDescriptor.DisplayName} disallows Startup registration.");
                 }
             }
 
             bool explicitMigrate = cli.MigrateLegacy || (ctx.ConfigOverride?.MigrateLegacy ?? false);
-            bool showLegacy = descriptor.AllowLegacyMigration || explicitMigrate;
+            bool showLegacy = effectiveDescriptor.AllowLegacyMigration || explicitMigrate;
             bool isNonInteractive = cli.Silent || ctx.IsIsolatedTestProcess;
 
             if (!isNonInteractive && !cli.DryRun && !cli.VerifyOnly && string.IsNullOrWhiteSpace(cli.InstallDir) && OperatingSystem.IsWindows())
             {
                 InitializeWinFormsHost();
-                var guiEngine = new InstallerEngine(descriptor, ctx, resolvedAssembly);
+                var guiEngine = new InstallerEngine(effectiveDescriptor, ctx, resolvedAssembly);
                 using var wizard = new InstallerWizardForm(
                     engine: guiEngine,
                     ctx: ctx,
@@ -131,14 +137,15 @@ public static class StandardInstallerHost
                     initialSecondaryDir: cli.SecondaryDir,
                     secondaryFlagName: cli.SecondaryFlagName,
                     initialMigrateLegacy: explicitMigrate,
-                    showLegacyMigration: showLegacy);
+                    showLegacyMigration: showLegacy,
+                    payloadAssembly: resolvedAssembly);
                 Application.Run(wizard);
                 return new InstallerHostRunResult(wizard.ExitCode, ctx.LogDirectory);
             }
 
             return SynchronizationContext.Current != null
-                ? Task.Run(() => RunCliFlowAsync(descriptor, ctx, resolvedAssembly, cli, effectiveAutoStart, explicitMigrate)).GetAwaiter().GetResult()
-                : RunCliFlowAsync(descriptor, ctx, resolvedAssembly, cli, effectiveAutoStart, explicitMigrate).GetAwaiter().GetResult();
+                ? Task.Run(() => RunCliFlowAsync(effectiveDescriptor, ctx, resolvedAssembly, cli, effectiveAutoStart, explicitMigrate)).GetAwaiter().GetResult()
+                : RunCliFlowAsync(effectiveDescriptor, ctx, resolvedAssembly, cli, effectiveAutoStart, explicitMigrate).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {

@@ -29,6 +29,9 @@ __pycache__/
 *.user
 *.suo
 *.pdb
+TestResults/
+*.trx
+*.dmp
 
 # ==============================================================================
 # 4. Unity / Game Engine Generated Directories (Outside Dev/Assets & Dev/Packages)

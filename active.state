@@ -7,8 +7,8 @@
   "containerTier": "Tier A (4-Folder)",
   "ecosystemTier": "Tier1_Infrastructure",
   "appArchetype": "SDK",
-  "version": "0.4.2",
-  "activeMilestone": "0.5.0",
+  "version": "0.5.0",
+  "activeMilestone": "0.6.0",
   "goalMajorVersion": "1.0.0",
   "stateChangedDate": "2026-11-04",
   "lastVersionDate": "2026-11-16",
@@ -16,8 +16,10 @@
   "supersededBy": null,
   "tasklistDetailLevel": 3,
   "openTaskCount": 0,
-  "completedTaskCount": 24,
-  "openReportCount": 0,
+  "completedTaskCount": 34,
+  "openReportCount": 1,
+  "isPublicRepo": false,
+  "requireHumanReviewBeforePush": false,
   "gates": {
     "isGate0ScopePassed": true,
     "isGate1PlanPassed": true,
@@ -25,7 +27,7 @@
     "isInspecterVerified": true,
     "isTessaSynced": true
   },
-  "notes": "Shipped Foundation v0.4.2 (4-drive SandboxEnvironmentSeam, KnownFolderPaths + GetHostFolderPath, IPlatformRegistry / JsonHivePlatformRegistry, Foundation.Installer 3-mode isolation & 0.4.1 shortcut colon + DPI badge fixes, foundation_core Python parity, sandbox_ctl.py, run_sandbox_e2e.py): 40/40 C# tests PASS (0 warnings), 8/8 Python tests PASS, 12/12 live Stage 2 dogfood E2E PASS (hostDiffCount=0), 54 SDK files published to SharedLibs\\Foundation\\v0.4.2 & Latest, @dean Gate 2 + Delta Gate 2 PASS, @inspecter PASS, @tessa Quartet/Notion synced. Next locked milestone: v0.5.0.",
+  "notes": "Shipped Foundation v0.5.0 (InstallerManifestStore schemaVersion 2 + LastInstallBaseDir + Foundation.Automation loopback & snapshot module + SECURITY.md + expanded README Quickstart): 45/45 C# tests PASS (0 warnings), 8/8 Python tests PASS, audit_scanner P0:0 P1:0, 57 SDK files published to SharedLibs\\Foundation\\v0.5.0 & Latest, Releases\\v0.5.0 + hardlinked Latest validated, @dean Gate 2 PASS, @inspecter Phase 3 PASS. Tagged v0.5.0 on private remote with open pre-public human review gate report (Dev/docs/reports/0.5.0.2026-11-16_1840.-.pre-public-human-review-gate.md). Next milestone: v0.6.0.",
   "discordPost": {
     "isEnabled": true,
     "serverName": null,
@@ -36,5 +38,5 @@
     "secretEnvKey": "DISCORD_WEBHOOK_FOUNDATION",
     "autoPostOnRelease": true
   },
-  "updatedAtUtc": "2026-11-16T22:38:00Z"
+  "updatedAtUtc": "2026-11-16T19:22:00-05:00"
 }

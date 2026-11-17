@@ -104,9 +104,37 @@ public sealed partial class InstallerEngineCore
 
         if (IsStage1Isolated)
             return Path.Combine(RuntimeEnvironment.DataDirectory, "installed-app");
-        if (IsSandboxActive)
-            return KnownFolderPaths.MapHostPathToSandbox(Theme.DefaultInstallDir, Sandbox);
-        return Path.GetFullPath(Theme.DefaultInstallDir);
+
+        string fallback = IsSandboxActive
+            ? KnownFolderPaths.MapHostPathToSandbox(Theme.DefaultInstallDir, Sandbox)
+            : Path.GetFullPath(Theme.DefaultInstallDir);
+
+        if (!ShouldSuppressHostMutations)
+        {
+            try
+            {
+                string? regLoc = Registry.GetValue(PlatformRegistryHive.CurrentUser, $@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{Theme.DisplayName}", "InstallLocation")?.AsString()
+                    ?? Registry.GetValue(PlatformRegistryHive.CurrentUser, $@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{Theme.AppId}", "InstallLocation")?.AsString();
+                if (!string.IsNullOrWhiteSpace(regLoc))
+                {
+                    string candidate = Path.GetFullPath(regLoc.Trim());
+                    if ((!IsSandboxActive || SandboxEnvironmentSeam.IsPathWithinSandbox(candidate, Sandbox)) && Directory.Exists(candidate))
+                        return candidate;
+                }
+
+                if (!HasExistingInstallation(fallback) &&
+                    InstallerEngine.TryResolveSuggestedInstallDirFromHistory(Registry, Theme.GetEffectiveUmbrellaSubpath(), EffectiveSandbox, out string suggested))
+                {
+                    return suggested;
+                }
+            }
+            catch (Exception ex)
+            {
+                _ = ex; // Registry lookup falls back cleanly to default directory.
+            }
+        }
+
+        return fallback;
     }
 
     public bool HasExistingInstallation(string? targetDir)
@@ -225,6 +253,12 @@ public sealed partial class InstallerEngineCore
             };
             File.WriteAllText(Path.Combine(installDir, "app", "install-manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions), new UTF8Encoding(false));
             RegisterSuiteManifestIfPresent(installDir);
+            InstallerEngine.TrySaveLastInstallBaseDir(
+                Registry,
+                installDir,
+                Theme.GetEffectiveUmbrellaSubpath(),
+                EffectiveSandbox,
+                ShouldSuppressHostMutations);
         }
 
         onProgress?.Invoke(100, $"Completed {(wasUpgrade ? "upgrade" : "installation")} ({installedFiles.Count} files).");

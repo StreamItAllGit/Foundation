@@ -18,6 +18,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Foundation.Server", "src\Fo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Foundation.Launcher", "src\Foundation.Launcher\Foundation.Launcher.csproj", "{A1000001-0008-4000-8000-000000000008}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Foundation.Automation", "src\Foundation.Automation\Foundation.Automation.csproj", "{A1000001-0009-4000-8000-000000000009}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -56,5 +58,9 @@ Global
 		{A1000001-0008-4000-8000-000000000008}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1000001-0008-4000-8000-000000000008}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1000001-0008-4000-8000-000000000008}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1000001-0009-4000-8000-000000000009}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1000001-0009-4000-8000-000000000009}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1000001-0009-4000-8000-000000000009}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1000001-0009-4000-8000-000000000009}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -22,5 +22,6 @@
     <ProjectReference Include="..\..\src\Foundation.Launcher\Foundation.Launcher.csproj" />
     <ProjectReference Include="..\..\src\Foundation.Installer\Foundation.Installer.csproj" />
     <ProjectReference Include="..\..\src\Foundation.UI\Foundation.UI.csproj" />
+    <ProjectReference Include="..\..\src\Foundation.Automation\Foundation.Automation.csproj" />
   </ItemGroup>
 </Project>

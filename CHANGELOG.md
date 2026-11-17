@@ -7,6 +7,23 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-16
+### Added
+- **`Foundation.Installer` Declarative `installer.manifest.json` (`schemaVersion: 2`) Markup Engine:**
+  - Added [`InstallerManifestStore.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Installer/InstallerManifestStore.cs) and `InstallerMarkupManifest` parsing Standard 40 `"installer-manifest"` descriptors (`--manifest`, adjacent directory, or embedded assembly resources), supporting `"single-line"`/`"multi-line"` layout modes, `"lightweight"`/`"full"`/`"custom"` profiles with fallback, 2-line tooltips, theme/button overrides, custom `logoPath`/`iconPath`, declarative `secondaryPickers`, and `allowAutoStart`.
+- **Persistent `HKCU\Software\StreamItAll\LastInstallBaseDir` Precedence & Isolation (`Foundation.Installer`):**
+  - Added `InstallerEngine.SharedStreamItAllRegistrySubKey` / `LastInstallBaseDirValueName` persistence across `IPlatformRegistry` (`registry.hive.json` in Stage 2 sandbox mode; strictly suppressed under `APP_ISOLATED_TEST=1` / `--data-dir`), giving upgrade targets precedence over `LastInstallBaseDir`, rejecting non-rooted/reparse paths, and remapping paths into active sandboxes.
+- **`Foundation.Automation` (`net8.0-windows`) Opt-In Loopback UI Driver & Snapshot Module:**
+  - Added `Foundation.Automation` (`AutomationContracts.cs`, `AutomationLoopbackServer.cs`, `Win32VirtualInputDriver.cs`, `WindowSnapshotService.cs`) with `127.0.0.1` HTTP/1.1 loopback (`Host`/`Origin` `403`, constant-time Bearer `401`, `/v1/health`, `/v1/tree`, `/v1/pointer`, `/v1/keyboard`, `/v1/snapshot`), UI-thread dispatch, `AutomationCliHelper`, non-focus-stealing `WM_*` pointer/keyboard driver (`0` `SendInput` calls), and `IRenderSurfaceSnapshotProvider` + `RgbaPngWriter` / `CapturePreviewBitmap` PNG capture.
+- **Public-Repo Security & Readiness Baseline:**
+  - Added outer [`SECURITY.md`](file:///<PROJECTS_ROOT>/Foundation/SECURITY.md), expanded public Quickstart in [`README.md`](file:///<PROJECTS_ROOT>/Foundation/README.md), documented human-gated `git-filter-repo` pre-public runbook in [`Dev\docs\OPERATIONS.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/OPERATIONS.md), and opened [`0.5.0.2026-11-16_1840.-.pre-public-human-review-gate.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/0.5.0.2026-11-16_1840.-.pre-public-human-review-gate.md) while keeping GitHub private pending human review.
+- **Automated Tests & Gate Sign-Off:**
+  - Added `FoundationMarkupInstallerTests.cs` and `FoundationAutomationTests.cs`; verified `45/45` C# Release tests (`0` warnings), `8/8` Python `unittest`, `audit_scanner.py` (`P0: 0, P1: 0, P2: 45, P3: 0`), `@dean` Gate 2 `PASS`, and `@inspecter` Phase 3 `PASS`.
+
+### Changed
+- **Unified `v0.5.0` SemVer, Manual Shelf & Single-Pass SDK Publish:**
+  - Bumped `0.5.0` across `Directory.Build.props`, `app.manifest.json`, `Foundation.UI.csproj`, `ShellBrandingOptions.cs`, `Web\package.json`, `foundation_core`, `sandbox_ctl.py`, `sync_foundation_sdk.py` (`57` published SDK files in `Foundation-v0.5.0.zip`), and [`Dev\docs\`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/ARCHITECTURE.md).
+
 ## [0.4.2] - 2026-11-16
 ### Added
 - **`Foundation.Core` 4-Drive Sandbox Seams & Atomic JSON Pseudo-Registry:**
@@ -115,22 +132,4 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 ### Changed
 - **Upgraded React 19 `GlobalTerminalDrawer` & `TerminalToolbarAndFilters` to ShadowLibrary Strict Standard (`@foundation/ui v0.2.0`)**.
 
-## [0.2.1] - 2026-11-07
-### Fixed
-- **Clean-Root `app\<exe>` Auto-Resolution & Fail-Closed Self-Spawn Guard in `Foundation.Launcher` (`v0.1.1` — [`RootLauncherHost.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Launcher/RootLauncherHost.cs))**:
-  - Added `RootLauncherHost.ResolveTargetExecutable(rootDir, appExecutableRelativePath, currentProcessPath)` preventing recursive launcher loops.
-
-## [0.2.0] - 2026-11-07
-### Added
-- **`Foundation.Retro.dll` (`v0.1.0` — `net8.0`) Shared Retro Emulation & DAT Library**:
-  - `ConsoleSystemCatalog`, `DatTitleNormalizer`, `NoIntroRedumpDatParser`, `HeaderlessRomStripper` + `MagicBytePlatformDetector`, and `SoftPatchEngine` (IPS, `BPS1`, `UPS1`).
-- **`Foundation.Sidecars.dll` (`v0.1.0` — `net8.0`) Shared Stream Hashing, Archive & `.hash` Coexistence Library**:
-  - `SinglePassStreamHasher`, `SevenZipAndZipInspector`, `HashSidecarService`, and `HkLockSentinel`.
-- **`Foundation.Server.dll` (`v0.1.0` — `net8.0` ASP.NET Core) Shared Kestrel Security & Sister-App Endpoints**:
-  - `TieredAuthEngine`, `TieredAuthMiddleware`, and `SisterAppStandardEndpoints`.
-- **`Foundation.Launcher.dll`, `Foundation.UI.Desktop` & `Foundation.Core.Cli`/`Process` Primitives**:
-  - `RootLauncherHost`, `StaNativeDialogBridgeBase`, `DisposableWebViewHostForm`, `TrayIconBadgeHelper`, `CliArgumentHelper`, `BoundedTailStream`, `CappedSharedLogSink`.
-- **`Foundation.Installer` Fast `<1.5s` Pre-Upgrade Backup & Verification Suite (`InstallerEngineCore.BackupAndVerify.cs`)**.
-- **Shared React 19 `@foundation/ui` (`v0.1.0`) Web Component Library & Python `foundation_core` (`v0.1.0`) Modular Parity**.
-
-*(Older 0.1.x history trimmed per Standard 04 3-minor retention; snapshots preserved in Archive\\.)*
+*(Older 0.1.x–0.2.x history trimmed per Standard 04 3-minor retention (`0.5`/`0.4`/`0.3`); snapshots preserved in Archive\\.)*

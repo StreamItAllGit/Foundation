@@ -38,17 +38,20 @@ public sealed partial class InstallerWizardForm
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
 
-        Icon? extractedIcon = null;
+        Icon? extractedIcon = InstallerWizardControls.TryLoadIcon(_iconPath, _payloadAssembly);
         try
         {
-            string? selfExe = Environment.ProcessPath;
-            if (!string.IsNullOrWhiteSpace(selfExe) && File.Exists(selfExe))
+            if (extractedIcon == null)
             {
-                extractedIcon = Icon.ExtractAssociatedIcon(selfExe);
-                if (extractedIcon != null)
+                string? selfExe = Environment.ProcessPath;
+                if (!string.IsNullOrWhiteSpace(selfExe) && File.Exists(selfExe))
                 {
-                    Icon = extractedIcon;
+                    extractedIcon = Icon.ExtractAssociatedIcon(selfExe);
                 }
+            }
+            if (extractedIcon != null)
+            {
+                Icon = extractedIcon;
             }
         }
         catch (Exception ex)
@@ -98,7 +101,7 @@ public sealed partial class InstallerWizardForm
             _lblModeBadge.ForeColor = AccentEmerald;
             if (!_completedSuccessfully)
             {
-                _btnPrimary.Text = "Upgrade Now";
+                _btnPrimary.Text = _buttonOverrides?.UpgradeText ?? "Upgrade Now";
                 _btnPrimary.BackColor = AccentEmerald;
             }
         }
@@ -108,7 +111,7 @@ public sealed partial class InstallerWizardForm
             _lblModeBadge.ForeColor = _accentColor;
             if (!_completedSuccessfully)
             {
-                _btnPrimary.Text = "Install Now";
+                _btnPrimary.Text = _buttonOverrides?.InstallText ?? "Install Now";
                 _btnPrimary.BackColor = _accentColor;
             }
         }
@@ -182,6 +185,7 @@ public sealed partial class InstallerWizardForm
         _btnSecondaryBrowse.Enabled = false;
         _rbProfileLightweight.Enabled = false;
         _rbProfileFull.Enabled = false;
+        _rbProfileCustom.Enabled = false;
         _chkShortcuts.Enabled = false;
         _chkAutoStart.Enabled = false;
         _chkMigrateLegacy.Enabled = false;
@@ -326,6 +330,7 @@ public sealed partial class InstallerWizardForm
         _btnSecondaryBrowse.Enabled = _hasSecondaryPicker;
         _rbProfileLightweight.Enabled = !_isUninstallMode;
         _rbProfileFull.Enabled = !_isUninstallMode;
+        _rbProfileCustom.Enabled = !_isUninstallMode;
         _chkShortcuts.Enabled = !_isUninstallMode;
         _chkAutoStart.Enabled = _allowAutoStart && !_isUninstallMode;
         _chkMigrateLegacy.Enabled = _showLegacyMigration;

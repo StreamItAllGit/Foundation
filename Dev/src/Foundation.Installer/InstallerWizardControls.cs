@@ -4,8 +4,12 @@
 // @exports: InstallerWizardControls
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -163,5 +167,82 @@ public static class InstallerWizardControls
             Visible = false,
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
+    }
+
+    public static ToolTip CreateDarkTooltipController() =>
+        new() { AutoPopDelay = 8000, InitialDelay = 300, ReshowDelay = 100, ShowAlways = true };
+
+    public static void ApplyTooltips(
+        ToolTip controller,
+        IReadOnlyDictionary<string, InstallerMarkupTooltip>? tooltips,
+        IReadOnlyDictionary<string, Control> controlMap)
+    {
+        if (tooltips is null || tooltips.Count == 0) return;
+        foreach (KeyValuePair<string, Control> kv in controlMap)
+        {
+            if (tooltips.TryGetValue(kv.Key, out InstallerMarkupTooltip? tip))
+            {
+                string formatted = tip.FormatTwoLine();
+                if (!string.IsNullOrWhiteSpace(formatted))
+                    controller.SetToolTip(kv.Value, formatted);
+            }
+        }
+    }
+
+    public static Image? TryLoadImage(string? pathOrResource, Assembly? assembly)
+    {
+        if (string.IsNullOrWhiteSpace(pathOrResource)) return null;
+        string trimmed = pathOrResource.Trim();
+        try
+        {
+            string resolved = Path.IsPathRooted(trimmed) ? trimmed : Path.Combine(AppContext.BaseDirectory, trimmed);
+            if (File.Exists(resolved))
+            {
+                using var fs = File.OpenRead(resolved);
+                using var img = Image.FromStream(fs);
+                return new Bitmap(img);
+            }
+
+            if (assembly is not null)
+            {
+                string? resName = assembly.GetManifestResourceNames()
+                    .FirstOrDefault(n => n.EndsWith(trimmed, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(resName))
+                {
+                    using Stream? stream = assembly.GetManifestResourceStream(resName);
+                    if (stream is not null)
+                    {
+                        using var img = Image.FromStream(stream);
+                        return new Bitmap(img);
+                    }
+                }
+            }
+        }
+        catch (Exception ex) { _ = ex; /* optional logo load failure falls back cleanly */ }
+        return null;
+    }
+
+    public static Icon? TryLoadIcon(string? pathOrResource, Assembly? assembly)
+    {
+        if (string.IsNullOrWhiteSpace(pathOrResource)) return null;
+        string trimmed = pathOrResource.Trim();
+        try
+        {
+            string resolved = Path.IsPathRooted(trimmed) ? trimmed : Path.Combine(AppContext.BaseDirectory, trimmed);
+            if (File.Exists(resolved)) return new Icon(resolved);
+
+            if (assembly is not null)
+            {
+                string? resName = assembly.GetManifestResourceNames()
+                    .FirstOrDefault(n => n.EndsWith(trimmed, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(resName))
+                {
+                    using Stream? stream = assembly.GetManifestResourceStream(resName);
+                    if (stream is not null) return new Icon(stream);
+                }
+            }
+        }
+        catch (Exception ex) { _ = ex; /* optional logo load failure falls back cleanly */ }
+        return null;
     }
 }
