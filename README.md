@@ -1,4 +1,6 @@
-# Foundation (`v0.5.0`)
+# Foundation (`v0.5.0` — Beta)
+
+> **Release Status:** **Beta (Pre-1.0 — `v0.5.0`)**. All projects across the ecosystem, including `Foundation`, are considered Beta unless otherwise specified prior to `v1.0.0` Going Gold.
 
 **Shared SDK & Zero-Duplication Infrastructure Core** (`Foundation.Core v0.5.0`, `Foundation.Retro v0.5.0`, `Foundation.Sidecars v0.5.0`, `Foundation.Server v0.5.0`, `Foundation.Launcher v0.5.0`, `Foundation.UI v0.5.0` + `@foundation/ui v0.5.0`, `Foundation.Installer v0.5.0`, `Foundation.Automation v0.5.0`, Python `foundation_core v0.5.0`, and `Dev\tools\*.py`).
 
@@ -64,7 +66,7 @@ python Foundation\Dev\tools\run_sandbox_e2e.py --app-id myapp --version 0.1.0 --
 
 ## 4. Governance & Lifecycle Status
 
-- **Lifecycle State:** [`active.state`](file:///<PROJECTS_ROOT>/Foundation/active.state) (`v0.5.0`)
+- **Lifecycle State:** [`active.state`](file:///<PROJECTS_ROOT>/Foundation/active.state) (`v0.5.0` — Beta, Public Repository)
 - **Project Anchor & Roadmap:** [`AGENTS.md`](file:///<PROJECTS_ROOT>/Foundation/AGENTS.md) · [`FEATURES.md`](file:///<PROJECTS_ROOT>/Foundation/FEATURES.md) · [`ROADMAP.md`](file:///<PROJECTS_ROOT>/Foundation/ROADMAP.md) · [`CHANGELOG.md`](file:///<PROJECTS_ROOT>/Foundation/CHANGELOG.md)
 - **Dev Bible Compliance:** Strictly adheres to [`00_GLOSSARY.md`](file:///<PROJECTS_ROOT>/_DevBible/00_GLOSSARY.md) (`250/400/600` code-only SLOC across `Dev\` sources; Standard 18 & Standard 40 compliant).
 

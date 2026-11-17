@@ -7,6 +7,9 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 
 ## [Unreleased]
 
+### Added
+- **IDE Workspace (`Dev\Foundation.code-workspace`):** Added multi-root VS Code / Antigravity workspace (`1. Foundation — Dev` + `2. Foundation — Project Root`) with `dotnet.defaultSolution`, Python interpreter settings, build/test/scaffold-audit tasks, file excludes, and extension recommendations, and updated [`Dev\docs\ARCHITECTURE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/ARCHITECTURE.md) and [`Dev\docs\OPERATIONS.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/OPERATIONS.md).
+
 ## [0.5.0] - 2026-11-16
 ### Added
 - **`Foundation.Installer` Declarative `installer.manifest.json` (`schemaVersion: 2`) Markup Engine:**

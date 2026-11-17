@@ -7,6 +7,8 @@
 
 ## 1. Build & Verification (`Foundation.sln` + `foundation_core`)
 
+Open [`Dev\Foundation.code-workspace`](file:///<PROJECTS_ROOT>/Foundation/Dev/Foundation.code-workspace) in VS Code / Antigravity for preconfigured `Dev\` + Project Root folders, `dotnet.defaultSolution`, build/test/scaffold-audit tasks, and recommended extensions.
+
 | Command | Purpose | Notes |
 |---|---|---|
 | `dotnet test <PROJECTS_ROOT>\Foundation\Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` | Compiles all assemblies + runs all C# xUnit tests | Zero-warning build (`PublishFoundationSdk` defaults to `false`) |

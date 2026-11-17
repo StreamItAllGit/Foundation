@@ -81,6 +81,7 @@ Every production source and tool file complies with **Standard 32 `250 / 400 / 6
 | File | SLOC (Raw) | Responsibility |
 |---|---|---|
 | `Dev\Directory.Build.props` | `23` (`24`) | Enforces `.NET 8`, nullable/implicit usings, `Deterministic`, `ContinuousIntegrationBuild`, `Version=0.5.0` (`0.5.0.0`) |
+| `Dev\Foundation.code-workspace` | — | Multi-root IDE workspace (`Dev\` + Project Root), `.NET` / Python tasks, file excludes & extension recommendations |
 | `Dev\app.manifest.json` | `28` (`28`) | Standard 40 `standalone-app` manifest (`version: "0.5.0"`, `sdkVersion: "0.5.0"`, `containerTier: "Tier A (4-Folder)"`) |
 | `Dev\.env.example` | `17` (`21`) | Optional SharedLibs, Notion, and empty Stage 2 4-drive sandbox overlay placeholders |
 | `Dev\Foundation.sln` | — (`66`) | Solution binding all 8 C# projects + `Foundation.Tests` |

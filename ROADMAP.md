@@ -1,6 +1,6 @@
 # Foundation (`v0.5.0`) — Strategic Roadmap
 
-> **Active Version:** `v0.5.0` (Unified SemVer across all 8 C# assemblies, `@foundation/ui v0.5.0`, and `foundation_core v0.5.0`)
+> **Active Version:** `v0.5.0` (`Beta` — Unified SemVer across all 8 C# assemblies, `@foundation/ui v0.5.0`, and `foundation_core v0.5.0`; Pre-1.0 Beta until `v1.0.0` Going Gold)
 > **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`
 
 ---

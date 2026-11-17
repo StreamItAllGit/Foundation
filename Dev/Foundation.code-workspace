@@ -1,0 +1,128 @@
+{
+  "folders": [
+    {
+      "name": "1. Foundation — Dev",
+      "path": "."
+    },
+    {
+      "name": "2. Foundation — Project Root",
+      "path": ".."
+    }
+  ],
+  "settings": {
+    "dotnet.defaultSolution": "Foundation.sln",
+    "python.defaultInterpreterPath": "C:\\Python313",
+    "files.eol": "\n",
+    "files.exclude": {
+      "**/bin": true,
+      "**/obj": true,
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "**/.cache": true,
+      "**/node_modules": true,
+      "**/[Dd]esktop.ini": true,
+      "**/[Tt]humbs.db": true
+    }
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build Foundation (.NET)",
+        "type": "shell",
+        "command": "dotnet",
+        "args": [
+          "build",
+          "Foundation.sln",
+          "-c",
+          "Release",
+          "-p:TreatWarningsAsErrors=true"
+        ],
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "problemMatcher": "$msCompile"
+      },
+      {
+        "label": "Test Foundation (.NET)",
+        "type": "shell",
+        "command": "dotnet",
+        "args": [
+          "test",
+          "Foundation.sln",
+          "-c",
+          "Release",
+          "-p:TreatWarningsAsErrors=true"
+        ],
+        "options": {
+          "env": {
+            "APP_ISOLATED_TEST": "1"
+          }
+        },
+        "group": {
+          "kind": "test",
+          "isDefault": true
+        }
+      },
+      {
+        "label": "Test foundation_core (Python unittest)",
+        "type": "shell",
+        "command": "python",
+        "args": [
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests/foundation_core",
+          "-v"
+        ],
+        "group": {
+          "kind": "test",
+          "isDefault": false
+        }
+      },
+      {
+        "label": "Test foundation_core (pytest)",
+        "type": "shell",
+        "command": "pytest",
+        "args": [
+          "tests/foundation_core",
+          "-q"
+        ],
+        "group": {
+          "kind": "test",
+          "isDefault": false
+        }
+      },
+      {
+        "label": "Audit Foundation Scaffold",
+        "type": "shell",
+        "command": "powershell",
+        "args": [
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${userHome}/.gemini/config/skills/graduate/scripts/scaffold_project.ps1",
+          "-ProjectName",
+          "Foundation",
+          "-Group",
+          "Personal",
+          "-AllowInitialEmptyInstallers",
+          "-AuditOnly"
+        ],
+        "group": {
+          "kind": "test",
+          "isDefault": false
+        }
+      }
+    ]
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-dotnettools.csdevkit",
+      "ms-python.python",
+      "dbaeumer.vscode-eslint"
+    ]
+  }
+}
