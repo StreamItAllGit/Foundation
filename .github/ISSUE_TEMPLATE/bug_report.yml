@@ -1,0 +1,50 @@
+name: Bug Report
+description: Report a bug or regression in Foundation (.NET SDK, Python foundation_core, React @foundation/ui, or tools)
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component / Assembly
+      options:
+        - Foundation.Core
+        - Foundation.Installer
+        - Foundation.Automation
+        - Foundation.UI / @foundation/ui
+        - Foundation.Retro
+        - Foundation.Sidecars
+        - Foundation.Server
+        - Foundation.Launcher
+        - foundation_core (Python)
+        - Dev/tools CLI Scripts
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Foundation Version
+      description: Version string or Git commit SHA where you observed the issue.
+      placeholder: "e.g., v0.5.1 (Beta)"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: Clear explanation of expected vs. actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal snippet, CLI arguments, or test case that triggers the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Environment & Error Output
+      description: OS version, .NET/Python version, stack trace, or redacted crash bundle JSON (strip any local paths or secrets).
+      render: text

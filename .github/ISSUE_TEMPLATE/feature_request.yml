@@ -1,0 +1,33 @@
+name: Feature Request
+description: Propose a new shared primitive, parity module, or ergonomic enhancement for Foundation
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: target_area
+    attributes:
+      label: Target SDK Surface
+      options:
+        - Foundation.Core (.NET)
+        - Foundation.Installer / Launcher
+        - Foundation.Automation
+        - Foundation.UI / @foundation/ui
+        - Foundation.Retro / Sidecars / Server
+        - foundation_core (Python)
+        - Developer Tooling & Sandbox Scripts
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What repetitive boilerplate or runtime gap should Foundation solve cleanly across apps?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Design / API
+      description: Suggested classes, CLI flags, JSON schema keys, or compatibility notes.
+    validations:
+      required: true
