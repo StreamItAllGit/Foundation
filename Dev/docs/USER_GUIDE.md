@@ -1,20 +1,29 @@
-# Foundation (`v0.5.1`) — Consumer User Guide & Integration Recipes
+# Foundation (`v0.5.2`) — Consumer User Guide & Integration Recipes
 
 > **Goal:** Copy-paste integration recipes for consuming `Foundation` across C#, React/TypeScript, Vanilla Web, Python, and Stage 2 external 4-drive sandboxes without re-reading SDK source files.
-> **Full API Dictionary:** [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md)
+> **Full API Dictionary:** `Dev\docs\INTERFACES.md`
 
 ---
 
 ## 1. Syncing Foundation into a Consumer Project
 
-Consumer repositories (`Housekeeping`, `ShadowLibrary`, `reStation`, `KingsFieldRecomp`, `MediaSync`) reference published binaries in `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` (or vendored copies under `<Consumer>\Dev\lib\` synced via [`sync_foundation_sdk.py`](file:///<PROJECTS_ROOT>/Foundation/Dev/tools/sync_foundation_sdk.py)):
+Consumer repositories (`Housekeeping`, `ShadowLibrary`, `reStation`, `KingsFieldRecomp`, `MediaSync`) reference published binaries in `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` (or vendored copies under `<Consumer>\Dev\lib\` synced via `Dev\tools\sync_foundation_sdk.py`):
 
 ```powershell
 # Verify hub health, pull Latest SDK DLLs/@foundation/ui/foundation_core, and purge retired legacy test artifacts
 python <PROJECTS_ROOT>\Foundation\Dev\tools\sync_foundation_sdk.py --sync-consumer <PROJECTS_ROOT>\<ProjectName> --source-version Latest
 ```
 
-> **Rule Reminder:** Consumer development sessions treat `<PROJECTS_ROOT>\Foundation\` and `<PROJECTS_ROOT>\SharedLibs\Foundation\` as **strictly read-only**. Log upstream SDK gaps in [`Dev\docs\reports\`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/reports/).
+> **Rule Reminder:** Consumer development sessions treat `<PROJECTS_ROOT>\Foundation\` and `<PROJECTS_ROOT>\SharedLibs\Foundation\` as **strictly read-only**. Log upstream SDK gaps in `Dev\docs\reports\`.
+
+### 1.1 Validating App & Portable Release Bundles (`--allow-portable-zip`)
+When shipping an app installer paired with a companion `*-Portable.zip`, validate the strict 7-file release layout (`*-Setup-v*.exe`, `*-Portable.zip`, `README.md`, `FEATURES.md`, `RELEASE_NOTES.md`, `CHANGELOG.md`, `SHA256SUMS.txt` — ensuring zero `*Setup*.exe` leaks inside `*-Portable.zip` and zero loose subdirectories):
+
+```powershell
+python <PROJECTS_ROOT>\Foundation\Dev\tools\build_release_universal.py path\to\Releases\Latest --regen-sums --allow-portable-zip
+```
+
+*(Note: `build_release_universal.py` also auto-enables 7-file validation whenever a `*-Portable.zip` accompanies `*-Setup-v*.exe`, unless `--allow-sdk-zip` is passed for SDK-only 6-file validation.)*
 
 ---
 
@@ -43,10 +52,30 @@ using var lockHandle = PidSafeLockfile.Acquire(Path.Combine(env.DataDirectory, "
 
 ---
 
-## 3. Drop-In & Declarative Markup Installer (`Foundation.Installer v0.5.1`)
+## 3. Drop-In & Declarative Markup Installer (`Foundation.Installer v0.5.2`)
 
 ### 3.1 Tier 1 — Zero-Boilerplate `StandardInstallerHost` + Optional `installer.manifest.json`
-Add a ~15-line `Dev\Installer\Program.cs` referencing `Foundation.Installer.dll`, embedding `payload.zip` as `<ProductName>.Installer.Embedded.payload.zip`, and optionally placing a Standard 40 `schemaVersion: 2` `installer.manifest.json` (`manifestType: "installer-manifest"`) beside the setup executable or embedded in the assembly. `StandardInstallerHost` automatically merges `installer.manifest.json` (`theme`, `layoutMode`, `supportedProfiles`, 2-line `tooltips`, `secondaryPickers`, `logoPath`/`iconPath`) and uses `HKCU\Software\StreamItAll\LastInstallBaseDir` for fresh-install destination suggestions (keeping existing `InstallLocation` on upgrades):
+Add a ~15-line `Dev\Installer\Program.cs` referencing `Foundation.Installer.dll`, embedding `payload.zip` as `<ProductName>.Installer.Embedded.payload.zip`, and optionally placing a `schemaVersion: 2` `installer.manifest.json` (`manifestType: "installer-manifest"`) beside the setup executable or embedded in the assembly. `StandardInstallerHost` automatically merges `installer.manifest.json` (`suiteId`, `theme`, `layoutMode`, `supportedProfiles`, 2-line `tooltips`, `secondaryPickers`, `logoPath`/`iconPath`), avoids doubling `ProductName` on versioned `umbrellaSubpath` leaves (`vX.Y.Z*`), and uses self-healing `HKCU\Software\StreamItAll\LastInstallBaseDir` suggestions for fresh installs (keeping existing `InstallLocation` on upgrades and preserving clean user roots such as `D:\Games\Misc`):
+
+```json
+{
+  "$schema": "https://schemas.local/manifest.v2.json",
+  "schemaVersion": 2,
+  "manifestType": "installer-manifest",
+  "appId": "myapp",
+  "version": "0.1.0",
+  "updatedAtUtc": "2026-11-19T00:00:00Z",
+  "displayName": "My App",
+  "publisher": "StreamItAll",
+  "studioName": "StreamItAll",
+  "suiteId": "MySuite",
+  "layoutMode": "single-line",
+  "supportedProfiles": ["lightweight", "full"],
+  "defaultProfile": "lightweight"
+}
+```
+
+*(Note: `"suiteId"` is the canonical manifest field; legacy `"suiteName"` remains supported as a read-only JSON fallback when `"suiteId"` is omitted.)*
 
 ```csharp
 using Foundation.Installer;
@@ -77,12 +106,22 @@ Configure `InstallerThemeOptions` (`AllowAutoStart`, `AllowLegacyMigration`, `Av
 
 ---
 
-## 4. Clean-Root Launcher, Server, Retro, Sidecars & `Foundation.Automation` (`v0.5.1`)
+## 4. Clean-Root Launcher, Server, Retro, Sidecars & `Foundation.Automation` (`v0.5.2`)
 
-- **`Foundation.Launcher`:** `return RootLauncherHost.Run(@"app\MyApp.exe", "My App", args);`
+- **`Foundation.Launcher` (Built-in + Extensible via `RootLauncherOptions`):** Built-in sync flags (`--diagnose`, `--doctor`, `--verify`, `--verify-module`, `--wait`, `--open`), value/path options (`--programs-dir`, `--save-dir`, `--preload-media`, `--backend`, `--automation-port`, `--automation-token`), and non-swallowing optional flags (`--suite-tab`, `--window`, `--browser`) work out of the box; pass `RootLauncherOptions` to append app-specific flags:
+  ```csharp
+  using Foundation.Launcher;
+
+  var launcherOpts = new RootLauncherOptions(
+      ExtraSyncWaitFlags: new[] { "--export-manifest" },
+      ExtraValueOptions: new[] { "--profile-id" },
+      ExtraPathValueOptions: new[] { "--rom-dir" });
+
+  return RootLauncherHost.Run(@"app\MyApp.exe", "My App", args, launcherOpts);
+  ```
 - **`Foundation.Server` (`net8.0`):** `TieredAuthEngine.LoadOrCreateSigningKey(env.DataDirectory)`, `FoundationTieredAuthMiddleware`, and `SisterAppStandardEndpoints.MapSuiteManifestEndpoints(...)`.
 - **`Foundation.Retro` + `Foundation.Sidecars`:** `ConsoleSystemCatalog.ResolvePlatformId`, `DatTitleNormalizer.ParseFilename`, `SinglePassStreamHasher.HashFileSinglePassAsync`, `HashSidecarService`, `HkLockSentinel.TryAcquireDirectoryHkLock`.
-- **`Foundation.Automation` (Opt-In Loopback):**
+- **`Foundation.Automation` (Opt-In Loopback, Focus-Free Mouse Dispatch):**
   ```csharp
   using Foundation.Automation;
 
@@ -93,7 +132,7 @@ Configure `InstallerThemeOptions` (`AllowAutoStart`, `AllowLegacyMigration`, `Av
 
 ---
 
-## 5. React `@foundation/ui` (`v0.5.1`) & Vanilla Web Integration
+## 5. React `@foundation/ui` (`v0.5.2`) & Vanilla Web Integration
 
 ```tsx
 import { GlobalTerminalDrawer, UniversalDataTable, SchemaSettingsRenderer, ModalDialog, StyledTooltip } from "@foundation/ui";
@@ -107,7 +146,7 @@ For Vanilla JS / FastAPI / Razor hosts, include `foundation-tokens.css`, `founda
 
 ---
 
-## 6. Python `foundation_core` (`v0.5.1`) Quickstart
+## 6. Python `foundation_core` (`v0.5.2`) Quickstart
 
 ```python
 from foundation_core import (
@@ -123,7 +162,7 @@ from foundation_core import (
     resolve_sandbox_environment,
 )
 
-cli = parse_standard_cli_flags(app_name="my_py_app", app_version="0.5.1")
+cli = parse_standard_cli_flags(app_name="my_py_app", app_version="0.5.2")
 sandbox = resolve_sandbox_environment()
 folders = resolve_known_folders(sandbox)
 reg = JsonHivePlatformRegistry.from_sandbox(sandbox) if sandbox.is_sandbox_active else None
@@ -142,4 +181,4 @@ python <PROJECTS_ROOT>\Foundation\Dev\tools\run_sandbox_e2e.py `
   --probe-arg --version
 ```
 
-The runner executes the 12-point `Standard 02 §4` matrix (`S2-01`..`S2-12`) with scrubbed child environments (`FOUNDATION_SUPPRESS_MODALS=1`), verifies `hostDiffCount == 0`, and emits a Standard 18 JSON receipt under `<SandboxRoot>\runs\`.
+The runner executes the 12-point Stage 2 sandbox matrix (`S2-01`..`S2-12`) with scrubbed child environments (`FOUNDATION_SUPPRESS_MODALS=1`), verifies `hostDiffCount == 0`, and emits a structured JSON receipt under `<SandboxRoot>\runs\`.

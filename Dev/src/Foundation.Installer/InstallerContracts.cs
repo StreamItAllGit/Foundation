@@ -79,7 +79,10 @@ public sealed record InstallerAppDescriptor(
             string[] segments = trimmed.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
             if (segments.Length > 0)
             {
-                return string.Equals(segments[^1], ProductName, StringComparison.OrdinalIgnoreCase)
+                bool hasProductOrVersionLeaf =
+                    segments.Any(s => string.Equals(s, ProductName, StringComparison.OrdinalIgnoreCase)) ||
+                    IsVersionLeafSegment(segments[^1]);
+                return hasProductOrVersionLeaf
                     ? Path.Combine(segments)
                     : Path.Combine(segments.Concat(new[] { ProductName }).ToArray());
             }
@@ -90,6 +93,12 @@ public sealed record InstallerAppDescriptor(
             ? Path.Combine(effectiveStudio, SuiteName.Trim(), ProductName)
             : Path.Combine(effectiveStudio, ProductName);
     }
+
+    internal static bool IsVersionLeafSegment(string? segment) =>
+        !string.IsNullOrWhiteSpace(segment) &&
+        segment.Length >= 2 &&
+        (segment[0] == 'v' || segment[0] == 'V') &&
+        char.IsAsciiDigit(segment[1]);
 
     public string ResolveCanonicalDefaultInstallDir(SandboxResolution? sandbox = null)
     {

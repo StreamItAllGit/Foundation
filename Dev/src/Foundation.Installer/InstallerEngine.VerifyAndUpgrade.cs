@@ -37,7 +37,7 @@ public sealed partial class InstallerEngine
         byte[] buffer = new byte[65536];
         long total = 0;
         int read;
-        while ((read = await payloadStream.ReadAsync(buffer, ct)) > 0)
+        while ((read = await payloadStream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
         {
             sha.TransformBlock(buffer, 0, read, null, 0);
             total += read;

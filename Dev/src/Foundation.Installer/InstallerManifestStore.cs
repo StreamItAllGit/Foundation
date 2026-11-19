@@ -27,6 +27,8 @@ public sealed record InstallerMarkupManifest
     [JsonPropertyName("publisher")] public string? Publisher { get; init; }
     [JsonPropertyName("subtitle")] public string? Subtitle { get; init; }
     [JsonPropertyName("studioName")] public string? StudioName { get; init; }
+    [JsonPropertyName("suiteId")] public string? SuiteId { get; init; }
+    /// <summary>Legacy read-only JSON fallback for <see cref="SuiteId"/> per Standard 18.</summary>
     [JsonPropertyName("suiteName")] public string? SuiteName { get; init; }
     [JsonPropertyName("umbrellaSubpath")] public string? UmbrellaSubpath { get; init; }
     [JsonPropertyName("mainExecutableRelativePath")] public string? MainExecutableRelativePath { get; init; }
@@ -45,6 +47,11 @@ public sealed record InstallerMarkupManifest
     [JsonIgnore]
     public string EffectiveDisplayName =>
         FirstNonEmpty(DisplayName, AppTitle, AppId) ?? "Application";
+
+    [JsonIgnore]
+    public string? EffectiveSuiteId => ResolveEffectiveSuiteId();
+
+    public string? ResolveEffectiveSuiteId() => FirstNonEmpty(SuiteId, SuiteName);
 
     private static string? FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();
@@ -153,7 +160,7 @@ public static class InstallerManifestStore
             BrandAccentHex = FirstNonEmpty(manifest.Theme?.Accent) ?? baseDescriptor.BrandAccentHex,
             AllowAutoStart = manifest.AllowAutoStart ?? baseDescriptor.AllowAutoStart,
             StudioName = FirstNonEmpty(manifest.StudioName) ?? baseDescriptor.StudioName,
-            SuiteName = FirstNonEmpty(manifest.SuiteName) ?? baseDescriptor.SuiteName,
+            SuiteName = manifest.ResolveEffectiveSuiteId() ?? baseDescriptor.SuiteName,
             UmbrellaSubpath = FirstNonEmpty(manifest.UmbrellaSubpath) ?? baseDescriptor.UmbrellaSubpath,
             DefaultProfile = manifest.DefaultProfile,
             AllowLegacyMigration = manifest.AllowLegacyMigration ?? baseDescriptor.AllowLegacyMigration,
@@ -209,7 +216,7 @@ public static class InstallerManifestStore
                 : null,
             AllowAutoStart = manifest.AllowAutoStart ?? true,
             StudioName = FirstNonEmpty(manifest.StudioName) ?? "StreamItAll",
-            SuiteName = FirstNonEmpty(manifest.SuiteName),
+            SuiteName = manifest.ResolveEffectiveSuiteId(),
             UmbrellaSubpath = FirstNonEmpty(manifest.UmbrellaSubpath),
             AvailableProfiles = profiles,
             DefaultProfileId = manifest.DefaultProfile,

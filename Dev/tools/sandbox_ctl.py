@@ -22,7 +22,7 @@ from typing import Any
 winreg = __import__("winreg") if os.name == "nt" else None
 DEV_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = DEV_ROOT.parent
-SDK_VERSION = "0.5.1"
+SDK_VERSION = "0.5.2"
 ROLE_DIRS = {"SANDBOX_C_DRIVE": "C", "SANDBOX_D_DRIVE": "D", "SANDBOX_REMOVABLE_DRIVE": "E"}
 
 

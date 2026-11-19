@@ -1,13 +1,13 @@
-# Foundation (`v0.5.1`) — Operations, Build & CLI Runbook
+# Foundation (`v0.5.2`) — Operations, Build & CLI Runbook
 
 > **Audience:** Engineers maintaining `Foundation` itself or running `Dev\tools\*.py`, `sandbox_ctl.py`, `run_sandbox_e2e.py`, `Foundation.Automation`, or `StandardInstallerHost` CLIs.
-> **Full Symbol Reference:** [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md)
+> **Full Symbol Reference:** `Dev\docs\INTERFACES.md`
 
 ---
 
 ## 1. Build & Verification (`Foundation.sln` + `foundation_core`)
 
-Open [`Dev\Foundation.code-workspace`](file:///<PROJECTS_ROOT>/Foundation/Dev/Foundation.code-workspace) in VS Code / Antigravity for preconfigured `Dev\` + Project Root folders, `dotnet.defaultSolution`, build/test/scaffold-audit tasks, and recommended extensions.
+Open `Dev\Foundation.code-workspace` in VS Code / Antigravity for preconfigured `Dev\` + Project Root folders, `dotnet.defaultSolution`, build/test/scaffold-audit tasks, and recommended extensions.
 
 | Command | Purpose | Notes |
 |---|---|---|
@@ -16,7 +16,7 @@ Open [`Dev\Foundation.code-workspace`](file:///<PROJECTS_ROOT>/Foundation/Dev/Fo
 | `pytest Dev\tests\foundation_core -q` | Runs the same Python suite via Pytest | Uses isolated `TemporaryDirectory()` fixtures |
 
 ### ⚠️ MSBuild Post-Build Side Effect Note (`Foundation.UI.csproj`)
-Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.5.1 --ui-version 0.5.1 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
+Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.5.2 --ui-version 0.5.2 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
 
 ---
 
@@ -25,19 +25,20 @@ Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\
 ### 2.1 `sync_foundation_sdk.py` (`Dev\tools\sync_foundation_sdk.py`, `<= 260` raw lines)
 | Flag | Default / Type | Description |
 |---|---|---|
-| `--publish` | bool | Publishes Release binaries, `@foundation/ui` (`0.5.1`), `foundation_core` (`0.5.1`), and `Dev\tools\` to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus strict 6-file `Releases\Latest\` (without loose `LICENSE`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
+| `--publish` | bool | Publishes Release binaries, `@foundation/ui` (`0.5.2`), `foundation_core` (`0.5.2`), and `Dev\tools\` to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus strict 6-file `Releases\Latest\` (without loose `LICENSE`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
 | `--sync-consumer` | `<ProjectRoot>` | Copies pinned SDK DLLs, `WebAssets`, and `foundation_core` into consumer `Dev\lib\` and removes only retired legacy test globs (`tools/verify_sandbox_universal.py`, `Foundation.Sandbox.*`, `*VisibleTest*`, `*InstallerSandboxContext*`) so `sandbox_seam.py`, `sandbox_ctl.py`, and `run_sandbox_e2e.py` survive |
-| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.5.1`) |
+| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.5.2`) |
 | `--web-dir` | Path (optional) | Optional consumer frontend directory target for `WebAssets` |
-| `--version` / `--ui-version` | `0.5.1` | Foundation SDK / `@foundation/ui` SemVer |
+| `--version` / `--ui-version` | `0.5.2` | Foundation SDK / `@foundation/ui` SemVer |
 | `--configuration` | `Release` | Build configuration (`Release`/`Debug`) |
 
 ### 2.2 `build_release_universal.py` (`Dev\tools\build_release_universal.py`)
 | Argument / Flag | Required? | Description |
 |---|---|---|
-| `release_dir` | Positional (Yes) | Path to `Releases\v<Version>` or `Releases\Latest` to validate strictly as a 6-file bundle |
-| `--regen-sums` | Optional | Regenerates `SHA256SUMS.txt` before validating the 6-file bundle |
-| `--allow-sdk-zip` | Optional | Validates strictly 6 files (`Foundation-v<Version>.zip`, `README.md`, `FEATURES.md`, `RELEASE_NOTES.md`, `CHANGELOG.md`, `SHA256SUMS.txt` — loose `LICENSE` fails validation) |
+| `release_dir` | Positional (Yes) | Path to `Releases\v<Version>` or `Releases\Latest` to validate via `validate_release_bundle` (`validate_six_file_release_bundle`) as a strict 6-file or 7-file bundle |
+| `--regen-sums` | Optional | Regenerates `SHA256SUMS.txt` before validating the bundle |
+| `--allow-sdk-zip` | Optional | Validates strictly 6 files (`Foundation-v<Version>.zip`, `README.md`, `FEATURES.md`, `RELEASE_NOTES.md`, `CHANGELOG.md`, `SHA256SUMS.txt` — loose `LICENSE` fails validation; mutually exclusive with `--allow-portable-zip`) |
+| `--allow-portable-zip` | Optional | Validates strictly 7 files for app+portable releases (`*-Setup-v*.exe`, `*-Portable.zip`, `README.md`, `FEATURES.md`, `RELEASE_NOTES.md`, `CHANGELOG.md`, `SHA256SUMS.txt` — rejects loose subdirectories/extras, empty/corrupt archives, or any `*Setup*.exe` inside `*-Portable.zip`; auto-enabled when `*-Portable.zip` is present without `--allow-sdk-zip`) |
 
 ---
 
@@ -48,7 +49,7 @@ Resolves `SANDBOX_C_DRIVE`, `SANDBOX_D_DRIVE`, `SANDBOX_REMOVABLE_DRIVE`, `SANDB
 
 | Subcommand | Flags | Behavior |
 |---|---|---|
-| `init` | `--no-subst`, `--force-hive` | Creates `C`/`D`/`E`/`registry`/`locks`/`snapshots`/`runs`/`logs`, mounts `subst` drives, writes Standard 40 `sandbox.manifest.json` (no `manifestType`) & `registry.baseline.json` -> `registry.hive.json` |
+| `init` | `--no-subst`, `--force-hive` | Creates `C`/`D`/`E`/`registry`/`locks`/`snapshots`/`runs`/`logs`, mounts `subst` drives, writes `schemaVersion: 2` `sandbox.manifest.json` (no `manifestType`) & `registry.baseline.json` -> `registry.hive.json` |
 | `mount` | `--no-subst` | Idempotently mounts `SANDBOX_C_DRIVE`, `SANDBOX_D_DRIVE`, `SANDBOX_REMOVABLE_DRIVE` |
 | `unmount-removable` / `remount-removable` | — | Runs `subst <Removable> /D` or remounts `<SandboxRoot>\E` for eject/retry tests |
 | `mount-disc` / `unmount-disc` | `--iso <path>` | Mounts/dismounts an ISO via PowerShell `Mount-DiskImage`/`Dismount-DiskImage` or verifies pre-mounted `SANDBOX_DISC_DRIVE` |
@@ -59,7 +60,7 @@ Resolves `SANDBOX_C_DRIVE`, `SANDBOX_D_DRIVE`, `SANDBOX_REMOVABLE_DRIVE`, `SANDB
 Global flags accepted before or after subcommands: `--sandbox-root`, `--c-drive`, `--d-drive`, `--removable-drive`, `--disc-drive`, `--profile-dir`, `--env-file`.
 
 ### 3.2 `run_sandbox_e2e.py` (`Dev\tools\run_sandbox_e2e.py`)
-Executes the 12-point `Standard 02 §4` matrix (`S2-01`..`S2-12`) with scrubbed child environments (`FOUNDATION_SANDBOX_ROOT`, `SANDBOX_*_DRIVE`, sandboxed `USERPROFILE`/`LOCALAPPDATA`/`APPDATA`/`TEMP`/`TMP`, `FOUNDATION_SUPPRESS_MODALS=1`, `APP_ISOLATED_TEST` stripped) and emits a 25-key Standard 18 receipt JSON under `<SandboxRoot>\runs\<appId>-v<Ver>-<ts>.json`.
+Executes the 12-point Stage 2 sandbox matrix (`S2-01`..`S2-12`) with scrubbed child environments (`FOUNDATION_SANDBOX_ROOT`, `SANDBOX_*_DRIVE`, sandboxed `USERPROFILE`/`LOCALAPPDATA`/`APPDATA`/`TEMP`/`TMP`, `FOUNDATION_SUPPRESS_MODALS=1`, `APP_ISOLATED_TEST` stripped) and emits a 25-key JSON receipt under `<SandboxRoot>\runs\<appId>-v<Ver>-<ts>.json`.
 
 | Flag | Purpose |
 |---|---|
@@ -72,13 +73,13 @@ Executes the 12-point `Standard 02 §4` matrix (`S2-01`..`S2-12`) with scrubbed 
 
 ---
 
-## 4. `StandardInstallerHost` (`v0.5.1`) & `Foundation.Automation` CLI Reference
+## 4. `StandardInstallerHost` (`v0.5.2`), `RootLauncherOptions` & `Foundation.Automation` CLI Reference
 
 | Switch / Alias | Argument | Behavior |
 |---|---|---|
 | `--install-dir <dir>` / `--target-dir <dir>` | Path | Target install directory (defaults via `KnownFolderPaths` to sandboxed or host `%LOCALAPPDATA%\Programs\<Studio>\<Suite?>\<App>\`) |
 | `--profile <id>` · `--reengine-dir <dir>` · `--suite-dir <dir>` · `--migrate-legacy` | String / Path / Flag | Profile selection, secondary picker target, and opt-in legacy flat migration (`<SandboxDDrive>\Programs` under Stage 2) |
-| `--payload <path>` · `--data-dir <dir>` · `--config <path>` · `--log-dir <dir>` | Path | External `.payload.zip` and Standard 02 isolation overrides |
+| `--payload <path>` · `--data-dir <dir>` · `--config <path>` · `--log-dir <dir>` | Path | External `.payload.zip` and runtime isolation overrides |
 | `--silent` / `--quiet` · `--dry-run` · `--verify` · `--uninstall` · `--purge-data` | Flag | Non-interactive setup, simulation, payload verify, or uninstall |
 | `--no-shortcuts` · `--autostart` · `--launch` · `--no-launch` / `--no-restart` | Flag | Shortcut, Startup (clamped when `AllowAutoStart = false`), and launch flags |
 | `--version` / `-v` · `--help` / `-h` / `/?` / `help` | Flag | Prints version or usage and exits |
@@ -90,6 +91,7 @@ Executes the 12-point `Standard 02 §4` matrix (`S2-01`..`S2-12`) with scrubbed 
 - **`3`**: Production/Sandbox Containment Violation (`SandboxEnvironmentSeam.IsContainmentViolation` — host OS/user/host-`Programs` escape aborted fail-closed).
 
 - **`--automation-port <port>` & `--automation-token <token>` (`Foundation.Automation`):** Opt-in `127.0.0.1` loopback HTTP/JSON control surface (`AutomationCliHelper.TryCreateFromArgs`); defaults to disabled unless `--automation-port` is supplied. Falls back to `FOUNDATION_AUTOMATION_TOKEN` or a CSPRNG 32-hex bearer token.
+- **`RootLauncherHost` + `RootLauncherOptions` (`Foundation.Launcher`):** Built-in sync flags include `--diagnose`, `--doctor`, `--verify`, `--verify-module` (plus `--wait`, `--open`, `--check-updates`, `--register-assoc`, `--dry-run`, `--version`, `--help`); built-in path/value flags include `--programs-dir`, `--save-dir`, `--preload-media`, `--backend`, `--automation-port`, `--automation-token`; optional-value switches (`--suite-tab`, `--window`, `--browser`) consume an adjacent non-flag value without swallowing trailing sync flags. Supply `RootLauncherOptions` to append app-specific sync/value/path flags.
 
 ---
 

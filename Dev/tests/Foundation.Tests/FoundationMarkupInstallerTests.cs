@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Foundation.Core;
 using Foundation.Installer;
@@ -94,18 +95,26 @@ public sealed class FoundationMarkupInstallerTests : IDisposable
 
         var ctx = new InstallerRuntimeContext(cliDataDir: Path.Combine(_tempDir, "isolated"), envPrefix: "DEMOGAME");
         var engine = new InstallerEngine(merged, ctx);
-        using var wizard = new InstallerWizardForm(engine, ctx);
-        Assert.Equal("multi-line", wizard.LayoutMode);
-        Assert.Contains("custom", wizard.SupportedProfiles);
-        Assert.True(wizard.CustomProfileRadioButton.Checked);
-        Assert.Equal("custom", wizard.SelectedProfileId);
-        Assert.False(wizard.IsAutoStartAllowed);
-        Assert.Equal("Begin Setup", wizard.PrimaryButton.Text);
-        Assert.Equal("Exit", wizard.CancelButton.Text);
-        string? tip = wizard.GetControlTooltip(wizard.InstallDirTextBox);
-        Assert.NotNull(tip);
-        Assert.Contains("Install Directory", tip);
-        Assert.Contains(Environment.NewLine, tip);
+        SynchronizationContext? prevSyncCtx = SynchronizationContext.Current;
+        try
+        {
+            using var wizard = new InstallerWizardForm(engine, ctx);
+            Assert.Equal("multi-line", wizard.LayoutMode);
+            Assert.Contains("custom", wizard.SupportedProfiles);
+            Assert.True(wizard.CustomProfileRadioButton.Checked);
+            Assert.Equal("custom", wizard.SelectedProfileId);
+            Assert.False(wizard.IsAutoStartAllowed);
+            Assert.Equal("Begin Setup", wizard.PrimaryButton.Text);
+            Assert.Equal("Exit", wizard.CancelButton.Text);
+            string? tip = wizard.GetControlTooltip(wizard.InstallDirTextBox);
+            Assert.NotNull(tip);
+            Assert.Contains("Install Directory", tip);
+            Assert.Contains(Environment.NewLine, tip);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(prevSyncCtx);
+        }
 
         string manifestDir = Path.Combine(_tempDir, "disk-manifest");
         Directory.CreateDirectory(manifestDir);
@@ -117,9 +126,17 @@ public sealed class FoundationMarkupInstallerTests : IDisposable
 
         InstallerMarkupManifest noLw = InstallerManifestStore.LoadFromJson("{\"schemaVersion\":2,\"manifestType\":\"installer-manifest\",\"appId\":\"a\",\"supportedProfiles\":[\"full\",\"custom\"],\"defaultProfile\":\"lightweight\"}");
         Assert.Equal("full", noLw.DefaultProfile);
-        using var noLwWizard = new InstallerWizardForm(new InstallerEngine(InstallerManifestStore.ApplyToDescriptor(baseDesc, noLw), ctx), ctx);
-        Assert.Equal("full", noLwWizard.SelectedProfileId);
-        Assert.True(noLwWizard.FullProfileRadioButton.Checked);
+        SynchronizationContext? prevNoLwSyncCtx = SynchronizationContext.Current;
+        try
+        {
+            using var noLwWizard = new InstallerWizardForm(new InstallerEngine(InstallerManifestStore.ApplyToDescriptor(baseDesc, noLw), ctx), ctx);
+            Assert.Equal("full", noLwWizard.SelectedProfileId);
+            Assert.True(noLwWizard.FullProfileRadioButton.Checked);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(prevNoLwSyncCtx);
+        }
     }
 
     [Fact]
@@ -204,6 +221,86 @@ public sealed class FoundationMarkupInstallerTests : IDisposable
                 _junctions.Add(junctionDir);
                 Assert.False(InstallerEngine.TryValidateLastInstallBaseDir(junctionDir, sandbox, out _));
             }
+        }
+    }
+
+    [Fact]
+    public void MarkupManifest_PrefersSuiteId_WithLegacySuiteNameFallback()
+    {
+        InstallerMarkupManifest suiteIdOnly = InstallerManifestStore.LoadFromJson(
+            "{\"schemaVersion\":2,\"manifestType\":\"installer-manifest\",\"appId\":\"reengine\",\"suiteId\":\"reEngine\"}");
+        Assert.Equal("reEngine", suiteIdOnly.ResolveEffectiveSuiteId());
+        Assert.Equal("reEngine", InstallerManifestStore.ToThemeOptions(suiteIdOnly).SuiteName);
+
+        InstallerMarkupManifest legacySuiteNameOnly = InstallerManifestStore.LoadFromJson(
+            "{\"schemaVersion\":2,\"manifestType\":\"installer-manifest\",\"appId\":\"reengine\",\"suiteName\":\"reEngine\"}");
+        Assert.Equal("reEngine", legacySuiteNameOnly.ResolveEffectiveSuiteId());
+        Assert.Equal("reEngine", InstallerManifestStore.ToThemeOptions(legacySuiteNameOnly).SuiteName);
+
+        InstallerMarkupManifest bothPresent = InstallerManifestStore.LoadFromJson(
+            "{\"schemaVersion\":2,\"manifestType\":\"installer-manifest\",\"appId\":\"reengine\",\"suiteId\":\"reEngine\",\"suiteName\":\"LegacySuite\"}");
+        Assert.Equal("reEngine", bothPresent.ResolveEffectiveSuiteId());
+        var baseDesc = new InstallerAppDescriptor("reEngine", "reEngine", "StreamItAll", "0.3.0", SuiteName: "OldSuite");
+        Assert.Equal("reEngine", InstallerManifestStore.ApplyToDescriptor(baseDesc, bothPresent).SuiteName);
+        Assert.Equal("reEngine", InstallerManifestStore.ToThemeOptions(bothPresent).SuiteName);
+    }
+
+    [Fact]
+    public void UmbrellaSubpath_And_LastInstallBaseDir_PreventVersionLeafDoubling_And_SelfHealPoisonedRegistry()
+    {
+        const string versionedUmbrella = @"StreamItAll\reEngine\engines\reSlate\v0.3.0-hf.1";
+        var desc = new InstallerAppDescriptor("reSlate", "reSlate", "StreamItAll", "0.3.0-hf.1", UmbrellaSubpath: versionedUmbrella);
+        Assert.Equal(Path.Combine("StreamItAll", "reEngine", "engines", "reSlate", "v0.3.0-hf.1"), desc.GetEffectiveUmbrellaSubpath());
+
+        var theme = new InstallerThemeOptions
+        {
+            AppId = "reslate",
+            DisplayName = "reSlate",
+            Version = "0.3.0-hf.1",
+            DefaultInstallDir = _tempDir,
+            UmbrellaSubpath = versionedUmbrella
+        };
+        Assert.Equal(Path.Combine("StreamItAll", "reEngine", "engines", "reSlate", "v0.3.0-hf.1"), theme.GetEffectiveUmbrellaSubpath());
+        var customDesc = new InstallerAppDescriptor("CustomApp", "Custom App", "StreamItAll", "0.5.2", UmbrellaSubpath: @"CustomStudio\CustomSuite");
+        Assert.Equal(Path.Combine("CustomStudio", "CustomSuite", "CustomApp"), customDesc.GetEffectiveUmbrellaSubpath());
+
+        string sbxRoot = Path.Combine(_tempDir, "sbx2");
+        string cDrive = Path.Combine(sbxRoot, "C");
+        string dDrive = Path.Combine(sbxRoot, "D");
+        string profileDir = Path.Combine(cDrive, "Users", "Sandbox");
+        Directory.CreateDirectory(profileDir);
+        Directory.CreateDirectory(dDrive);
+        var sandbox = new SandboxResolution(
+            true, sbxRoot, cDrive, dDrive, null, null, profileDir,
+            Path.Combine(sbxRoot, "registry", "registry.hive.json"),
+            Path.Combine(sbxRoot, "registry", "registry.baseline.json"),
+            Path.Combine(sbxRoot, "locks", "registry.hive.lock"));
+        var reg = new JsonHivePlatformRegistry(sandbox.RegistryHivePath!, sbxRoot, sandbox.RegistryLockPath);
+
+        string cleanGamesMisc = Path.Combine(dDrive, "Games", "Misc");
+        Directory.CreateDirectory(cleanGamesMisc);
+        string reSlateInstallDir = Path.Combine(cleanGamesMisc, "StreamItAll", "reEngine", "engines", "reSlate", "v0.3.0-hf.1");
+        Assert.Equal(Path.GetFullPath(cleanGamesMisc), InstallerEngine.ExtractInstallBaseDirectory(reSlateInstallDir, versionedUmbrella));
+        Assert.Equal(Path.GetFullPath(cleanGamesMisc), InstallerEngine.ExtractInstallBaseDirectory(reSlateInstallDir, @"StreamItAll\reEngine\engines\reSlate"));
+        Assert.True(InstallerEngine.TrySaveLastInstallBaseDir(reg, reSlateInstallDir, versionedUmbrella, sandbox, false));
+        Assert.Equal(Path.GetFullPath(cleanGamesMisc), reg.GetValue(PlatformRegistryHive.CurrentUser, InstallerEngine.SharedStreamItAllRegistrySubKey, InstallerEngine.LastInstallBaseDirValueName)?.AsString());
+
+        string poisonedBase = Path.Combine(cleanGamesMisc, "StreamItAll", "reEngine", "engines", "reSlate");
+        reg.SetValue(PlatformRegistryHive.CurrentUser, InstallerEngine.SharedStreamItAllRegistrySubKey, InstallerEngine.LastInstallBaseDirValueName, poisonedBase);
+        Assert.True(InstallerEngine.TryResolveSuggestedInstallDirFromHistory(reg, @"StreamItAll\reEngine\games\MeadowValley-BackToEarth-SlateOne-04", sandbox, out string suggested));
+        Assert.Equal(Path.GetFullPath(Path.Combine(cleanGamesMisc, "StreamItAll", "reEngine", "games", "MeadowValley-BackToEarth-SlateOne-04")), suggested);
+
+        Assert.True(InstallerEngine.TryValidateLastInstallBaseDir(cleanGamesMisc, sandbox, out _));
+        Assert.False(InstallerEngine.TryValidateLastInstallBaseDir(Path.Combine(dDrive, "Custom", "engines", "reSlate"), sandbox, out _));
+        Assert.False(InstallerEngine.TryResolveSuggestedInstallDirFromHistory(
+            regWith(dDrive, sbxRoot, reg, Path.Combine(dDrive, "StreamItAll", "reEngine", "engines", "reSlate")),
+            @"StreamItAll\reEngine\games\Demo", sandbox, out _));
+
+        static IPlatformRegistry regWith(string dDrivePath, string rootPath, JsonHivePlatformRegistry targetReg, string value)
+        {
+            _ = dDrivePath; _ = rootPath;
+            targetReg.SetValue(PlatformRegistryHive.CurrentUser, InstallerEngine.SharedStreamItAllRegistrySubKey, InstallerEngine.LastInstallBaseDirValueName, value);
+            return targetReg;
         }
     }
 

@@ -124,7 +124,7 @@ public sealed partial class InstallerEngineCore
                 foreach (var (fullPath, rel, len) in eligibleFiles)
                 {
                     ct.ThrowIfCancellationRequested();
-                    await AddFileSharedReadToZipAsync(zip, fullPath, rel, ct);
+                    await AddFileSharedReadToZipAsync(zip, fullPath, rel, ct).ConfigureAwait(false);
                     filesDone++;
                     bytesDone += len;
 
@@ -178,7 +178,7 @@ public sealed partial class InstallerEngineCore
         entry.LastWriteTime = File.GetLastWriteTimeUtc(sourceFilePath);
         await using var fs = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
         await using var entryStream = entry.Open();
-        await fs.CopyToAsync(entryStream, 81920, ct);
+        await fs.CopyToAsync(entryStream, 81920, ct).ConfigureAwait(false);
     }
 
     public static bool StopRunningInstancesInDirectory(string installDir, IReadOnlyList<string> processNames, bool dryRun = false)

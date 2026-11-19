@@ -152,8 +152,12 @@ public sealed record InstallerThemeOptions
             string[] segments = trimmed.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
             if (segments.Length > 0)
             {
-                return string.Equals(segments[^1], DisplayName, StringComparison.OrdinalIgnoreCase) ||
-                       string.Equals(segments[^1], AppId, StringComparison.OrdinalIgnoreCase)
+                bool hasAppOrVersionLeaf =
+                    segments.Any(s =>
+                        string.Equals(s, DisplayName, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(s, AppId, StringComparison.OrdinalIgnoreCase)) ||
+                    InstallerAppDescriptor.IsVersionLeafSegment(segments[^1]);
+                return hasAppOrVersionLeaf
                     ? Path.Combine(segments)
                     : Path.Combine(segments.Concat(new[] { DisplayName }).ToArray());
             }

@@ -70,7 +70,7 @@ public sealed partial class InstallerEngine
         InstallManifest? manifest = null;
         if (File.Exists(manifestPath))
         {
-            string raw = await File.ReadAllTextAsync(manifestPath, Encoding.UTF8, ct);
+            string raw = await File.ReadAllTextAsync(manifestPath, Encoding.UTF8, ct).ConfigureAwait(false);
             manifest = JsonSerializer.Deserialize<InstallManifest>(raw, JsonOpts);
         }
 

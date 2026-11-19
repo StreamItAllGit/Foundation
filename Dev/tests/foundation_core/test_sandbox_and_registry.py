@@ -92,7 +92,7 @@ def _isolated_tool_env(fake_home: Path) -> dict[str, str]:
 
 class TestSandboxSeam(unittest.TestCase):
     def test_sdk_version_and_inactive_production_safety(self) -> None:
-        self.assertEqual(foundation_core.SDK_VERSION, "0.5.1")
+        self.assertEqual(foundation_core.SDK_VERSION, "0.5.2")
         res = resolve_sandbox_environment(env_override={})
         self.assertFalse(res.is_sandbox_active)
         self.assertIsNone(res.sandbox_root)
@@ -329,7 +329,7 @@ class TestSandboxToolsCli(unittest.TestCase):
             manifest = json.loads((sbx_root / "sandbox.manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["schemaVersion"], 2)
             self.assertEqual(manifest["appId"], "foundation-sandbox")
-            self.assertEqual(manifest["version"], "0.5.1")
+            self.assertEqual(manifest["version"], "0.5.2")
             self.assertNotIn("manifestType", manifest)
             self.assertEqual(len(manifest["sandboxMounts"]), 4)
             self.assertTrue((sbx_root / "registry" / "registry.baseline.json").is_file())

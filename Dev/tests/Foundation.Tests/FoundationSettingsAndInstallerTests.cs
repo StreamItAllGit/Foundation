@@ -125,7 +125,7 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
         Assert.Equal(570, wizard.ClientSize.Height);
 
         var branding = new ShellBrandingOptions { AppId = "shadowlibrary", DisplayName = "ShadowLibrary" };
-        Assert.Equal("0.5.1", branding.SdkVersion);
+        Assert.Equal("0.5.2", branding.SdkVersion);
 
         FoundationInstallResult uninstallRes = engine.Uninstall(purgeUserData: false);
         Assert.True(uninstallRes.Success);
@@ -162,11 +162,19 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
         var installRes = await engine.InstallAsync(externalPayloadPath: payloadZipPath);
         Assert.True(installRes.Success);
 
-        using var wizard = new InstallerWizardForm(engine, ctx);
-        Assert.Equal(650, wizard.ClientSize.Width);
-        Assert.Equal(460, wizard.ClientSize.Height);
-        wizard.SetDetailsExpanded(true);
-        Assert.Equal(570, wizard.ClientSize.Height);
+        var prevSyncCtx = System.Threading.SynchronizationContext.Current;
+        try
+        {
+            using var wizard = new InstallerWizardForm(engine, ctx);
+            Assert.Equal(650, wizard.ClientSize.Width);
+            Assert.Equal(460, wizard.ClientSize.Height);
+            wizard.SetDetailsExpanded(true);
+            Assert.Equal(570, wizard.ClientSize.Height);
+        }
+        finally
+        {
+            System.Threading.SynchronizationContext.SetSynchronizationContext(prevSyncCtx);
+        }
 
         var uninstallRes = await engine.UninstallAsync(installRes.InstallDirectory, purgeData: true);
         Assert.True(uninstallRes.Success);

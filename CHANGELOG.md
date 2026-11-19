@@ -7,6 +7,29 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-19
+### Added
+- **Canonical `suiteId` Manifest Support (`Foundation.Installer`):**
+  - Added `[JsonPropertyName("suiteId")]` (`SuiteId`) and `EffectiveSuiteId` / `ResolveEffectiveSuiteId()` on [`InstallerMarkupManifest`](Dev/src/Foundation.Installer/InstallerManifestStore.cs), preferring canonical `suiteId` while retaining `suiteName` as a non-`[Obsolete]` legacy JSON fallback and propagating both through `ApplyToDescriptor` and `ToThemeOptions`.
+- **Extensible Launcher Contracts (`Foundation.Launcher`):**
+  - Added zero-dependency [`RootLauncherOptions`](Dev/src/Foundation.Launcher/RootLauncherOptions.cs) (`ExtraSyncWaitFlags`, `ExtraValueOptions`, `ExtraPathValueOptions`) and backward-compatible `RootLauncherHost.Run`, `ShouldWaitForChild`, and `NormalizeRelativePathArgs` overloads, plus built-in suite flags (`--diagnose`, `--doctor`, `--verify`, `--verify-module`, `--automation-port`, `--automation-token`, `--programs-dir`, `--save-dir`, `--preload-media`, `--backend`) and non-swallowing optional-value handling (`--suite-tab`, `--window`, `--browser`).
+- **7-File App+Portable Release Validator (`Dev\tools\build_release_universal.py`):**
+  - Added `--allow-portable-zip` (plus automatic 7-file detection when `*-Portable.zip` accompanies `*-Setup-v*.exe`), `validate_release_bundle` alias, and `_inspect_portable_zip` matching `audit_installer.ps1` (`0` `*Setup*.exe` leaks, `0` loose directories, `0` corrupt/empty archives).
+
+### Changed
+- **Unified `0.5.2` SemVer & Test Coverage:**
+  - Bumped `0.5.2` across `Directory.Build.props`, `Dev\app.manifest.json`, `Foundation.UI.csproj`, `ShellBrandingOptions.cs`, `Web\package.json`, `foundation_core`, `sandbox_ctl.py`, `sync_foundation_sdk.py`, test suites, `active.state`, Root Quartet, and Manual Shelf.
+  - Added isolated unit tests in `FoundationMarkupInstallerTests`, `FoundationV040ContractsTests`, and `test_build_release_universal.py`.
+
+### Fixed
+- **Versioned `UmbrellaSubpath` & `LastInstallBaseDir` Poisoning (`Foundation.Installer`):**
+  - Updated `GetEffectiveUmbrellaSubpath()` in [`InstallerContracts.cs`](Dev/src/Foundation.Installer/InstallerContracts.cs) and [`InstallerThemeOptions.cs`](Dev/src/Foundation.Installer/InstallerThemeOptions.cs) (`IsVersionLeafSegment`) so versioned leaves (`vX.Y.Z*`) never double `ProductName`/`DisplayName`.
+  - Hardened [`InstallerEngine.Core.cs`](Dev/src/Foundation.Installer/InstallerEngine.Core.cs) with studio/suite-anchored `ExtractInstallBaseDirectory`, poisoned-candidate rejection (`StreamItAll`, `reEngine\engines|games`, `engines`), sandbox drive-root checks, and self-healing `TryResolveSuggestedInstallDirFromHistory` while keeping legitimate user paths like `D:\Games\Misc` valid.
+- **Focus-Free Win32 Mouse Dispatch & Deterministic Test Isolation (`Foundation.Automation`, `Foundation.Tests`):**
+  - Updated [`Win32VirtualInputDriver.cs`](Dev/src/Foundation.Automation/Win32VirtualInputDriver.cs) (`DispatchMouseButton`, `drag`) to invoke managed WinForms mouse handlers (`InvokeManagedMouse`) rather than native `WM_*BUTTONDOWN` messages that triggered `user32!SetFocus()` foreground steal on `Button`/`CheckBox`/`RadioButton`/`TextBox` controls.
+  - Added [`TestAssemblyConfig.cs`](Dev/tests/Foundation.Tests/TestAssemblyConfig.cs) (`[assembly: CollectionBehavior(DisableTestParallelization = true)]`) so tests mutating process-wide environment variables or Win32 desktop state run deterministically without cross-class races.
+  - Added `.ConfigureAwait(false)` across `Foundation.Installer` async engine methods (`InstallerEngine`, `InstallerEngineCore`) and restored `SynchronizationContext` around headless `InstallerWizardForm` instantiation in tests so WinForms form construction under non-parallel xUnit no longer deadlocks subsequent `await` continuations.
+
 ## [0.5.1] - 2026-11-19
 ### Added
 - **ISO/IEC 18004 QR Code Suite (`Foundation.Core.QrCodeEncoder`):**

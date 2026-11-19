@@ -19,8 +19,7 @@ namespace Foundation.Automation;
 /// </summary>
 public static class Win32VirtualInputDriver
 {
-    private const uint WmMouseMove = 0x0200, WmLButtonDown = 0x0201, WmLButtonUp = 0x0202, WmLButtonDblClk = 0x0203;
-    private const uint WmRButtonDown = 0x0204, WmRButtonUp = 0x0205, WmMButtonDown = 0x0207, WmMButtonUp = 0x0208, WmMouseWheel = 0x020A;
+    private const uint WmMouseMove = 0x0200, WmMouseWheel = 0x020A;
     private const uint WmKeyDown = 0x0100, WmKeyUp = 0x0101, WmChar = 0x0102, WmSysKeyDown = 0x0104, WmSysKeyUp = 0x0105;
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -51,16 +50,17 @@ public static class Win32VirtualInputDriver
             switch (action)
             {
                 case "move": SendMessage(target.Handle, WmMouseMove, IntPtr.Zero, lParam); return true;
-                case "click": DispatchMouseButton(target, button, lParam, isDoubleClick: false); return true;
-                case "doubleclick": DispatchMouseButton(target, button, lParam, isDoubleClick: true); return true;
+                case "click": DispatchMouseButton(target, button, pt, isDoubleClick: false); return true;
+                case "doubleclick": DispatchMouseButton(target, button, pt, isDoubleClick: true); return true;
                 case "drag":
                     Point endPt = hasTargetId
                         ? new Point(request.ToX ?? pt.X, request.ToY ?? pt.Y)
                         : TranslatePointToTarget(root, target, request.ToX ?? request.X, request.ToY ?? request.Y);
                     SendMessage(target.Handle, WmMouseMove, IntPtr.Zero, lParam);
-                    SendMessage(target.Handle, WmLButtonDown, (IntPtr)1, lParam);
+                    InvokeManagedMouse(target, "OnMouseDown", MouseButtons.Left, 1, pt);
                     SendMessage(target.Handle, WmMouseMove, (IntPtr)1, MakeLParam(endPt.X, endPt.Y));
-                    SendMessage(target.Handle, WmLButtonUp, IntPtr.Zero, MakeLParam(endPt.X, endPt.Y));
+                    InvokeManagedMouse(target, "OnMouseMove", MouseButtons.Left, 0, endPt);
+                    InvokeManagedMouse(target, "OnMouseUp", MouseButtons.Left, 1, endPt);
                     return true;
                 case "scroll":
                     int delta = request.DeltaY == 0 ? 120 : request.DeltaY;
@@ -176,26 +176,59 @@ public static class Win32VirtualInputDriver
         return new Point(rootX - origin.X, rootY - origin.Y);
     }
 
-    private static void DispatchMouseButton(Control target, string button, IntPtr lParam, bool isDoubleClick)
+    private static void DispatchMouseButton(Control target, string button, Point pt, bool isDoubleClick)
     {
-        SendMessage(target.Handle, WmMouseMove, IntPtr.Zero, lParam);
-        if (button == "right") { SendMessage(target.Handle, WmRButtonDown, (IntPtr)2, lParam); SendMessage(target.Handle, WmRButtonUp, IntPtr.Zero, lParam); return; }
-        if (button == "middle") { SendMessage(target.Handle, WmMButtonDown, (IntPtr)16, lParam); SendMessage(target.Handle, WmMButtonUp, IntPtr.Zero, lParam); return; }
+        SendMessage(target.Handle, WmMouseMove, IntPtr.Zero, MakeLParam(pt.X, pt.Y));
+        MouseButtons mouseBtn = button switch
+        {
+            "right" => MouseButtons.Right,
+            "middle" => MouseButtons.Middle,
+            _ => MouseButtons.Left
+        };
+        int clicks = isDoubleClick ? 2 : 1;
 
-        SendMessage(target.Handle, isDoubleClick ? WmLButtonDblClk : WmLButtonDown, (IntPtr)1, lParam);
-        SendMessage(target.Handle, WmLButtonUp, IntPtr.Zero, lParam);
+        // Dispatch through WinForms managed mouse handlers instead of native WM_*BUTTONDOWN,
+        // because native BUTTON/EDIT WndProcs invoke user32!SetFocus() and steal foreground focus.
+        InvokeManagedMouse(target, "OnMouseDown", mouseBtn, clicks, pt);
+        if (isDoubleClick) InvokeManagedMouse(target, "OnMouseDoubleClick", mouseBtn, clicks, pt);
 
-        if (target.Enabled)
+        if (mouseBtn == MouseButtons.Left && target.Enabled)
         {
             if (target is Button btn)
             {
-                if (btn.CanSelect) btn.PerformClick();
-                else typeof(Button).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(btn, new object[] { EventArgs.Empty });
+                bool clicked = false;
+                EventHandler probe = (_, _) => clicked = true;
+                btn.Click += probe;
+                try { InvokeManagedMouse(target, "OnMouseUp", mouseBtn, clicks, pt); }
+                finally { btn.Click -= probe; }
+                if (!clicked)
+                    typeof(Control).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(btn, new object[] { EventArgs.Empty });
+                return;
             }
-            else if (target is CheckBox chk) chk.Checked = !chk.Checked;
-            else if (target is RadioButton rb) rb.Checked = true;
+            if (target is CheckBox chk)
+            {
+                bool toggled = false;
+                EventHandler probe = (_, _) => toggled = true;
+                chk.CheckedChanged += probe;
+                try { InvokeManagedMouse(target, "OnMouseUp", mouseBtn, clicks, pt); }
+                finally { chk.CheckedChanged -= probe; }
+                if (!toggled) chk.Checked = !chk.Checked;
+                return;
+            }
+            if (target is RadioButton rb)
+            {
+                InvokeManagedMouse(target, "OnMouseUp", mouseBtn, clicks, pt);
+                if (!rb.Checked) rb.Checked = true;
+                return;
+            }
         }
+
+        InvokeManagedMouse(target, "OnMouseUp", mouseBtn, clicks, pt);
     }
+
+    private static void InvokeManagedMouse(Control target, string methodName, MouseButtons button, int clicks, Point pt, int delta = 0) =>
+        typeof(Control).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?.Invoke(target, new object[] { new MouseEventArgs(button, clicks, pt.X, pt.Y, delta) });
 
     private static IntPtr MakeLParam(int x, int y) => (IntPtr)((y << 16) | (x & 0xFFFF));
 

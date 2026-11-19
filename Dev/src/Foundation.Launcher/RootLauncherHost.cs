@@ -19,7 +19,8 @@ public static class RootLauncherHost
     {
         "--version", "-v", "--help", "-h", "/?", "help",
         "--dry-run", "--wait", "--open",
-        "--check-updates", "--register-assoc"
+        "--check-updates", "--register-assoc",
+        "--diagnose", "--doctor", "--verify", "--verify-module"
     };
 
     private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
@@ -27,15 +28,27 @@ public static class RootLauncherHost
         "--port", "--ui", "--data-dir", "--config", "--log-dir", "--feed", "--open",
         "--frames", "--profile", "--install-dir", "--reengine-dir",
         "--suite-dir", "--rom", "--manifest", "--output", "--out",
-        "--file", "--path"
+        "--file", "--path",
+        "--programs-dir", "--save-dir", "--preload-media", "--backend",
+        "--automation-port", "--automation-token", "--verify-module"
     };
 
     private static readonly HashSet<string> PathValueOptions = new(StringComparer.OrdinalIgnoreCase)
     {
         "--open", "--data-dir", "--config", "--log-dir", "--install-dir", "--reengine-dir",
         "--suite-dir", "--rom", "--manifest",
-        "--output", "--out", "--file", "--path"
+        "--output", "--out", "--file", "--path",
+        "--programs-dir", "--save-dir", "--preload-media", "--verify-module"
     };
+
+    private static readonly HashSet<string> OptionalValueFlags = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--suite-tab", "--window", "--browser"
+    };
+
+    public static IReadOnlySet<string> DefaultSyncWaitFlags => SyncWaitFlags;
+    public static IReadOnlySet<string> DefaultValueOptions => ValueOptions;
+    public static IReadOnlySet<string> DefaultPathValueOptions => PathValueOptions;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(int dwProcessId);
@@ -71,7 +84,10 @@ public static class RootLauncherHost
         return chosen;
     }
 
-    public static int Run(string appExecutableRelativePath, string displayName, string[] args)
+    public static int Run(string appExecutableRelativePath, string displayName, string[] args) =>
+        Run(appExecutableRelativePath, displayName, args, options: null);
+
+    public static int Run(string appExecutableRelativePath, string displayName, string[] args, RootLauncherOptions? options)
     {
         string rootDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         string? selfPath = Environment.ProcessPath;
@@ -98,7 +114,7 @@ public static class RootLauncherHost
             return 1;
         }
 
-        bool isCliOrSyncWait = ShouldWaitForChild(args);
+        bool isCliOrSyncWait = ShouldWaitForChild(args, options);
         if (isCliOrSyncWait && OperatingSystem.IsWindows())
         {
             try
@@ -112,7 +128,7 @@ public static class RootLauncherHost
         }
 
         string callerCwd = Environment.CurrentDirectory;
-        string[] normalizedArgs = NormalizeRelativePathArgs(args, callerCwd);
+        string[] normalizedArgs = NormalizeRelativePathArgs(args, callerCwd, options);
 
         var psi = new ProcessStartInfo
         {
@@ -164,7 +180,10 @@ public static class RootLauncherHost
         return 0;
     }
 
-    public static string[] NormalizeRelativePathArgs(string[]? args, string callerCwd)
+    public static string[] NormalizeRelativePathArgs(string[]? args, string callerCwd) =>
+        NormalizeRelativePathArgs(args, callerCwd, options: null);
+
+    public static string[] NormalizeRelativePathArgs(string[]? args, string callerCwd, RootLauncherOptions? options)
     {
         if (args == null || args.Length == 0)
             return Array.Empty<string>();
@@ -184,7 +203,7 @@ public static class RootLauncherHost
             {
                 string opt = raw[..eq];
                 string val = raw[(eq + 1)..];
-                result[i] = PathValueOptions.Contains(opt)
+                result[i] = IsPathValueOption(opt, options)
                     ? $"{opt}={RebasePathIfRelative(val, callerCwd)}"
                     : raw;
                 continue;
@@ -193,11 +212,20 @@ public static class RootLauncherHost
             if (raw.StartsWith("-", StringComparison.Ordinal))
             {
                 result[i] = raw;
-                if (ValueOptions.Contains(raw) && i + 1 < args.Length)
+                if (IsOptionalValueFlag(raw) &&
+                    i + 1 < args.Length &&
+                    !args[i + 1].TrimStart().StartsWith("-", StringComparison.Ordinal))
+                {
+                    i++;
+                    result[i] = args[i];
+                }
+                else if (IsValueOption(raw, options) &&
+                         i + 1 < args.Length &&
+                         !args[i + 1].TrimStart().StartsWith("--", StringComparison.Ordinal))
                 {
                     i++;
                     string nextVal = args[i];
-                    result[i] = PathValueOptions.Contains(raw)
+                    result[i] = IsPathValueOption(raw, options)
                         ? RebasePathIfRelative(nextVal, callerCwd)
                         : nextVal;
                 }
@@ -212,7 +240,10 @@ public static class RootLauncherHost
         return result;
     }
 
-    public static bool ShouldWaitForChild(string[]? args)
+    public static bool ShouldWaitForChild(string[]? args) =>
+        ShouldWaitForChild(args, options: null);
+
+    public static bool ShouldWaitForChild(string[]? args, RootLauncherOptions? options)
     {
         if (args == null || args.Length == 0)
             return false;
@@ -225,14 +256,22 @@ public static class RootLauncherHost
             int eq = a.IndexOf('=', StringComparison.Ordinal);
             string flagName = eq > 0 && a.StartsWith("-", StringComparison.Ordinal) ? a[..eq] : a;
 
-            if (SyncWaitFlags.Contains(flagName))
+            if (IsSyncWaitFlag(flagName, options))
             {
                 return true;
             }
 
-            if (eq < 0 && ValueOptions.Contains(flagName))
+            if (eq < 0 && IsOptionalValueFlag(flagName))
             {
-                i++;
+                if (i + 1 < args.Length && !args[i + 1].TrimStart().StartsWith("-", StringComparison.Ordinal))
+                    i++;
+                continue;
+            }
+
+            if (eq < 0 && IsValueOption(flagName, options))
+            {
+                if (i + 1 < args.Length && !args[i + 1].TrimStart().StartsWith("--", StringComparison.Ordinal))
+                    i++;
                 continue;
             }
 
@@ -242,6 +281,27 @@ public static class RootLauncherHost
             }
         }
 
+        return false;
+    }
+
+    private static bool IsSyncWaitFlag(string flagName, RootLauncherOptions? options) =>
+        SyncWaitFlags.Contains(flagName) || ContainsIgnoreCase(options?.ExtraSyncWaitFlags, flagName);
+
+    private static bool IsValueOption(string flagName, RootLauncherOptions? options) =>
+        ValueOptions.Contains(flagName) ||
+        ContainsIgnoreCase(options?.ExtraValueOptions, flagName) ||
+        ContainsIgnoreCase(options?.ExtraPathValueOptions, flagName);
+
+    private static bool IsPathValueOption(string flagName, RootLauncherOptions? options) =>
+        PathValueOptions.Contains(flagName) || ContainsIgnoreCase(options?.ExtraPathValueOptions, flagName);
+
+    private static bool IsOptionalValueFlag(string flagName) => OptionalValueFlags.Contains(flagName);
+
+    private static bool ContainsIgnoreCase(IReadOnlyCollection<string>? set, string value)
+    {
+        if (set == null || set.Count == 0) return false;
+        foreach (string item in set)
+            if (string.Equals(item, value, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
 

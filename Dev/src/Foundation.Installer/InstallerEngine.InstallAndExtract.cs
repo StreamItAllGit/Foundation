@@ -83,7 +83,7 @@ public sealed partial class InstallerEngine
         }
 
         progress?.Report("Verifying embedded payload SHA-256 & archive integrity...");
-        var verify = await VerifyPayloadAsync(options.ExternalPayloadPath, ct);
+        var verify = await VerifyPayloadAsync(options.ExternalPayloadPath, ct).ConfigureAwait(false);
         if (!verify.Valid)
         {
             return new InstallerOperationResult(false, installDir, string.Empty, 0, verify.Message);
@@ -107,7 +107,7 @@ public sealed partial class InstallerEngine
         {
             try
             {
-                string prevRaw = await File.ReadAllTextAsync(existingManifestPath, Encoding.UTF8, ct);
+                string prevRaw = await File.ReadAllTextAsync(existingManifestPath, Encoding.UTF8, ct).ConfigureAwait(false);
                 previousManifest = JsonSerializer.Deserialize<InstallManifest>(prevRaw, JsonOpts);
             }
             catch (Exception ex)
@@ -122,7 +122,7 @@ public sealed partial class InstallerEngine
         {
             progress?.Report("Creating pre-upgrade state backup in backups\\...");
         }
-        string? backupZipPath = isUpgrade ? await CreatePreUpgradeBackupAsync(installDir, progress, ct) : null;
+        string? backupZipPath = isUpgrade ? await CreatePreUpgradeBackupAsync(installDir, progress, ct).ConfigureAwait(false) : null;
 
         var installedRelFiles = new List<string>();
         var installedTopDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -189,7 +189,7 @@ public sealed partial class InstallerEngine
                     await using (Stream entryStream = entry.Open())
                     await using (var outFs = new FileStream(tempDest, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
-                        await entryStream.CopyToAsync(outFs, ct);
+                        await entryStream.CopyToAsync(outFs, ct).ConfigureAwait(false);
                     }
                     FileLockRetryHelper.MoveWithOverwrite(tempDest, destPath, onRetryLog: msg => _ctx.WriteLog("WARN", msg), ct: ct);
                     installedRelFiles.Add(normalizedRel);
@@ -288,7 +288,7 @@ public sealed partial class InstallerEngine
             targetManifestPath,
             JsonSerializer.Serialize(manifest, JsonOpts),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-            ct);
+            ct).ConfigureAwait(false);
 
         string actionVerb = isUpgrade ? "Upgraded" : "Installed";
         string backupSuffix = !string.IsNullOrWhiteSpace(backupZipPath) ? $" (Pre-upgrade backup: '{Path.GetFileName(backupZipPath)}')" : "";

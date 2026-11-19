@@ -227,6 +227,33 @@ public sealed class FoundationV040ContractsTests : IDisposable
         Assert.Equal($"--config={Path.GetFullPath("cfg/app.json", callerCwd)}", normalized[2]);
         Assert.Equal("--tray", normalized[3]);
         Assert.Equal(Path.GetFullPath(@".\save.dat", callerCwd), normalized[4]);
+
+        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--diagnose" }));
+        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--doctor" }));
+        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--verify" }));
+        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--verify-module", "mods/game.dll" }));
+        Assert.False(RootLauncherHost.ShouldWaitForChild(new[] { "--automation-port", "51234", "--automation-token", "tok", "--programs-dir", "./progs", "--save-dir", "./saves", "--preload-media", "disc.chd", "--backend", "vulkan" }));
+        Assert.False(RootLauncherHost.ShouldWaitForChild(new[] { "--suite-tab", "housekeeping", "--window", "main", "--browser", "edge" }));
+        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--suite-tab", "--wait" }));
+        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--window", "--diagnose" }));
+
+        string[] suiteNorm = RootLauncherHost.NormalizeRelativePathArgs(new[] { "--suite-tab", "housekeeping", "--programs-dir", "./progs", "--save-dir", "./saves", "--preload-media", "disc.chd", "--verify-module", "mods/game.dll" }, callerCwd);
+        Assert.Equal("housekeeping", suiteNorm[1]);
+        Assert.Equal(Path.GetFullPath("./progs", callerCwd), suiteNorm[3]);
+        Assert.Equal(Path.GetFullPath("./saves", callerCwd), suiteNorm[5]);
+        Assert.Equal(Path.GetFullPath("disc.chd", callerCwd), suiteNorm[7]);
+        Assert.Equal(Path.GetFullPath("mods/game.dll", callerCwd), suiteNorm[9]);
+
+        var customOpts = new RootLauncherOptions(
+            ExtraSyncWaitFlags: new[] { "--custom-sync" },
+            ExtraValueOptions: new[] { "-automation-port" },
+            ExtraPathValueOptions: new[] { "--custom-dir" });
+        Assert.True(RootLauncherHost.ShouldWaitForChild(new[] { "--custom-sync" }, customOpts));
+        Assert.False(RootLauncherHost.ShouldWaitForChild(new[] { "-automation-port", "51234", "--custom-dir", "./rel" }, customOpts));
+        string[] customNorm = RootLauncherHost.NormalizeRelativePathArgs(new[] { "-automation-port", "51234", "--custom-dir", "./rel", "--custom-dir=./eqrel" }, callerCwd, customOpts);
+        Assert.Equal("51234", customNorm[1]);
+        Assert.Equal(Path.GetFullPath("./rel", callerCwd), customNorm[3]);
+        Assert.Equal($"--custom-dir={Path.GetFullPath("./eqrel", callerCwd)}", customNorm[4]);
     }
 
     [Fact]

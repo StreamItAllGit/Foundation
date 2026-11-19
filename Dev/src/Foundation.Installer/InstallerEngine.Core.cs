@@ -143,7 +143,9 @@ public sealed partial class InstallerEngine
             SharedStreamItAllRegistrySubKey,
             LastInstallBaseDirValueName)?.AsString();
 
-        if (!TryValidateLastInstallBaseDir(rawBase, sandbox, out string validBase))
+        string sanitized = SanitizeLastInstallBaseDir(rawBase, umbrellaSubpath);
+        if (!TryValidateLastInstallBaseDir(sanitized, sandbox, out string validBase) ||
+            IsPoisonedInstallBaseDirectory(validBase, umbrellaSubpath))
             return false;
 
         string cleanUmbrella = umbrellaSubpath.Trim().Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -162,7 +164,8 @@ public sealed partial class InstallerEngine
             return false;
 
         string baseDir = ExtractInstallBaseDirectory(installDir, umbrellaSubpath);
-        if (!TryValidateLastInstallBaseDir(baseDir, sandbox, out string validBase))
+        if (!TryValidateLastInstallBaseDir(baseDir, sandbox, out string validBase) ||
+            IsPoisonedInstallBaseDirectory(validBase, umbrellaSubpath))
             return false;
 
         try
@@ -182,78 +185,136 @@ public sealed partial class InstallerEngine
         }
     }
 
-    internal static string ExtractInstallBaseDirectory(string installDir, string umbrellaSubpath)
+    internal static string SanitizeLastInstallBaseDir(string? rawBase, string? umbrellaSubpath)
     {
-        string full = Path.GetFullPath(installDir.Trim()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        string[] segments = (umbrellaSubpath ?? string.Empty)
-            .Trim()
-            .Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+        if (string.IsNullOrWhiteSpace(rawBase)) return string.Empty;
+        string trimmed = rawBase.Trim();
+        if (!Path.IsPathFullyQualified(trimmed)) return trimmed;
+        string full;
+        try { full = TrimNonRootDirectorySeparator(Path.GetFullPath(trimmed)); }
+        catch (Exception ex) { _ = ex; return trimmed; }
+
+        (string root, string[] pathSegs) = SplitRootAndSegments(full);
+        int cutIdx = FindPoisonBoundaryIndex(pathSegs, SplitUmbrellaSegments(umbrellaSubpath), includeEngines: false);
+        return cutIdx >= 0 ? CombineRootAndSegments(root, pathSegs.AsSpan(0, cutIdx)) : full;
+    }
+
+    internal static bool IsPoisonedInstallBaseDirectory(string candidateBase, string? umbrellaSubpath)
+    {
+        if (string.IsNullOrWhiteSpace(candidateBase)) return true;
+        (_, string[] segs) = SplitRootAndSegments(candidateBase);
+        return segs.Length == 0 || FindPoisonBoundaryIndex(segs, SplitUmbrellaSegments(umbrellaSubpath), includeEngines: true) >= 0;
+    }
+
+    public static string ExtractInstallBaseDirectory(string installDir, string umbrellaSubpath)
+    {
+        string full = TrimNonRootDirectorySeparator(Path.GetFullPath(installDir.Trim()));
+        (string root, string[] pathSegs) = SplitRootAndSegments(full);
+        string[] umbSegs = SplitUmbrellaSegments(umbrellaSubpath);
+
+        int anchorIdx = FindPoisonBoundaryIndex(pathSegs, umbSegs, includeEngines: false);
+        if (anchorIdx >= 0)
+        {
+            string anchored = CombineRootAndSegments(root, pathSegs.AsSpan(0, anchorIdx));
+            return IsPoisonedInstallBaseDirectory(anchored, umbrellaSubpath) ? string.Empty : anchored;
+        }
 
         string current = full;
-        for (int i = segments.Length - 1; i >= 0; i--)
+        if (umbSegs.Length > 0 && !InstallerAppDescriptor.IsVersionLeafSegment(umbSegs[^1]) &&
+            InstallerAppDescriptor.IsVersionLeafSegment(Path.GetFileName(current)))
         {
-            if (!string.Equals(Path.GetFileName(current), segments[i], StringComparison.OrdinalIgnoreCase))
-                break;
-
-            string? parent = Path.GetDirectoryName(current);
-            if (string.IsNullOrEmpty(parent))
-                break;
-
+            if (Path.GetDirectoryName(current) is { Length: > 0 } noVer) current = TrimNonRootDirectorySeparator(noVer);
+        }
+        for (int i = umbSegs.Length - 1; i >= 0; i--)
+        {
+            if (!string.Equals(Path.GetFileName(current), umbSegs[i], StringComparison.OrdinalIgnoreCase)) break;
+            if (Path.GetDirectoryName(current) is not { Length: > 0 } parent) break;
             current = TrimNonRootDirectorySeparator(parent);
         }
 
-        if (string.Equals(current, full, StringComparison.OrdinalIgnoreCase))
-        {
-            string? fallbackParent = Path.GetDirectoryName(full);
-            return string.IsNullOrEmpty(fallbackParent) ? string.Empty : TrimNonRootDirectorySeparator(fallbackParent);
-        }
-
-        return current;
+        string candidate = string.Equals(current, full, StringComparison.OrdinalIgnoreCase)
+            ? (Path.GetDirectoryName(full) is { Length: > 0 } fb ? TrimNonRootDirectorySeparator(fb) : string.Empty)
+            : current;
+        return IsPoisonedInstallBaseDirectory(candidate, umbrellaSubpath) ? string.Empty : candidate;
     }
 
-    private static string TrimNonRootDirectorySeparator(string path)
+    private static int FindPoisonBoundaryIndex(string[] pathSegs, string[] umbSegs, bool includeEngines)
     {
-        string? root = Path.GetPathRoot(path);
-        return string.Equals(path, root, StringComparison.OrdinalIgnoreCase)
-            ? path
-            : path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string? studioAnchor = umbSegs.Length > 0 ? umbSegs[0] : null;
+        for (int i = 0; i < pathSegs.Length; i++)
+        {
+            string seg = pathSegs[i];
+            if (string.Equals(seg, "StreamItAll", StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(studioAnchor) && string.Equals(seg, studioAnchor, StringComparison.OrdinalIgnoreCase)) ||
+                (includeEngines && string.Equals(seg, "engines", StringComparison.OrdinalIgnoreCase)))
+                return i;
+        }
+        bool umbHasReEngine = Array.Exists(umbSegs, s => string.Equals(s, "reEngine", StringComparison.OrdinalIgnoreCase));
+        for (int i = 0; i < pathSegs.Length; i++)
+        {
+            if (!string.Equals(pathSegs[i], "reEngine", StringComparison.OrdinalIgnoreCase)) continue;
+            if (umbHasReEngine || (i + 1 < pathSegs.Length && (
+                string.Equals(pathSegs[i + 1], "engines", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(pathSegs[i + 1], "games", StringComparison.OrdinalIgnoreCase))))
+                return i;
+        }
+        return -1;
     }
+
+    private static string[] SplitUmbrellaSegments(string? umbrellaSubpath) =>
+        string.IsNullOrWhiteSpace(umbrellaSubpath) ? Array.Empty<string>()
+            : umbrellaSubpath.Trim().Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+
+    private static (string Root, string[] Segments) SplitRootAndSegments(string fullPath)
+    {
+        string norm = TrimNonRootDirectorySeparator(Path.GetFullPath(fullPath.Trim()));
+        string root = Path.GetPathRoot(norm) ?? string.Empty;
+        string rel = !string.IsNullOrEmpty(root) && norm.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? norm[root.Length..] : norm;
+        return (root, rel.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static string CombineRootAndSegments(string root, ReadOnlySpan<string> segments)
+    {
+        string combined = root;
+        for (int i = 0; i < segments.Length; i++) combined = Path.Combine(combined, segments[i]);
+        return TrimNonRootDirectorySeparator(combined);
+    }
+
+    private static string TrimNonRootDirectorySeparator(string path) =>
+        string.Equals(path, Path.GetPathRoot(path), StringComparison.OrdinalIgnoreCase)
+            ? path : path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     public static bool TryValidateLastInstallBaseDir(string? rawBase, SandboxResolution sandbox, out string validBase)
     {
         validBase = string.Empty;
-        if (string.IsNullOrWhiteSpace(rawBase)) return false;
-
-        string trimmed = rawBase.Trim();
-        if (!Path.IsPathFullyQualified(trimmed)) return false;
-
+        if (string.IsNullOrWhiteSpace(rawBase) || !Path.IsPathFullyQualified(rawBase.Trim())) return false;
         string full;
-        try { full = Path.GetFullPath(trimmed).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+        try { full = TrimNonRootDirectorySeparator(Path.GetFullPath(rawBase.Trim())); }
         catch (Exception ex) { _ = ex; return false; }
 
         string? root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (string.IsNullOrEmpty(root) || string.Equals(full, root, StringComparison.OrdinalIgnoreCase))
-            return false;
+        if (string.IsNullOrEmpty(root) || string.Equals(full, root, StringComparison.OrdinalIgnoreCase)) return false;
 
         if (sandbox.IsSandboxActive)
         {
-            if (!SandboxEnvironmentSeam.IsPathWithinSandbox(full, sandbox)) return false;
-            string sandboxTemp = Path.Combine(
-                KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox),
-                "Temp");
+            if (!SandboxEnvironmentSeam.IsPathWithinSandbox(full, sandbox) || IsSandboxRootPath(full, sandbox)) return false;
+            string sandboxTemp = Path.Combine(KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox), "Temp");
             if (IsSameOrChildPath(full, sandboxTemp)) return false;
         }
-        else if (IsSameOrChildPath(full, Path.GetTempPath()))
-        {
-            return false;
-        }
+        else if (IsSameOrChildPath(full, Path.GetTempPath())) return false;
 
-        if (HasReparsePointInExistingHierarchy(full, sandbox))
-            return false;
-
+        if (IsPoisonedInstallBaseDirectory(full, null) || HasReparsePointInExistingHierarchy(full, sandbox)) return false;
         validBase = full;
         return true;
+    }
+
+    private static bool IsSandboxRootPath(string fullPath, SandboxResolution sandbox)
+    {
+        foreach (string? c in new[] { sandbox.SandboxRoot, sandbox.SystemDriveRoot, sandbox.StorageDriveRoot, sandbox.RemovableDriveRoot })
+            if (!string.IsNullOrWhiteSpace(c) && string.Equals(fullPath, TrimNonRootDirectorySeparator(Path.GetFullPath(c)), StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
     }
 
     private static bool HasReparsePointInExistingHierarchy(string fullPath, SandboxResolution sandbox)
