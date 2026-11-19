@@ -27,6 +27,10 @@ public sealed class FoundationAutomationTests : IDisposable
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
+
     private readonly string _tempDir;
 
     public FoundationAutomationTests()
@@ -100,7 +104,7 @@ public sealed class FoundationAutomationTests : IDisposable
             return form;
         }, async form =>
         {
-            IntPtr beforeFg = GetForegroundWindow();
+            IntPtr formHwnd = form.Invoke<IntPtr>(() => form.Handle);
             var opts = new AutomationServerOptions(0, "token-ui", "ui-app", _tempDir);
             await using var server = new AutomationLoopbackServer(opts, form);
             server.Start();
@@ -148,7 +152,11 @@ public sealed class FoundationAutomationTests : IDisposable
             using var badDoc = JsonDocument.Parse(await badTarget.Content.ReadAsStringAsync());
             Assert.False(badDoc.RootElement.GetProperty("isPassed").GetBoolean());
 
-            Assert.Equal(beforeFg, GetForegroundWindow());
+            IntPtr afterFg = GetForegroundWindow();
+            Assert.NotEqual(formHwnd, afterFg);
+            Assert.False(afterFg != IntPtr.Zero && IsChild(formHwnd, afterFg));
+            Assert.Null(form.Invoke<Form?>(() => Form.ActiveForm));
+            Assert.False(form.Invoke<bool>(() => form.Visible));
         });
     }
 
