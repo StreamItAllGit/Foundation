@@ -1,4 +1,4 @@
-# Foundation (`v0.5.0`) — Operations, Build & CLI Runbook
+# Foundation (`v0.5.1`) — Operations, Build & CLI Runbook
 
 > **Audience:** Engineers maintaining `Foundation` itself or running `Dev\tools\*.py`, `sandbox_ctl.py`, `run_sandbox_e2e.py`, `Foundation.Automation`, or `StandardInstallerHost` CLIs.
 > **Full Symbol Reference:** [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md)
@@ -16,7 +16,7 @@ Open [`Dev\Foundation.code-workspace`](file:///<PROJECTS_ROOT>/Foundation/Dev/Fo
 | `pytest Dev\tests\foundation_core -q` | Runs the same Python suite via Pytest | Uses isolated `TemporaryDirectory()` fixtures |
 
 ### ⚠️ MSBuild Post-Build Side Effect Note (`Foundation.UI.csproj`)
-Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.5.0 --ui-version 0.5.0 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
+Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.5.1 --ui-version 0.5.1 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
 
 ---
 
@@ -25,11 +25,11 @@ Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\
 ### 2.1 `sync_foundation_sdk.py` (`Dev\tools\sync_foundation_sdk.py`, `<= 260` raw lines)
 | Flag | Default / Type | Description |
 |---|---|---|
-| `--publish` | bool | Publishes Release binaries, `@foundation/ui` (`0.5.0`), `foundation_core` (`0.5.0`), and `Dev\tools\` to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus strict 6-file `Releases\Latest\` (without loose `LICENSE`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
+| `--publish` | bool | Publishes Release binaries, `@foundation/ui` (`0.5.1`), `foundation_core` (`0.5.1`), and `Dev\tools\` to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus strict 6-file `Releases\Latest\` (without loose `LICENSE`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
 | `--sync-consumer` | `<ProjectRoot>` | Copies pinned SDK DLLs, `WebAssets`, and `foundation_core` into consumer `Dev\lib\` and removes only retired legacy test globs (`tools/verify_sandbox_universal.py`, `Foundation.Sandbox.*`, `*VisibleTest*`, `*InstallerSandboxContext*`) so `sandbox_seam.py`, `sandbox_ctl.py`, and `run_sandbox_e2e.py` survive |
-| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.5.0`) |
+| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.5.1`) |
 | `--web-dir` | Path (optional) | Optional consumer frontend directory target for `WebAssets` |
-| `--version` / `--ui-version` | `0.5.0` | Foundation SDK / `@foundation/ui` SemVer |
+| `--version` / `--ui-version` | `0.5.1` | Foundation SDK / `@foundation/ui` SemVer |
 | `--configuration` | `Release` | Build configuration (`Release`/`Debug`) |
 
 ### 2.2 `build_release_universal.py` (`Dev\tools\build_release_universal.py`)
@@ -72,7 +72,7 @@ Executes the 12-point `Standard 02 §4` matrix (`S2-01`..`S2-12`) with scrubbed 
 
 ---
 
-## 4. `StandardInstallerHost` (`v0.5.0`) & `Foundation.Automation` CLI Reference
+## 4. `StandardInstallerHost` (`v0.5.1`) & `Foundation.Automation` CLI Reference
 
 | Switch / Alias | Argument | Behavior |
 |---|---|---|

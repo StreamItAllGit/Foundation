@@ -1,6 +1,6 @@
-# Foundation (`v0.5.0`) — Strategic Roadmap
+# Foundation (`v0.5.1`) — Strategic Roadmap
 
-> **Active Version:** `v0.5.0` (`Beta` — Unified SemVer across all 8 C# assemblies, `@foundation/ui v0.5.0`, and `foundation_core v0.5.0`; Pre-1.0 Beta until `v1.0.0` Going Gold)
+> **Active Version:** `v0.5.1` (`Beta` — Unified SemVer across all 8 C# assemblies, `@foundation/ui v0.5.1`, and `foundation_core v0.5.1`; Pre-1.0 Beta until `v1.0.0` Going Gold)
 > **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`
 
 ---
@@ -58,12 +58,15 @@
   - `Foundation.Automation` (`net8.0-windows`): `AutomationLoopbackServer` (`127.0.0.1`, Host/Origin `403`, constant-time Bearer `401`, UI-thread dispatch), `AutomationCliHelper`, `Win32VirtualInputDriver` (`WM_*` pointer/keyboard, zero `SendInput`), and `WindowSnapshotService` (`IRenderSurfaceSnapshotProvider` + `RgbaPngWriter` + `CapturePreviewBitmap`).
 - **Verification & Compliance:** `dotnet test Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` (`45/45` passed, `0` warnings), Python `unittest` (`8/8` OK), `audit_scanner.py` (`P0: 0, P1: 0, P2: 45, P3: 0`), `57` SDK files published + strict 6-file `Releases\v0.5.0\` / `Latest\` bundle validated (`build_release_universal.py --allow-sdk-zip`), `@dean` Gate 2 `PASS`, `@inspecter` Phase 3 `PASS`.
 
+### ✅ `v0.5.1` — ISO/IEC 18004 QR Code Suite (`Foundation.Core.QrCodeEncoder`) *(2026-11-19)*
+- **Added:** Zero-dependency `Foundation.Core.QrCodeEncoder` (`QrCodeEncoder.cs`, `<= 350` SLOC, byte-mode Versions 1–10 ECC Level M up to 213 UTF-8 bytes, GF(256) Reed-Solomon, BCH format/version bits, 8-mask ISO penalty scoring, 4-module ISO quiet zone, high-contrast `RenderSvg`) + `FoundationQrCodeTests` and unified SDK `v0.5.1` bump (`Mother v0.3.0` prerequisite).
+
 ---
 
 ## Upcoming Horizons (`v0.6.0` $\rightarrow$ `v1.0.0` Going Gold)
 
 ```
-v0.5.0 (Live) ─▶ v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
+v0.5.1 (Live) ─▶ v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
                    │
                    ▼
                 v0.7.0 (JobQueue/Scheduler + Doctor/Backup + NativeAOT Core Subset)

@@ -1,4 +1,4 @@
-# Foundation (`v0.5.0`) — Consumer User Guide & Integration Recipes
+# Foundation (`v0.5.1`) — Consumer User Guide & Integration Recipes
 
 > **Goal:** Copy-paste integration recipes for consuming `Foundation` across C#, React/TypeScript, Vanilla Web, Python, and Stage 2 external 4-drive sandboxes without re-reading SDK source files.
 > **Full API Dictionary:** [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md)
@@ -43,7 +43,7 @@ using var lockHandle = PidSafeLockfile.Acquire(Path.Combine(env.DataDirectory, "
 
 ---
 
-## 3. Drop-In & Declarative Markup Installer (`Foundation.Installer v0.5.0`)
+## 3. Drop-In & Declarative Markup Installer (`Foundation.Installer v0.5.1`)
 
 ### 3.1 Tier 1 — Zero-Boilerplate `StandardInstallerHost` + Optional `installer.manifest.json`
 Add a ~15-line `Dev\Installer\Program.cs` referencing `Foundation.Installer.dll`, embedding `payload.zip` as `<ProductName>.Installer.Embedded.payload.zip`, and optionally placing a Standard 40 `schemaVersion: 2` `installer.manifest.json` (`manifestType: "installer-manifest"`) beside the setup executable or embedded in the assembly. `StandardInstallerHost` automatically merges `installer.manifest.json` (`theme`, `layoutMode`, `supportedProfiles`, 2-line `tooltips`, `secondaryPickers`, `logoPath`/`iconPath`) and uses `HKCU\Software\StreamItAll\LastInstallBaseDir` for fresh-install destination suggestions (keeping existing `InstallLocation` on upgrades):
@@ -77,7 +77,7 @@ Configure `InstallerThemeOptions` (`AllowAutoStart`, `AllowLegacyMigration`, `Av
 
 ---
 
-## 4. Clean-Root Launcher, Server, Retro, Sidecars & `Foundation.Automation` (`v0.5.0`)
+## 4. Clean-Root Launcher, Server, Retro, Sidecars & `Foundation.Automation` (`v0.5.1`)
 
 - **`Foundation.Launcher`:** `return RootLauncherHost.Run(@"app\MyApp.exe", "My App", args);`
 - **`Foundation.Server` (`net8.0`):** `TieredAuthEngine.LoadOrCreateSigningKey(env.DataDirectory)`, `FoundationTieredAuthMiddleware`, and `SisterAppStandardEndpoints.MapSuiteManifestEndpoints(...)`.
@@ -93,7 +93,7 @@ Configure `InstallerThemeOptions` (`AllowAutoStart`, `AllowLegacyMigration`, `Av
 
 ---
 
-## 5. React `@foundation/ui` (`v0.5.0`) & Vanilla Web Integration
+## 5. React `@foundation/ui` (`v0.5.1`) & Vanilla Web Integration
 
 ```tsx
 import { GlobalTerminalDrawer, UniversalDataTable, SchemaSettingsRenderer, ModalDialog, StyledTooltip } from "@foundation/ui";
@@ -107,7 +107,7 @@ For Vanilla JS / FastAPI / Razor hosts, include `foundation-tokens.css`, `founda
 
 ---
 
-## 6. Python `foundation_core` (`v0.5.0`) Quickstart
+## 6. Python `foundation_core` (`v0.5.1`) Quickstart
 
 ```python
 from foundation_core import (
@@ -123,7 +123,7 @@ from foundation_core import (
     resolve_sandbox_environment,
 )
 
-cli = parse_standard_cli_flags(app_name="my_py_app", app_version="0.5.0")
+cli = parse_standard_cli_flags(app_name="my_py_app", app_version="0.5.1")
 sandbox = resolve_sandbox_environment()
 folders = resolve_known_folders(sandbox)
 reg = JsonHivePlatformRegistry.from_sandbox(sandbox) if sandbox.is_sandbox_active else None

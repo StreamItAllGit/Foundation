@@ -7,16 +7,16 @@
   "containerTier": "Tier A (4-Folder)",
   "ecosystemTier": "Tier1_Infrastructure",
   "appArchetype": "SDK",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "activeMilestone": "0.6.0",
   "goalMajorVersion": "1.0.0",
   "stateChangedDate": "2026-11-04",
-  "lastVersionDate": "2026-11-16",
+  "lastVersionDate": "2026-11-19",
   "productionSubpath": null,
   "supersededBy": null,
   "tasklistDetailLevel": 3,
   "openTaskCount": 0,
-  "completedTaskCount": 34,
+  "completedTaskCount": 35,
   "openReportCount": 0,
   "isPublicRepo": true,
   "requireHumanReviewBeforePush": false,
@@ -27,7 +27,7 @@
     "isInspecterVerified": true,
     "isTessaSynced": true
   },
-  "notes": "Shipped Foundation v0.5.0 (Beta — Pre-1.0; InstallerManifestStore schemaVersion 2 + LastInstallBaseDir + Foundation.Automation loopback & snapshot module + SECURITY.md + expanded README Quickstart): 45/45 C# tests PASS (0 warnings), 8/8 Python tests PASS, audit_scanner P0:0 P1:0, 57 SDK files published to SharedLibs\\Foundation\\v0.5.0 & Latest, Releases\\v0.5.0 + hardlinked Latest validated, @dean Gate 2 PASS, @inspecter Phase 3 PASS. Public visibility & ongoing public pushes approved by Stream (git-filter-repo scrubbed history + --prerelease GitHub Releases; pre-public gate report archived). Next milestone: v0.6.0.",
+  "notes": "Shipped Foundation v0.5.1 (Beta — Pre-1.0; Stream-authorized ISO/IEC 18004 QrCodeEncoder V1-V10 ECC-M + SVG renderer in Foundation.Core + FoundationQrCodeTests + Dev\\Foundation.code-workspace, prerequisite for Mother v0.3.0). Verified 48/48 C# Release tests (/warnaserror), 8/8 Python unittest, audit_scanner P0:0 P1:0, SharedLibs\\Foundation\\v0.5.1 & Latest, Releases\\v0.5.1 + hardlinked Latest.",
   "discordPost": {
     "isEnabled": true,
     "serverName": null,
@@ -38,5 +38,5 @@
     "secretEnvKey": "DISCORD_WEBHOOK_FOUNDATION",
     "autoPostOnRelease": true
   },
-  "updatedAtUtc": "2026-11-16T23:55:00-05:00"
+  "updatedAtUtc": "2026-11-19T08:00:00.000Z"
 }

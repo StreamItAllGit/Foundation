@@ -7,8 +7,15 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-19
 ### Added
+- **ISO/IEC 18004 QR Code Suite (`Foundation.Core.QrCodeEncoder`):**
+  - Added zero-dependency [`QrCodeEncoder.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/src/Foundation.Core/QrCodeEncoder.cs) (`QrCodeMatrix` + `QrCodeEncoder`) supporting ISO/IEC 18004 byte-mode Versions 1–10 at ECC Level M (`<= 213` UTF-8 bytes for long Tailscale MagicDNS URLs), GF(256) Reed-Solomon (`0x11D`), BCH(15,5)/(18,6) format & version bits, 8-mask penalty scoring, 4-module ISO quiet zone, and high-contrast `RenderSvg`.
+  - Added [`FoundationQrCodeTests.cs`](file:///<PROJECTS_ROOT>/Foundation/Dev/tests/Foundation.Tests/FoundationQrCodeTests.cs) verifying V1–V10 sizing, finder/timing/dark-module geometry, capacity limits, 4-module quiet zone, and deterministic SVG output (`48/48` C# Release tests passed with `0` warnings; `8/8` Python `unittest` passed; `audit_scanner.py` `P0: 0, P1: 0`).
 - **IDE Workspace (`Dev\Foundation.code-workspace`):** Added multi-root VS Code / Antigravity workspace (`1. Foundation — Dev` + `2. Foundation — Project Root`) with `dotnet.defaultSolution`, Python interpreter settings, build/test/scaffold-audit tasks, file excludes, and extension recommendations, and updated [`Dev\docs\ARCHITECTURE.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/ARCHITECTURE.md) and [`Dev\docs\OPERATIONS.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/OPERATIONS.md).
+
+### Changed
+- **Unified `v0.5.1` SemVer & SDK Publish:** Bumped `0.5.1` across `Directory.Build.props`, `app.manifest.json`, `Foundation.UI.csproj`, `ShellBrandingOptions.cs`, `Web\package.json`, `foundation_core`, `sandbox_ctl.py`, `sync_foundation_sdk.py`, test suites, `active.state` (strict UTC `Z`), Root Quartet, and Manual Shelf.
 
 ## [0.5.0] - 2026-11-16
 ### Added

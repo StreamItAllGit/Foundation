@@ -63,7 +63,14 @@ public sealed class FoundationV040ContractsTests : IDisposable
             UmbrellaSubpath: @"CustomStudio\CustomSuite");
         Assert.Equal(Path.Combine(localPrograms, "CustomStudio", "CustomSuite", "UniqueUmbrellaApp040"), umbrella.CanonicalDefaultInstallDir);
 
-        var standardCtx = new InstallerRuntimeContext(envPrefix: "UNIQUE_TEST_APP_040");
+        var standardCtx = new InstallerRuntimeContext(
+            cliDataDir: null,
+            cliConfigPath: null,
+            cliLogDir: null,
+            dryRun: false,
+            envPrefix: "UNIQUE_TEST_APP_040",
+            sandboxOverride: SandboxResolution.Inactive,
+            registryOverride: NoOpPlatformRegistry.Instance);
         var engine = new InstallerEngine(standalone, standardCtx);
         string resolvedDefault = engine.ResolveDefaultInstallDirectory();
         Assert.StartsWith(localPrograms, resolvedDefault, StringComparison.OrdinalIgnoreCase);

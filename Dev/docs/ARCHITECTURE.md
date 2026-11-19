@@ -1,4 +1,4 @@
-# Foundation (`v0.5.0`) — Architecture & File Registry
+# Foundation (`v0.5.1`) — Architecture & File Registry
 
 > **Audience:** Engineers and autonomous agents working on `<PROJECTS_ROOT>\Foundation\` or tracing internals referenced by consumer apps (`Housekeeping`, `ShadowLibrary`, `reStation`, `KingsFieldRecomp`, `MediaSync`).
 > **Note for API Lookups:** If you only need public signatures, props, schemas, or CLI flags, read [`Dev\docs\INTERFACES.md`](file:///<PROJECTS_ROOT>/Foundation/Dev/docs/INTERFACES.md) first instead of opening source files.
@@ -7,19 +7,19 @@
 
 ## 1. System Overview & Assembly Dependency Topology
 
-`Foundation` is the zero-duplication Shared SDK & Infrastructure Core (`v0.5.0`, `.NET 8`, React/TypeScript `@foundation/ui v0.5.0`, Python `foundation_core v0.5.0`) organized in **Tier A (4-Folder)** layout serving companion apps under `<PROJECTS_ROOT>\`. Consumers treat `<PROJECTS_ROOT>\Foundation\` and `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` as **strictly read-only** during consumer development.
+`Foundation` is the zero-duplication Shared SDK & Infrastructure Core (`v0.5.1`, `.NET 8`, React/TypeScript `@foundation/ui v0.5.1`, Python `foundation_core v0.5.1`) organized in **Tier A (4-Folder)** layout serving companion apps under `<PROJECTS_ROOT>\`. Consumers treat `<PROJECTS_ROOT>\Foundation\` and `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` as **strictly read-only** during consumer development.
 
 ```mermaid
 flowchart LR
-    Core["Foundation.Core v0.5.0 (net8.0)"]
-    Retro["Foundation.Retro v0.5.0 (net8.0)"]
-    Sidecars["Foundation.Sidecars v0.5.0 (net8.0)"]
-    Server["Foundation.Server v0.5.0 (net8.0)"]
-    Installer["Foundation.Installer v0.5.0 (net8.0-windows)"]
-    UI["Foundation.UI + @foundation/ui v0.5.0"]
-    Automation["Foundation.Automation v0.5.0 (net8.0-windows)"]
-    Launcher["Foundation.Launcher v0.5.0 (net8.0-windows)"]
-    PyCore["foundation_core v0.5.0 (Python >= 3.12)"]
+    Core["Foundation.Core v0.5.1 (net8.0)"]
+    Retro["Foundation.Retro v0.5.1 (net8.0)"]
+    Sidecars["Foundation.Sidecars v0.5.1 (net8.0)"]
+    Server["Foundation.Server v0.5.1 (net8.0)"]
+    Installer["Foundation.Installer v0.5.1 (net8.0-windows)"]
+    UI["Foundation.UI + @foundation/ui v0.5.1"]
+    Automation["Foundation.Automation v0.5.1 (net8.0-windows)"]
+    Launcher["Foundation.Launcher v0.5.1 (net8.0-windows)"]
+    PyCore["foundation_core v0.5.1 (Python >= 3.12)"]
     Hub["SharedLibs/Foundation/Latest"]
 
     Core --> Retro
@@ -45,15 +45,15 @@ flowchart LR
 
 | Subproject | Target / Runtime | Depends On (Project / External) | Primary Role |
 |---|---|---|---|
-| `Foundation.Core` (`v0.5.0`) | `net8.0` | `Microsoft.Data.Sqlite 8.0.11`, `System.Security.Cryptography.ProtectedData 8.0.0`, in-box `Microsoft.Win32.Registry` | Runtime environment (`AppEnvironment`, `SandboxEnvironmentSeam`, `KnownFolderPaths`, `SandboxDriveController`), atomic JSON pseudo-registry (`IPlatformRegistry`, `JsonHivePlatformRegistry`, `WindowsPlatformRegistry`), CLI/logs, atomic settings, DPAPI, SQLite WAL, locks, telemetry, crash dumps, jobs, HTTP transfers, tools, module loader, frame pacer, SPSC audio, WAV/PNG/RGBA overlay |
-| `Foundation.Retro` (`v0.5.0`) | `net8.0` | `Foundation.Core` | 41-platform catalog, filename normalizer, Logiqx/Redump/RA/CMP DAT parser, headerless stripper + 20-magic sniff, IPS/BPS/UPS patcher, BYO media extractor, AOT-primary / `.decomp` contracts |
-| `Foundation.Sidecars` (`v0.5.0`) | `net8.0` | `Foundation.Core`, `Foundation.Retro` | Single-pass CRC32/MD5/SHA1/SHA256 + headerless hasher, ZIP/7z `-slt` inspector + TorrentZip, `.hash` v1 sidecars, `.hklock` sentinel |
-| `Foundation.Server` (`v0.5.0`) | `net8.0` | `Foundation.Core`, `Microsoft.AspNetCore.App` | Tiered Kestrel localhost/Tailscale/PBKDF2/HMAC cookie auth + Sister-App `/suite/manifest` endpoints |
-| `Foundation.Launcher` (`v0.5.0`) | `net8.0-windows` | *(None — zero dependencies)* | Clean-root Win32 `AttachConsole(-1)` CLI/GUI shim launching `app\<App>.exe` with sync wait, relative arg rebase & Ctrl+C forwarding |
-| `Foundation.Installer` (`v0.5.0`) | `net8.0-windows` (WinForms) | `Foundation.Core` | Tier 1 drop-in `StandardInstallerHost` (`ExitCode = 3` containment, auto-loads `installer.manifest.json`) + `InstallerManifestStore` (Standard 40 `schemaVersion: 2`, `single-line`/`multi-line`, `lightweight`/`full`/`custom`, 2-line tooltips) + `LastInstallBaseDir` suggestion + Dark Setup Wizard; Tier 2 `InstallerEngineCore` |
-| `Foundation.Automation` (`v0.5.0`) | `net8.0-windows` (WinForms) | `Foundation.Core`, `Foundation.UI` | Opt-in `127.0.0.1` HTTP/JSON loopback (`--automation-port`, bearer `401`, `Host`/`Origin` `403`), focus-free Win32 virtual pointer/keyboard & `inspectTree`, offscreen WinForms/WebView2/`IRenderSurfaceSnapshotProvider` PNG snapshot via `RgbaPngWriter` |
-| `Foundation.UI` (`v0.5.0` Web) | `net8.0-windows` (WinForms) + React 19 / TS / Vanilla | `Foundation.Core`, `Microsoft.Web.WebView2 1.0.2903.40`; `react ^19` peer | `DisposableWebViewHostForm`, STA dialogs, tray badges, `ShellBrandingOptions` (`SdkVersion = "0.5.0"`), 10 React components, Vanilla drawer + tokens |
-| `foundation_core` (`v0.5.0`) | Python `>= 3.12` | *(Python standard library only)* | Parity CLI, 4-drive sandbox seam (`sandbox_seam.py`), atomic JSON pseudo-registry (`pseudo_registry.py`), atomic settings, heartbeat/capped logging, crash dumper, PID lock, SQLite WAL helper |
+| `Foundation.Core` (`v0.5.1`) | `net8.0` | `Microsoft.Data.Sqlite 8.0.11`, `System.Security.Cryptography.ProtectedData 8.0.0`, in-box `Microsoft.Win32.Registry` | Runtime environment (`AppEnvironment`, `SandboxEnvironmentSeam`, `KnownFolderPaths`, `SandboxDriveController`), atomic JSON pseudo-registry (`IPlatformRegistry`, `JsonHivePlatformRegistry`, `WindowsPlatformRegistry`), CLI/logs, atomic settings, DPAPI, SQLite WAL, locks, telemetry, crash dumps, jobs, HTTP transfers, tools, module loader, frame pacer, SPSC audio, WAV/PNG/RGBA overlay, zero-dependency ISO/IEC 18004 QR encoder (`QrCodeEncoder`) |
+| `Foundation.Retro` (`v0.5.1`) | `net8.0` | `Foundation.Core` | 41-platform catalog, filename normalizer, Logiqx/Redump/RA/CMP DAT parser, headerless stripper + 20-magic sniff, IPS/BPS/UPS patcher, BYO media extractor, AOT-primary / `.decomp` contracts |
+| `Foundation.Sidecars` (`v0.5.1`) | `net8.0` | `Foundation.Core`, `Foundation.Retro` | Single-pass CRC32/MD5/SHA1/SHA256 + headerless hasher, ZIP/7z `-slt` inspector + TorrentZip, `.hash` v1 sidecars, `.hklock` sentinel |
+| `Foundation.Server` (`v0.5.1`) | `net8.0` | `Foundation.Core`, `Microsoft.AspNetCore.App` | Tiered Kestrel localhost/Tailscale/PBKDF2/HMAC cookie auth + Sister-App `/suite/manifest` endpoints |
+| `Foundation.Launcher` (`v0.5.1`) | `net8.0-windows` | *(None — zero dependencies)* | Clean-root Win32 `AttachConsole(-1)` CLI/GUI shim launching `app\<App>.exe` with sync wait, relative arg rebase & Ctrl+C forwarding |
+| `Foundation.Installer` (`v0.5.1`) | `net8.0-windows` (WinForms) | `Foundation.Core` | Tier 1 drop-in `StandardInstallerHost` (`ExitCode = 3` containment, auto-loads `installer.manifest.json`) + `InstallerManifestStore` (Standard 40 `schemaVersion: 2`, `single-line`/`multi-line`, `lightweight`/`full`/`custom`, 2-line tooltips) + `LastInstallBaseDir` suggestion + Dark Setup Wizard; Tier 2 `InstallerEngineCore` |
+| `Foundation.Automation` (`v0.5.1`) | `net8.0-windows` (WinForms) | `Foundation.Core`, `Foundation.UI` | Opt-in `127.0.0.1` HTTP/JSON loopback (`--automation-port`, bearer `401`, `Host`/`Origin` `403`), focus-free Win32 virtual pointer/keyboard & `inspectTree`, offscreen WinForms/WebView2/`IRenderSurfaceSnapshotProvider` PNG snapshot via `RgbaPngWriter` |
+| `Foundation.UI` (`v0.5.1` Web) | `net8.0-windows` (WinForms) + React 19 / TS / Vanilla | `Foundation.Core`, `Microsoft.Web.WebView2 1.0.2903.40`; `react ^19` peer | `DisposableWebViewHostForm`, STA dialogs, tray badges, `ShellBrandingOptions` (`SdkVersion = "0.5.1"`), 10 React components, Vanilla drawer + tokens |
+| `foundation_core` (`v0.5.1`) | Python `>= 3.12` | *(Python standard library only)* | Parity CLI, 4-drive sandbox seam (`sandbox_seam.py`), atomic JSON pseudo-registry (`pseudo_registry.py`), atomic settings, heartbeat/capped logging, crash dumper, PID lock, SQLite WAL helper |
 
 ---
 
@@ -68,7 +68,7 @@ flowchart LR
 4. **Single-Pass Media, Kestrel Auth & Hybrid Module Pipelines:**
    `Foundation.Sidecars` + `Foundation.Retro` hash and extract containers (`ArrayPool<byte>`, `.hash` v1, `.hklock`), `Foundation.Server` evaluates localhost/Tailscale/PBKDF2/HMAC auth, and `HybridModuleLoader` discovers in-assembly slices and `*.Module.*.dll` plugins.
 5. **SDK Publish, 6-File Release Bundle & Consumer Sync Pipeline:**
-   `Dev\tools\sync_foundation_sdk.py --publish` outputs binaries, `@foundation/ui`, `foundation_core`, and `Dev\tools\` to `SharedLibs\Foundation\v0.5.0\`, `Latest\`, and `Builds\v0.5.0\app\` (zero `AGENTS.md`, `app\LICENSE` included), and stages a strict 6-file `Releases\Latest\` bundle (`Foundation-v0.5.0.zip` + `README.md` + `FEATURES.md` + `RELEASE_NOTES.md` + `CHANGELOG.md` + `SHA256SUMS.txt` — no loose `LICENSE` in `Releases\`), verified via `build_release_universal.py --allow-sdk-zip`. `--sync-consumer` updates consumer `Dev\lib\` while preserving `sandbox_seam.py`/`sandbox_ctl.py`/`run_sandbox_e2e.py` and removing only retired legacy sandbox test artifacts.
+   `Dev\tools\sync_foundation_sdk.py --publish` outputs binaries, `@foundation/ui`, `foundation_core`, and `Dev\tools\` to `SharedLibs\Foundation\v0.5.1\`, `Latest\`, and `Builds\v0.5.1\app\` (zero `AGENTS.md`, `app\LICENSE` included), and stages a strict 6-file `Releases\Latest\` bundle (`Foundation-v0.5.1.zip` + `README.md` + `FEATURES.md` + `RELEASE_NOTES.md` + `CHANGELOG.md` + `SHA256SUMS.txt` — no loose `LICENSE` in `Releases\`), verified via `build_release_universal.py --allow-sdk-zip`. `--sync-consumer` updates consumer `Dev\lib\` while preserving `sandbox_seam.py`/`sandbox_ctl.py`/`run_sandbox_e2e.py` and removing only retired legacy sandbox test artifacts.
 
 ---
 
@@ -80,13 +80,13 @@ Every production source and tool file complies with **Standard 32 `250 / 400 / 6
 
 | File | SLOC (Raw) | Responsibility |
 |---|---|---|
-| `Dev\Directory.Build.props` | `23` (`24`) | Enforces `.NET 8`, nullable/implicit usings, `Deterministic`, `ContinuousIntegrationBuild`, `Version=0.5.0` (`0.5.0.0`) |
+| `Dev\Directory.Build.props` | `23` (`24`) | Enforces `.NET 8`, nullable/implicit usings, `Deterministic`, `ContinuousIntegrationBuild`, `Version=0.5.1` (`0.5.1.0`) |
 | `Dev\Foundation.code-workspace` | — | Multi-root IDE workspace (`Dev\` + Project Root), `.NET` / Python tasks, file excludes & extension recommendations |
-| `Dev\app.manifest.json` | `28` (`28`) | Standard 40 `standalone-app` manifest (`version: "0.5.0"`, `sdkVersion: "0.5.0"`, `containerTier: "Tier A (4-Folder)"`) |
+| `Dev\app.manifest.json` | `28` (`28`) | Standard 40 `standalone-app` manifest (`version: "0.5.1"`, `sdkVersion: "0.5.1"`, `containerTier: "Tier A (4-Folder)"`) |
 | `Dev\.env.example` | `17` (`21`) | Optional SharedLibs, Notion, and empty Stage 2 4-drive sandbox overlay placeholders |
 | `Dev\Foundation.sln` | — (`66`) | Solution binding all 8 C# projects + `Foundation.Tests` |
 
-### 3.2 `Dev\src\Foundation.Core\` (`24` `.cs` files + `.csproj`, `net8.0`)
+### 3.2 `Dev\src\Foundation.Core\` (`25` `.cs` files + `.csproj`, `net8.0`)
 
 | File | SLOC (Raw) | Exported / Key Symbols |
 |---|---|---|
@@ -109,6 +109,7 @@ Every production source and tool file complies with **Standard 32 `250 / 400 / 6
 | `JobObjectGuard.cs` | `181` (`228`) | `JobObjectGuard`, `DualJobCancellationCoordinator` |
 | `PidSafeLockfile.cs` | `212` (`266`) | `PidSafeLockEnvelope`, `PidSafeLockfile` |
 | `PixelOverlayCanvas.cs` & `RgbaPngWriter.cs` | `207` / `109` | `RgbaColor`, `PixelOverlayCanvas`, `RgbaPngWriter` |
+| `QrCodeEncoder.cs` | `275` (`295`) | `QrCodeMatrix`, `QrCodeEncoder` (ISO/IEC 18004 V1–V10 ECC-M byte-mode + GF(256) RS + 4-module SVG renderer) |
 | `SafeNetworkTransfer.cs` | `255` (`303`) | `SafeTransferOptions`, `SafeTransferResult`, `SafeNetworkTransfer` |
 | `SqliteWalPool.cs`, `ToolResolver.cs`, `WavCaptureWriter.cs` | `92` / `131` / `106` | `SqliteWalPool`, `ToolResolver`, `WavCaptureWriter` |
 
@@ -118,7 +119,7 @@ Every production source and tool file complies with **Standard 32 `250 / 400 / 6
 - **`Dev\src\Foundation.Sidecars\` (`net8.0`, `5` files):** `HashSidecarService.cs` (`287` raw), `HkLockSentinel.cs` (`181` raw), `SevenZipAndZipInspector.cs` (`208` raw), `SevenZipAndZipInspector.ExtractAndZip.cs` (`258` raw), `SinglePassStreamHasher.cs` (`187` raw).
 - **`Dev\src\Foundation.Server\` (`net8.0`, `3` `.cs` + `.csproj`):** `Foundation.Server.csproj` (`13` LOC, `net8.0` + `Microsoft.AspNetCore.App`), `SisterAppStandardEndpoints.cs` (`52` raw), `TieredAuthEngine.cs` (`285` raw), `TieredAuthMiddleware.cs` (`57` raw).
 - **`Dev\src\Foundation.Launcher\` (`net8.0-windows`, `1` `.cs` + `.csproj`):** `RootLauncherHost.cs` (`270` raw).
-- **`Dev\src\Foundation.UI\` (`net8.0-windows` + `@foundation/ui v0.5.0`):** `Foundation.UI.csproj` (`28` LOC), `ShellBrandingOptions.cs` (`21` SLOC / `51` raw, `SdkVersion = "0.5.0"`), `Desktop\{DisposableWebViewHostForm,StaNativeDialogBridgeBase,TrayIconBadgeHelper}.cs`, `Web\package.json` (`14` LOC, `0.5.0`) + `Web\index.ts` + 10 React components + `WebAssets\*`.
+- **`Dev\src\Foundation.UI\` (`net8.0-windows` + `@foundation/ui v0.5.1`):** `Foundation.UI.csproj` (`28` LOC), `ShellBrandingOptions.cs` (`21` SLOC / `51` raw, `SdkVersion = "0.5.1"`), `Desktop\{DisposableWebViewHostForm,StaNativeDialogBridgeBase,TrayIconBadgeHelper}.cs`, `Web\package.json` (`14` LOC, `0.5.1`) + `Web\index.ts` + 10 React components + `WebAssets\*`.
 
 ### 3.4 `Dev\src\Foundation.Installer\` (`18` `.cs` + `.csproj`, `net8.0-windows`) & `Dev\src\Foundation.Automation\` (`4` `.cs` + `.csproj`, `net8.0-windows`)
 
@@ -139,11 +140,11 @@ Every production source and tool file complies with **Standard 32 `250 / 400 / 6
 | `Win32VirtualInputDriver.cs` (`Foundation.Automation`) | `188` (`225`) | Focus-free window-scoped `SendMessage` pointer (`move`/`click`/`doubleClick`/`drag`/`scroll`), keyboard (`type`/`press`/`hotkey`), and `InspectTree` (`0` `SendInput`) |
 | `WindowSnapshotService.cs` (`Foundation.Automation`) | `81` (`106`) | Offscreen PNG capture via `IRenderSurfaceSnapshotProvider` (`RgbaPngWriter`), `DisposableWebViewHostForm.CapturePreviewBitmap()`, `PrintWindow`, or `DrawToBitmap` |
 
-### 3.5 `Dev\src\foundation_core\` (`10` files, Python `v0.5.0`) & `Dev\tools\` (`5` files)
+### 3.5 `Dev\src\foundation_core\` (`10` files, Python `v0.5.1`) & `Dev\tools\` (`5` files)
 
 | File | SLOC (Raw) | Key Symbols / Purpose |
 |---|---|---|
-| `foundation_core\pyproject.toml` & `__init__.py` | `11` / `62` | `version = "0.5.0"`, `dependencies = []`, `SDK_VERSION = "0.5.0"`, barrel exports |
+| `foundation_core\pyproject.toml` & `__init__.py` | `11` / `62` | `version = "0.5.1"`, `dependencies = []`, `SDK_VERSION = "0.5.1"`, barrel exports |
 | `foundation_core\sandbox_seam.py` | `244` (`303`) | `resolve_sandbox_environment`, `resolve_known_folders`, `assert_sandbox_path_if_active`, `is_path_within_sandbox`, `SandboxContainmentError` (`exit_code = 3`) |
 | `foundation_core\pseudo_registry.py` | `249` (`301`) | `JsonHivePlatformRegistry`, `PlatformRegistryHive`, `PlatformRegistryValueKind`, Windows `msvcrt`/POSIX lock + `.tmp -> fsync -> .bak` |
 | `foundation_core\{cli,settings,logging,crash_dumper,locks,db}.py` | `46`–`68` | CLI overrides, 3-file atomic settings, heartbeats/logs, crash bundles, PID locks, SQLite WAL |
