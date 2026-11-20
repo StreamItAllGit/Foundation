@@ -1,6 +1,6 @@
 // @module: Foundation.Core.Networking
-// @purpose: Implements Standard 19 §5 6-Pillar Safe Network Transfers (timeouts, jitter backoff, HTTP Range resume, disk preflight, throttle, hash check).
-// @depends-on: System, System.IO, System.Net.Http, System.Security.Cryptography, System.Threading, System.Threading.Tasks
+// @purpose: Implements Standard 41 6-Pillar Safe Network Transfers (HTTPS/SSRF/redirect validation, timeouts, jitter backoff, HTTP Range resume, disk preflight, throttle, hash + size check).
+// @depends-on: System, System.Diagnostics, System.IO, System.Net, System.Net.Http, System.Security.Cryptography, System.Threading, System.Threading.Tasks
 // @exports: SafeTransferOptions, SafeTransferResult, SafeNetworkTransfer
 
 using System;
@@ -8,7 +8,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,6 +21,9 @@ public sealed record SafeTransferOptions
     public TimeSpan ReadStallTimeout { get; init; } = TimeSpan.FromSeconds(30);
     public TimeSpan? ResponseHeadersTimeout { get; init; }
     public int MaxRetries { get; init; } = 3;
+    public int MaxRedirects { get; init; } = 5;
+    public bool RequireHttps { get; init; } = false;
+    public bool AllowLoopbackHttpForTesting { get; init; } = false;
     public long? ExpectedSizeBytes { get; init; }
     public string? ExpectedSha256Hex { get; init; }
     public string? ExpectedSha1Hex { get; init; }
@@ -40,15 +42,15 @@ public sealed record SafeTransferResult(
 );
 
 /// <summary>
-/// Enforces all 6 pillars of Standard 19 §5 Network Transfer Safety:
-/// 1. ConnectTimeout (10s) &amp; Per-Read Stall Timeout (30s)
+/// Enforces all 6 pillars of Standard 41 Network Transfer Safety:
+/// 1. HTTPS/SSRF/redirect validation &amp; TLS 1.2+ + ConnectTimeout (10s) &amp; Per-Read Stall Timeout (30s)
 /// 2. Exponential Backoff + Full Jitter (MaxRetries = 3, respecting Retry-After)
 /// 3. HTTP Range Resume on .partial_&lt;jobId&gt; staging files
 /// 4. Disk Free-Space Pre-Flight Check (1.2x expected size + 512 MB reserve)
 /// 5. Token-Bucket Bandwidth Throttling
-/// 6. Streaming SHA-256 &amp; SHA-1 Verification before atomic rename
+/// 6. Streaming SHA-256, SHA-1 &amp; exact byte-size verification before atomic rename
 /// </summary>
-public static class SafeNetworkTransfer
+public static partial class SafeNetworkTransfer
 {
     public static void AssertSufficientDiskSpace(
         string destinationFilePath,
@@ -70,6 +72,30 @@ public static class SafeNetworkTransfer
         }
     }
 
+    public static Task<SafeTransferResult> DownloadVerifiedAsync(
+        Uri sourceUri,
+        string destinationFilePath,
+        string? expectedSha256Hex = null,
+        long? expectedSizeBytes = null,
+        bool requireHttps = true,
+        bool allowLoopbackHttp = false,
+        Action<long, long?>? onProgress = null,
+        HttpMessageHandler? customHandler = null,
+        CancellationToken cancellationToken = default) =>
+        DownloadFileAsync(
+            sourceUri,
+            destinationFilePath,
+            new SafeTransferOptions
+            {
+                ExpectedSha256Hex = expectedSha256Hex,
+                ExpectedSizeBytes = expectedSizeBytes,
+                RequireHttps = requireHttps,
+                AllowLoopbackHttpForTesting = allowLoopbackHttp,
+                OnBytesProgress = onProgress
+            },
+            customHandler,
+            cancellationToken);
+
     public static async Task<SafeTransferResult> DownloadFileAsync(
         Uri sourceUri,
         string destinationFilePath,
@@ -81,6 +107,8 @@ public static class SafeNetworkTransfer
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationFilePath);
 
         SafeTransferOptions opts = options ?? new SafeTransferOptions();
+        ValidateRequestUri(sourceUri, opts.RequireHttps, opts.AllowLoopbackHttpForTesting);
+
         string fullDest = Path.GetFullPath(destinationFilePath);
         string? parentDir = Path.GetDirectoryName(fullDest);
         if (!string.IsNullOrEmpty(parentDir)) Directory.CreateDirectory(parentDir);
@@ -104,18 +132,8 @@ public static class SafeNetworkTransfer
             try
             {
                 long existingOffset = File.Exists(partialPath) ? new FileInfo(partialPath).Length : 0L;
-                using var request = new HttpRequestMessage(HttpMethod.Get, sourceUri);
-                if (existingOffset > 0) request.Headers.Range = new RangeHeaderValue(existingOffset, null);
-
-                TimeSpan headerTimeout = opts.ResponseHeadersTimeout ?? opts.ReadStallTimeout;
-                using var headerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                if (headerTimeout > TimeSpan.Zero && headerTimeout != Timeout.InfiniteTimeSpan)
-                {
-                    headerCts.CancelAfter(headerTimeout);
-                }
-
-                using HttpResponseMessage response = await client.SendAsync(
-                    request, HttpCompletionOption.ResponseHeadersRead, headerCts.Token).ConfigureAwait(false);
+                using HttpResponseMessage response = await SendWithValidatedRedirectsAsync(
+                    client, sourceUri, existingOffset, opts, cancellationToken).ConfigureAwait(false);
 
                 if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable && existingOffset > 0)
                 {
@@ -163,11 +181,22 @@ public static class SafeNetworkTransfer
         }
 
         (string sha256Hex, string sha1Hex, long finalLength) = await ComputeHashesAsync(partialPath, cancellationToken).ConfigureAwait(false);
+        VerifyExpectedSize(partialPath, fullDest, opts.ExpectedSizeBytes, finalLength);
         VerifyExpectedHash(partialPath, fullDest, "SHA-256", opts.ExpectedSha256Hex, sha256Hex);
         VerifyExpectedHash(partialPath, fullDest, "SHA-1", opts.ExpectedSha1Hex, sha1Hex);
 
         File.Move(partialPath, fullDest, overwrite: true);
         return new SafeTransferResult(fullDest, finalLength, sha256Hex, sha1Hex, attempt, resumed);
+    }
+
+    private static void VerifyExpectedSize(string partialPath, string fullDest, long? expectedSizeBytes, long actualSizeBytes)
+    {
+        if (expectedSizeBytes.HasValue && actualSizeBytes != expectedSizeBytes.Value)
+        {
+            try { File.Delete(partialPath); } catch { /* ignore */ }
+            throw new InvalidDataException(
+                $"Size verification failed for '{fullDest}': expected {expectedSizeBytes.Value} bytes, got {actualSizeBytes} bytes.");
+        }
     }
 
     private static void VerifyExpectedHash(string partialPath, string fullDest, string alg, string? expected, string actual)
@@ -250,16 +279,6 @@ public static class SafeNetworkTransfer
             total);
     }
 
-    private static HttpClient CreateHttpClient(TimeSpan connectTimeout, HttpMessageHandler? customHandler)
-    {
-        if (customHandler is not null)
-        {
-            return new HttpClient(customHandler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
-        }
-        var handler = new SocketsHttpHandler { ConnectTimeout = connectTimeout, AutomaticDecompression = DecompressionMethods.All };
-        return new HttpClient(handler, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
-    }
-
     private static string SanitizeJobId(string? jobId)
     {
         if (string.IsNullOrWhiteSpace(jobId)) return "default";
@@ -283,7 +302,7 @@ public static class SafeNetworkTransfer
         if (ex is HttpRequestException httpEx && httpEx.StatusCode is HttpStatusCode status)
         {
             int code = (int)status;
-            if (code is 400 or 401 or 403 or 404 or 410)
+            if (code is 400 or 401 or 403 or 404 or 410 or 422)
             {
                 return false;
             }

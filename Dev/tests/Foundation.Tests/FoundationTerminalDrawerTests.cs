@@ -88,10 +88,10 @@ public sealed class FoundationTerminalDrawerTests
         Assert.Contains("coalesceTerminalLogBatch", indexText);
 
         string pkgText = File.ReadAllText(pkgPath);
-        Assert.Contains("\"version\": \"0.5.2\"", pkgText);
+        Assert.Contains("\"version\": \"0.5.3\"", pkgText);
 
         var branding = new ShellBrandingOptions { AppId = "test", DisplayName = "Test" };
-        Assert.Equal("0.5.2", branding.SdkVersion);
+        Assert.Equal("0.5.3", branding.SdkVersion);
     }
 
     [Fact]
@@ -161,8 +161,8 @@ public sealed class FoundationTerminalDrawerTests
                 ArgumentList =
                 {
                     scriptPath,
-                    "--version", "0.5.2",
-                    "--ui-version", "0.5.2",
+                    "--version", "0.5.3",
+                    "--ui-version", "0.5.3",
                     "--publish",
                     "--sync-consumer", tempConsumer
                 },
@@ -181,7 +181,7 @@ public sealed class FoundationTerminalDrawerTests
 
             foreach (string sharedDir in new[]
             {
-                Path.Combine(tempSharedLibs, "v0.5.2"),
+                Path.Combine(tempSharedLibs, "v0.5.3"),
                 Path.Combine(tempSharedLibs, "Latest")
             })
             {
@@ -196,11 +196,13 @@ public sealed class FoundationTerminalDrawerTests
                 Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "sync_foundation_sdk.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "sandbox_ctl.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "run_sandbox_e2e.py")));
+                Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "ExeboxStreamHelpers.ps1")));
+                Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "exebox_stream.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "sdk-manifest.json")));
 
                 using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(sharedDir, "sdk-manifest.json")));
-                Assert.Equal("0.5.2", doc.RootElement.GetProperty("version").GetString());
-                Assert.Equal("0.5.2", doc.RootElement.GetProperty("uiVersion").GetString());
+                Assert.Equal("0.5.3", doc.RootElement.GetProperty("version").GetString());
+                Assert.Equal("0.5.3", doc.RootElement.GetProperty("uiVersion").GetString());
             }
 
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "Foundation.UI.dll")));

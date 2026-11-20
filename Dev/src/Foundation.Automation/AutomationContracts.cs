@@ -1,24 +1,32 @@
 // @module: Foundation.Automation.Contracts
-// @purpose: Opt-in loopback automation contracts, virtual pointer/keyboard/snapshot DTOs, Raylib/OpenGL RGBA snapshot callback, and CLI bootstrapper.
-// @depends-on: System, System.Collections.Generic, System.Globalization, System.Security.Cryptography, System.Text.Json.Serialization, System.Windows.Forms
-// @exports: IRenderSurfaceSnapshotProvider, AutomationServerOptions, AutomationControlNode, AutomationPointerRequest, AutomationKeyboardRequest, AutomationSnapshotRequest, AutomationSnapshotResult, AutomationHealthPayload, AutomationResponse, AutomationCliHelper
+// @purpose: WinForms-free opt-in loopback automation contracts, surface-target interface, virtual pointer/keyboard/snapshot DTOs, and Raylib/OpenGL RGBA snapshot callback.
+// @depends-on: System, System.Collections.Generic, System.Text.Json.Serialization
+// @exports: IRenderSurfaceSnapshotProvider, IAutomationSurfaceTarget, AutomationServerOptions, AutomationControlNode, AutomationPointerRequest, AutomationKeyboardRequest, AutomationSnapshotRequest, AutomationSnapshotResult, AutomationHealthPayload, AutomationResponse
 
-using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Security.Cryptography;
 using System.Text.Json.Serialization;
-using System.Windows.Forms;
 
 namespace Foundation.Automation;
 
 /// <summary>
-/// Callback interface implemented by custom render surfaces (e.g., Raylib, OpenGL, Vulkan)
+/// Callback interface implemented by custom render surfaces (e.g., Raylib, OpenGL, Vulkan, SDL3)
 /// so Foundation.Automation can snapshot framebuffers to PNG without taking an engine dependency.
 /// </summary>
 public interface IRenderSurfaceSnapshotProvider
 {
     bool TryCaptureRgba(out int width, out int height, out byte[] rgbaBytes);
+}
+
+/// <summary>
+/// WinForms-free UI/surface automation contract so SDL3, Avalonia, or cross-platform desktop hosts
+/// can expose tree inspection, virtual input, and PNG capture without referencing WinForms.
+/// </summary>
+public interface IAutomationSurfaceTarget
+{
+    AutomationControlNode? InspectTree();
+    bool ExecutePointer(AutomationPointerRequest request);
+    bool ExecuteKeyboard(AutomationKeyboardRequest request);
+    bool TryCapturePng(string? targetId, out byte[] pngBytes, out int width, out int height);
 }
 
 public sealed record AutomationServerOptions(
@@ -84,54 +92,4 @@ public sealed record AutomationResponse<T>(
 {
     public static AutomationResponse<T> Ok(T data) => new(true, "completed", null, data);
     public static AutomationResponse<T> Fail(string errorMessage) => new(false, "failed", errorMessage, default);
-}
-
-public static class AutomationCliHelper
-{
-    public static AutomationLoopbackServer? TryCreateFromArgs(
-        string appId,
-        string[]? args,
-        Control? rootControl,
-        IRenderSurfaceSnapshotProvider? renderProvider = null,
-        string? allowedSnapshotRoot = null)
-    {
-        args ??= Array.Empty<string>();
-        int? port = null;
-        string? token = null;
-
-        for (int i = 0; i < args.Length; i++)
-        {
-            string arg = args[i]?.Trim() ?? string.Empty;
-            if (arg.Equals("--automation-port", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length &&
-                int.TryParse(args[i + 1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed))
-            {
-                port = parsed;
-                i++;
-            }
-            else if (arg.Equals("--automation-token", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
-            {
-                token = args[i + 1].Trim();
-                i++;
-            }
-        }
-
-        if (!port.HasValue || port.Value < 0 || port.Value > 65535)
-            return null;
-
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            token = Environment.GetEnvironmentVariable("FOUNDATION_AUTOMATION_TOKEN")?.Trim();
-        }
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
-        }
-
-        var options = new AutomationServerOptions(
-            AutomationPort: port.Value,
-            BearerToken: token,
-            AppId: string.IsNullOrWhiteSpace(appId) ? "app" : appId.Trim(),
-            AllowedSnapshotRoot: allowedSnapshotRoot);
-        return new AutomationLoopbackServer(options, rootControl, renderProvider);
-    }
 }

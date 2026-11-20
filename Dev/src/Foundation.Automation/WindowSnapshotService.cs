@@ -32,6 +32,36 @@ public static class WindowSnapshotService
         string? allowedSnapshotRoot = null,
         SandboxResolution? sandbox = null)
     {
+        string fullPath = PrepareAndContainSnapshotPath(request, allowedSnapshotRoot, sandbox);
+        if (renderProvider is not null && renderProvider.TryCaptureRgba(out int w, out int h, out byte[] rgba))
+        {
+            RgbaPngWriter.WritePng(fullPath, w, h, rgba);
+            return new AutomationSnapshotResult(fullPath, w, h, new FileInfo(fullPath).Length, "png");
+        }
+
+        (byte[] pngBytes, int width, int height) = CaptureControlPngBytes(rootControl, request.TargetId);
+        File.WriteAllBytes(fullPath, pngBytes);
+        return new AutomationSnapshotResult(fullPath, width, height, pngBytes.LongLength, "png");
+    }
+
+    public static AutomationSnapshotResult CaptureSnapshot(
+        IAutomationSurfaceTarget? surfaceTarget,
+        IRenderSurfaceSnapshotProvider? renderProvider,
+        AutomationSnapshotRequest request,
+        string? allowedSnapshotRoot = null,
+        SandboxResolution? sandbox = null)
+    {
+        string fullPath = PrepareAndContainSnapshotPath(request, allowedSnapshotRoot, sandbox);
+        (byte[] pngBytes, int width, int height) = CaptureSnapshotPngBytes(surfaceTarget, renderProvider, request.TargetId);
+        File.WriteAllBytes(fullPath, pngBytes);
+        return new AutomationSnapshotResult(fullPath, width, height, pngBytes.LongLength, "png");
+    }
+
+    private static string PrepareAndContainSnapshotPath(
+        AutomationSnapshotRequest request,
+        string? allowedSnapshotRoot,
+        SandboxResolution? sandbox)
+    {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.FilePath);
 
@@ -51,33 +81,57 @@ public static class WindowSnapshotService
         string? parent = Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrEmpty(parent))
             Directory.CreateDirectory(parent);
+        return fullPath;
+    }
+
+    public static (byte[] PngBytes, int Width, int Height) CaptureSnapshotPngBytes(
+        Control? rootControl,
+        IRenderSurfaceSnapshotProvider? renderProvider,
+        string? targetId = null)
+    {
+        if (renderProvider is not null && renderProvider.TryCaptureRgba(out int w, out int h, out byte[] rgba))
+            return (RgbaPngWriter.Encode(w, h, rgba), w, h);
+
+        return CaptureControlPngBytes(rootControl, targetId);
+    }
+
+    public static (byte[] PngBytes, int Width, int Height) CaptureSnapshotPngBytes(
+        IAutomationSurfaceTarget? surfaceTarget,
+        IRenderSurfaceSnapshotProvider? renderProvider,
+        string? targetId = null)
+    {
+        if (surfaceTarget is not null && surfaceTarget.TryCapturePng(targetId, out byte[] pngBytes, out int sw, out int sh))
+            return (pngBytes, sw, sh);
 
         if (renderProvider is not null && renderProvider.TryCaptureRgba(out int w, out int h, out byte[] rgba))
-        {
-            RgbaPngWriter.WritePng(fullPath, w, h, rgba);
-            return new AutomationSnapshotResult(fullPath, w, h, new FileInfo(fullPath).Length, "png");
-        }
+            return (RgbaPngWriter.Encode(w, h, rgba), w, h);
 
+        throw new InvalidOperationException("No active automation surface target or render surface provider is available to snapshot.");
+    }
+
+    private static (byte[] PngBytes, int Width, int Height) CaptureControlPngBytes(Control? rootControl, string? targetId)
+    {
         if (rootControl is null || rootControl.IsDisposed)
             throw new InvalidOperationException("No active control or render surface provider is available to snapshot.");
 
-        (int width, int height) = Win32VirtualInputDriver.InvokeOnUiThread(rootControl, () =>
+        return Win32VirtualInputDriver.InvokeOnUiThread(rootControl, () =>
         {
             Control target = rootControl;
-            if (!string.IsNullOrWhiteSpace(request.TargetId))
+            if (!string.IsNullOrWhiteSpace(targetId))
             {
-                target = Win32VirtualInputDriver.FindControlById(rootControl, request.TargetId)
-                    ?? throw new ArgumentException($"Target control '{request.TargetId}' was not found.", nameof(request));
+                target = Win32VirtualInputDriver.FindControlById(rootControl, targetId)
+                    ?? throw new ArgumentException($"Target control '{targetId}' was not found.", nameof(targetId));
             }
 
             if (!target.IsHandleCreated) target.CreateControl();
             target.PerformLayout();
 
+            using var ms = new MemoryStream();
             if (target is DisposableWebViewHostForm webHost)
             {
                 using Bitmap webBmp = webHost.CapturePreviewBitmap();
-                webBmp.Save(fullPath, ImageFormat.Png);
-                return (webBmp.Width, webBmp.Height);
+                webBmp.Save(ms, ImageFormat.Png);
+                return (ms.ToArray(), webBmp.Width, webBmp.Height);
             }
 
             int bmpW = Math.Max(1, target.Width);
@@ -97,10 +151,8 @@ public static class WindowSnapshotService
                 target.DrawToBitmap(bmp, new Rectangle(0, 0, bmpW, bmpH));
             }
 
-            bmp.Save(fullPath, ImageFormat.Png);
-            return (bmpW, bmpH);
+            bmp.Save(ms, ImageFormat.Png);
+            return (ms.ToArray(), bmpW, bmpH);
         });
-
-        return new AutomationSnapshotResult(fullPath, width, height, new FileInfo(fullPath).Length, "png");
     }
 }

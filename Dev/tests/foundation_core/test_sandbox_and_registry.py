@@ -44,6 +44,7 @@ from foundation_core.sandbox_seam import (  # noqa: E402
     resolve_known_folders,
     resolve_sandbox_environment,
 )
+import exebox_stream  # noqa: E402
 import run_sandbox_e2e  # noqa: E402
 import sandbox_ctl  # noqa: E402
 
@@ -92,7 +93,9 @@ def _isolated_tool_env(fake_home: Path) -> dict[str, str]:
 
 class TestSandboxSeam(unittest.TestCase):
     def test_sdk_version_and_inactive_production_safety(self) -> None:
-        self.assertEqual(foundation_core.SDK_VERSION, "0.5.2")
+        self.assertEqual(foundation_core.SDK_VERSION, "0.5.3")
+        desktop_name = exebox_stream.get_thread_desktop_name()
+        self.assertTrue(bool(desktop_name))
         res = resolve_sandbox_environment(env_override={})
         self.assertFalse(res.is_sandbox_active)
         self.assertIsNone(res.sandbox_root)
@@ -329,7 +332,7 @@ class TestSandboxToolsCli(unittest.TestCase):
             manifest = json.loads((sbx_root / "sandbox.manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["schemaVersion"], 2)
             self.assertEqual(manifest["appId"], "foundation-sandbox")
-            self.assertEqual(manifest["version"], "0.5.2")
+            self.assertEqual(manifest["version"], "0.5.3")
             self.assertNotIn("manifestType", manifest)
             self.assertEqual(len(manifest["sandboxMounts"]), 4)
             self.assertTrue((sbx_root / "registry" / "registry.baseline.json").is_file())
@@ -429,6 +432,12 @@ class TestSandboxToolsCli(unittest.TestCase):
             self.assertEqual(child_env["FOUNDATION_SUPPRESS_MODALS"], "1")
             self.assertEqual(child_env["FOUNDATION_SANDBOX_ROOT"], str(sbx_root))
             self.assertNotIn("PYTHONPATH", child_env)
+            for required_os_key in (
+                "SystemDrive", "ProgramData", "ProgramFiles", "ProgramFiles(x86)",
+                "CommonProgramFiles", "CommonProgramFiles(x86)", "ALLUSERSPROFILE", "PUBLIC",
+            ):
+                if any(k.lower() == required_os_key.lower() and v for k, v in os.environ.items()):
+                    self.assertIn(required_os_key, child_env)
 
             prof_dir = sbx_root / "C" / "Users" / "Sandbox"
             mock_installer = tmp_path / "mock_installer.py"

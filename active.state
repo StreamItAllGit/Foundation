@@ -7,16 +7,16 @@
   "containerTier": "Tier A (4-Folder)",
   "ecosystemTier": "Tier1_Infrastructure",
   "appArchetype": "SDK",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "activeMilestone": "0.6.0",
   "goalMajorVersion": "1.0.0",
   "stateChangedDate": "2026-11-04",
-  "lastVersionDate": "2026-11-19",
+  "lastVersionDate": "2026-11-20",
   "productionSubpath": null,
   "supersededBy": null,
   "tasklistDetailLevel": 3,
   "openTaskCount": 0,
-  "completedTaskCount": 40,
+  "completedTaskCount": 47,
   "openReportCount": 0,
   "isPublicRepo": true,
   "requireHumanReviewBeforePush": false,
@@ -27,7 +27,7 @@
     "isInspecterVerified": true,
     "isTessaSynced": true
   },
-  "notes": "Foundation v0.5.2 shipped (Beta, Public Repository): fixed GetEffectiveUmbrellaSubpath version-leaf doubling and LastInstallBaseDir poisoning + self-healing, hardened Foundation.Installer async .ConfigureAwait(false) against non-pumping WinForms contexts, added canonical suiteId manifest identity with non-[Obsolete] suiteName fallback, added zero-dependency RootLauncherOptions + suite/optional flags, added build_release_universal.py --allow-portable-zip 7-file bundle parity, folded InvokeManagedMouse + TestAssemblyConfig, and verified 50/50 C# Release + 13/13 Python tests.",
+  "notes": "Foundation v0.5.3 shipped & verified (Beta, Public Repository): Gate 2 + Inspecter Phase 3 PASS, 55/55 C# + 16/16 Python tests, audit_scanner P0=0/P1=0/P3=0, live Stage 2 InstallerWizardForm GUI + sandbox E2E, 59 SDK files published, v0.5.2/v0.5.3/Latest Release bundles verified, GitHub Pages docs & Root Quartet/Manual Shelf synced.",
   "discordPost": {
     "isEnabled": true,
     "serverName": null,
@@ -38,5 +38,5 @@
     "secretEnvKey": "DISCORD_WEBHOOK_FOUNDATION",
     "autoPostOnRelease": true
   },
-  "updatedAtUtc": "2026-11-19T11:20:00Z"
+  "updatedAtUtc": "2026-11-20T20:18:50Z"
 }

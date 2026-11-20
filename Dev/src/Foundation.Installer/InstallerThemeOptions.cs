@@ -144,6 +144,15 @@ public sealed record InstallerThemeOptions
     /// <summary>Optional list of secondary directory pickers loaded from installer.manifest.json.</summary>
     public IReadOnlyList<SecondaryPathPickerOptions>? SecondaryPickers { get; init; }
 
+    /// <summary>Setup delivery kind ("onlineSetup" | "offlineSetup" | "portableZip").</summary>
+    public string InstallerDeliveryKind { get; init; } = InstallerDeliveryKinds.OfflineSetup;
+
+    /// <summary>Pinned HTTPS base/asset URL used by compact Online Setup installers.</summary>
+    public string? PayloadDownloadUrl { get; init; }
+
+    /// <summary>Pinned SHA-256 and byte-size payload asset descriptors for Online Setup delivery.</summary>
+    public IReadOnlyList<InstallerPayloadAsset>? PayloadAssets { get; init; }
+
     public string GetEffectiveUmbrellaSubpath()
     {
         if (!string.IsNullOrWhiteSpace(UmbrellaSubpath))

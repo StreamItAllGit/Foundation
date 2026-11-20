@@ -46,6 +46,19 @@ public sealed partial class InstallerEngine
 
         string installDir = ValidateAndNormalizeInstallDirectory(defaultBase);
 
+        if (!Directory.Exists(installDir))
+        {
+            return new InstallerOperationResult(false, installDir, string.Empty, 0, $"Install directory does not exist: '{installDir}'.");
+        }
+
+        InstallOwnershipCheckResult ownership = CheckDirectoryOwnership(installDir);
+        if (ownership.Status == InstallDirectoryOwnership.OwnedByForeignProduct)
+        {
+            string mismatchMsg = BuildForeignOwnershipErrorMessage(installDir, ownership.ExistingProductName!, isUninstall: true);
+            _ctx.WriteLog("ERROR", mismatchMsg);
+            return new InstallerOperationResult(false, installDir, string.Empty, 0, mismatchMsg);
+        }
+
         if (_ctx.DryRun)
         {
             return new InstallerOperationResult(
@@ -56,28 +69,18 @@ public sealed partial class InstallerEngine
                 $"[DRY-RUN] Would uninstall {Descriptor.DisplayName} from '{installDir}' (PurgeData={purgeData}).");
         }
 
-        if (!Directory.Exists(installDir))
-        {
-            return new InstallerOperationResult(false, installDir, string.Empty, 0, $"Install directory does not exist: '{installDir}'.");
-        }
-
         progress?.Report($"Stopping running {Descriptor.DisplayName} instances...");
         StopRunningInstanceInDirectory(installDir);
 
         string appManifestPath = Path.Combine(installDir, "app", InstallManifestFileName);
         string rootManifestPath = Path.Combine(installDir, InstallManifestFileName);
-        string manifestPath = File.Exists(appManifestPath) ? appManifestPath : rootManifestPath;
-        InstallManifest? manifest = null;
-        if (File.Exists(manifestPath))
-        {
-            string raw = await File.ReadAllTextAsync(manifestPath, Encoding.UTF8, ct).ConfigureAwait(false);
-            manifest = JsonSerializer.Deserialize<InstallManifest>(raw, JsonOpts);
-        }
+        InstallManifest? manifest = ownership.Manifest ?? TryReadInstallManifest(installDir, out _);
 
         int removedFiles = 0;
 
         progress?.Report("Removing installed application binaries and scripts...");
-        if (manifest?.InstalledRelativeFiles is { Count: > 0 } relFiles)
+        if (manifest?.InstalledRelativeFiles is { Count: > 0 } relFiles &&
+            (string.IsNullOrWhiteSpace(manifest.ProductName) || IsOwnInstallManifest(manifest, Descriptor.ProductName)))
         {
             foreach (string rel in relFiles)
             {
@@ -99,16 +102,6 @@ public sealed partial class InstallerEngine
             Path.Combine(installDir, "app", UninstallerExeName),
             Path.Combine(installDir, UninstallerExeName)
         };
-        foreach (string searchDir in new[] { installDir, Path.Combine(installDir, "app") })
-        {
-            if (Directory.Exists(searchDir))
-            {
-                foreach (string found in Directory.EnumerateFiles(searchDir, "*-Uninstall.exe", SearchOption.TopDirectoryOnly))
-                {
-                    uninstallerCandidates.Add(found);
-                }
-            }
-        }
 
         foreach (string uninstallerPath in uninstallerCandidates)
         {

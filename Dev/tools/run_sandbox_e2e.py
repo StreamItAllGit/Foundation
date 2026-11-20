@@ -30,7 +30,19 @@ SAFE_SYSTEM_ENV_KEYS = (
     "SYSTEMROOT", "WINDIR", "COMSPEC", "PATH", "PATHEXT",
     "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS",
     "DOTNET_ROOT", "DOTNET_CLI_TELEMETRY_OPTOUT",
+    "SystemDrive", "ProgramData", "ProgramFiles", "ProgramFiles(x86)",
+    "CommonProgramFiles", "CommonProgramFiles(x86)", "ALLUSERSPROFILE", "PUBLIC",
 )
+
+
+def _env_lookup_ci(key: str) -> str | None:
+    if key in os.environ and os.environ[key]:
+        return os.environ[key]
+    low = key.lower()
+    for ek, ev in os.environ.items():
+        if ek.lower() == low and ev:
+            return ev
+    return None
 
 
 def is_path_within_sandbox(candidate: Path, cfg: dict[str, Any]) -> bool:
@@ -40,7 +52,7 @@ def is_path_within_sandbox(candidate: Path, cfg: dict[str, Any]) -> bool:
 
 
 def build_sandbox_child_env(cfg: dict[str, Any]) -> dict[str, str]:
-    env = {k: os.environ[k] for k in SAFE_SYSTEM_ENV_KEYS if os.environ.get(k)}
+    env = {k: v for k in SAFE_SYSTEM_ENV_KEYS if (v := _env_lookup_ci(k))}
     prof = Path(cfg["sandboxProfileDir"])
     local_app, temp_dir = prof / "AppData/Local", prof / "AppData/Local/Temp"
     env.update({
@@ -157,6 +169,8 @@ def run_stage2_e2e(args: argparse.Namespace) -> tuple[dict[str, Any], Path, int]
         extra = ["--install-dir", str(install_dir), "--silent"]
         if args.payload:
             extra.extend(["--payload", str(Path(args.payload).resolve())])
+        if args.offline_bundle:
+            extra.extend(["--offline-bundle", str(Path(args.offline_bundle).resolve())])
         if args.installer_args:
             extra.extend(shlex.split(args.installer_args))
         proc = _run_child(_launch_cmd(inst, extra), child_env, args.timeout_seconds)
@@ -229,7 +243,11 @@ def run_stage2_e2e(args: argparse.Namespace) -> tuple[dict[str, Any], Path, int]
 
     def s09() -> str:
         up_inst = Path(args.upgrade_installer or args.installer).resolve()
-        extra = ["--install-dir", str(install_dir), "--silent"] + (["--payload", str(Path(args.upgrade_payload or args.payload).resolve())] if (args.upgrade_payload or args.payload) else [])
+        extra = ["--install-dir", str(install_dir), "--silent"]
+        if args.upgrade_payload or args.payload:
+            extra.extend(["--payload", str(Path(args.upgrade_payload or args.payload).resolve())])
+        if args.offline_bundle:
+            extra.extend(["--offline-bundle", str(Path(args.offline_bundle).resolve())])
         proc = _run_child(_launch_cmd(up_inst, extra), child_env, args.timeout_seconds)
         if proc.returncode != 0:
             raise RuntimeError(f"Upgrade exit={proc.returncode}: {(proc.stderr or proc.stdout).strip()}")
@@ -314,7 +332,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Foundation Stage 2 12-Point Sandbox E2E Runner")
     for flag, kw in (
         ("--app-id", {"required": True}), ("--version", {"default": "0.1.0"}), ("--installer", {"required": True}),
-        ("--payload", {}), ("--installer-args", {}), ("--upgrade-installer", {}), ("--upgrade-payload", {}),
+        ("--payload", {}), ("--offline-bundle", {}), ("--installer-args", {}), ("--upgrade-installer", {}), ("--upgrade-payload", {}),
         ("--uninstaller", {}), ("--install-dir", {}), ("--exe-rel", {}), ("--probe-arg", {"action": "append"}),
         ("--app-probe-args", {}), ("--missing-file-arg", {}), ("--missing-file-hook", {}),
         ("--missing-file-expected-exit", {"type": int, "nargs": "+", "default": [0, 1, 2]}),

@@ -35,6 +35,7 @@ public sealed record InstallerCliOptions(
     bool ShowHelp,
     bool ShowVersion)
 {
+    public string? OfflineBundlePath { get; init; }
     public string? SecondaryDir => !string.IsNullOrWhiteSpace(ReEngineDir) ? ReEngineDir : SuiteDir;
     public string? SecondaryFlagName => !string.IsNullOrWhiteSpace(ReEngineDir) ? "--reengine-dir" : (!string.IsNullOrWhiteSpace(SuiteDir) ? "--suite-dir" : null);
 }
@@ -46,7 +47,7 @@ public sealed partial class InstallerEngine
         ArgumentNullException.ThrowIfNull(descriptor);
         args ??= Array.Empty<string>();
 
-        string? installDir = null, dataDir = null, configPath = null, logDir = null, payloadPath = null;
+        string? installDir = null, dataDir = null, configPath = null, logDir = null, payloadPath = null, offlineBundlePath = null;
         string? profileId = null, reEngineDir = null, suiteDir = null;
         bool uninstall = string.Equals(Path.GetFileName(Environment.ProcessPath), descriptor.UninstallerExeName, StringComparison.OrdinalIgnoreCase);
         bool purgeData = false, verifyOnly = false, noShortcuts = false, autoStart = false, launchAfter = false, noLaunch = false;
@@ -63,6 +64,7 @@ public sealed partial class InstallerEngine
                 case "--config": configPath = RequireNextCliValue(args, ref i, arg); break;
                 case "--log-dir": logDir = RequireNextCliValue(args, ref i, arg); break;
                 case "--payload": payloadPath = RequireNextCliValue(args, ref i, arg); break;
+                case "--offline-bundle": offlineBundlePath = RequireNextCliValue(args, ref i, arg); break;
                 case "--profile": profileId = RequireNextCliValue(args, ref i, arg); break;
                 case "--reengine-dir": reEngineDir = RequireNextCliValue(args, ref i, arg); break;
                 case "--suite-dir": suiteDir = RequireNextCliValue(args, ref i, arg); break;
@@ -92,7 +94,10 @@ public sealed partial class InstallerEngine
             installDir, dataDir, configPath, logDir, payloadPath,
             profileId, reEngineDir, suiteDir,
             uninstall, purgeData, verifyOnly, noShortcuts, autoStart, launchAfter, noLaunch,
-            silent, dryRun, migrateLegacy, showHelp, showVersion);
+            silent, dryRun, migrateLegacy, showHelp, showVersion)
+        {
+            OfflineBundlePath = offlineBundlePath
+        };
     }
 
     private static string RequireNextCliValue(string[] args, ref int index, string flag)
@@ -230,10 +235,8 @@ public sealed partial class InstallerEngine
         string fullUninstaller = Path.GetFullPath(uninstallerPath);
         string fullAppDir = Path.GetFullPath(appDir);
         string fullInstallDir = Path.GetFullPath(installDir);
-        string wildUninstallerApp = Path.Combine(fullAppDir, "*-Uninstall.exe");
-        string wildUninstallerRoot = Path.Combine(fullInstallDir, "*-Uninstall.exe");
 
-        return $"for /L %i in (1,1,{boundedAttempts}) do @if exist \"{fullUninstaller}\" (ping 127.0.0.1 -n 2 >nul & del /f /q \"{fullUninstaller}\" 2>nul) & del /f /q \"{wildUninstallerApp}\" 2>nul & del /f /q \"{wildUninstallerRoot}\" 2>nul & rmdir \"{fullAppDir}\" 2>nul & rmdir \"{fullInstallDir}\" 2>nul";
+        return $"for /L %i in (1,1,{boundedAttempts}) do @if exist \"{fullUninstaller}\" (ping 127.0.0.1 -n 2 >nul & del /f /q \"{fullUninstaller}\" 2>nul) & rmdir \"{fullAppDir}\" 2>nul & rmdir \"{fullInstallDir}\" 2>nul";
     }
 
     private static void ScheduleDeferredSelfDelete(string uninstallerPath, string installDir)

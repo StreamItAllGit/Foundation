@@ -66,6 +66,15 @@ public sealed partial class InstallerEngine
         ArgumentNullException.ThrowIfNull(options);
         string installDir = ValidateAndNormalizeInstallDirectory(options.ExplicitInstallDir);
         _ctx.EnsureDefaultLogDirectory(installDir);
+
+        InstallOwnershipCheckResult ownership = CheckDirectoryOwnership(installDir);
+        if (ownership.Status == InstallDirectoryOwnership.OwnedByForeignProduct)
+        {
+            string mismatchMsg = BuildForeignOwnershipErrorMessage(installDir, ownership.ExistingProductName!, isUninstall: false);
+            _ctx.WriteLog("ERROR", mismatchMsg);
+            return new InstallerOperationResult(false, installDir, string.Empty, 0, mismatchMsg);
+        }
+
         bool effectiveShortcuts = _ctx.ConfigOverride?.CreateShortcuts ?? options.CreateShortcuts;
         bool requestedAutoStart = _ctx.ConfigOverride?.AutoStart ?? options.RegisterAutoStart;
         bool effectiveAutoStart = Descriptor.AllowAutoStart && requestedAutoStart;
@@ -82,41 +91,35 @@ public sealed partial class InstallerEngine
             _ctx.WriteLog("WARN", $"AutoStart requested for {Descriptor.ProductName}, but AllowAutoStart is false; skipping Startup shortcut.");
         }
 
-        progress?.Report("Verifying embedded payload SHA-256 & archive integrity...");
-        var verify = await VerifyPayloadAsync(options.ExternalPayloadPath, ct).ConfigureAwait(false);
-        if (!verify.Valid)
+        progress?.Report(Descriptor.IsOnlineSetup && string.IsNullOrWhiteSpace(options.OfflineBundlePath) && string.IsNullOrWhiteSpace(options.ExternalPayloadPath)
+            ? "Resolving & downloading verified Online Setup payload..."
+            : "Verifying payload SHA-256 & archive integrity...");
+        await using ResolvedPayloadBatch batch = await ResolvePayloadBatchAsync(
+            options.ExternalPayloadPath,
+            options.OfflineBundlePath,
+            effectiveProfile,
+            progress,
+            ct).ConfigureAwait(false);
+        if (!batch.Valid)
         {
-            return new InstallerOperationResult(false, installDir, string.Empty, 0, verify.Message);
+            return new InstallerOperationResult(false, installDir, string.Empty, 0, batch.Message);
         }
 
         if (_ctx.DryRun)
         {
-            string dryMsg = $"[DRY-RUN] Verified payload ({verify.EntryCount:N0} files, SHA-256: {verify.Sha256}); would install {Descriptor.DisplayName} v{InstallerVersion} (profile: {effectiveProfile}) into '{installDir}'.";
-            return new InstallerOperationResult(true, installDir, verify.Sha256, 0, dryMsg);
+            string dryMsg = $"[DRY-RUN] Verified payload ({batch.TotalEntries:N0} files, SHA-256: {batch.CombinedSha256}); would install {Descriptor.DisplayName} v{InstallerVersion} (profile: {effectiveProfile}) into '{installDir}'.";
+            return new InstallerOperationResult(true, installDir, batch.CombinedSha256, 0, dryMsg);
         }
 
         progress?.Report($"Checking for running {Descriptor.DisplayName} instances...");
         bool wasRunning = StopRunningInstanceInDirectory(installDir);
         Directory.CreateDirectory(installDir);
 
-        string appSubManifestPath = Path.Combine(installDir, "app", InstallManifestFileName);
-        string rootManifestPath = Path.Combine(installDir, InstallManifestFileName);
-        string existingManifestPath = File.Exists(appSubManifestPath) ? appSubManifestPath : rootManifestPath;
-        InstallManifest? previousManifest = null;
-        if (File.Exists(existingManifestPath))
-        {
-            try
-            {
-                string prevRaw = await File.ReadAllTextAsync(existingManifestPath, Encoding.UTF8, ct).ConfigureAwait(false);
-                previousManifest = JsonSerializer.Deserialize<InstallManifest>(prevRaw, JsonOpts);
-            }
-            catch (Exception ex)
-            {
-                _ = ex; // Unreadable previous manifest falls back cleanly to directory artifact detection.
-            }
-        }
-
-        bool isUpgrade = previousManifest != null || HasExistingInstallationArtifacts(installDir);
+        InstallManifest? previousManifest = ownership.Status == InstallDirectoryOwnership.OwnedBySelf
+            ? ownership.Manifest
+            : null;
+        bool isUpgrade = ownership.Status == InstallDirectoryOwnership.OwnedBySelf ||
+                         (ownership.Manifest == null && HasExistingInstallationArtifacts(installDir));
 
         if (isUpgrade)
         {
@@ -127,89 +130,16 @@ public sealed partial class InstallerEngine
         var installedRelFiles = new List<string>();
         var installedTopDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        await using Stream payloadStream = OpenPayloadStream(options.ExternalPayloadPath)
-            ?? throw new FileNotFoundException("Unable to open installer payload stream.");
-
-        using (var zip = new ZipArchive(payloadStream, ZipArchiveMode.Read, leaveOpen: false))
-        {
-            long expandedBytes = 0;
-            int totalEntries = zip.Entries.Count;
-            int currentEntry = 0;
-            foreach (var entry in zip.Entries)
-            {
-                ct.ThrowIfCancellationRequested();
-                currentEntry++;
-                string normalizedRel = entry.FullName.Replace('\\', '/').TrimStart('/');
-                if (string.IsNullOrWhiteSpace(normalizedRel))
-                    continue;
-
-                string topSegment = normalizedRel.Split('/', 2)[0];
-                if (ProtectedRuntimeNames.Contains(topSegment))
-                {
-                    continue;
-                }
-
-                string destPath = EnsureWithinDirectory(installDir, Path.Combine(installDir, normalizedRel.Replace('/', Path.DirectorySeparatorChar)));
-
-                if (normalizedRel.EndsWith("/", StringComparison.Ordinal) || string.IsNullOrEmpty(entry.Name))
-                {
-                    Directory.CreateDirectory(destPath);
-                    if (!string.Equals(topSegment, normalizedRel.TrimEnd('/'), StringComparison.OrdinalIgnoreCase) || Directory.Exists(destPath))
-                    {
-                        installedTopDirs.Add(topSegment);
-                    }
-                    continue;
-                }
-
-                expandedBytes += entry.Length;
-                if (expandedBytes > MaxArchiveExpandedBytes)
-                {
-                    throw new InvalidDataException("Payload archive exceeded 2 GB uncompressed safety cap during extraction.");
-                }
-
-                if (normalizedRel.Contains('/'))
-                {
-                    installedTopDirs.Add(topSegment);
-                }
-
-                string? parent = Path.GetDirectoryName(destPath);
-                if (!string.IsNullOrEmpty(parent))
-                {
-                    Directory.CreateDirectory(parent);
-                }
-
-                if (currentEntry == 1 || currentEntry % 15 == 0 || currentEntry == totalEntries)
-                {
-                    progress?.Report($"Extracting ({currentEntry}/{totalEntries}): {normalizedRel}");
-                }
-
-                string tempDest = destPath + ".tmp_" + Guid.NewGuid().ToString("N")[..8];
-                try
-                {
-                    await using (Stream entryStream = entry.Open())
-                    await using (var outFs = new FileStream(tempDest, FileMode.Create, FileAccess.Write, FileShare.None))
-                    {
-                        await entryStream.CopyToAsync(outFs, ct).ConfigureAwait(false);
-                    }
-                    FileLockRetryHelper.MoveWithOverwrite(tempDest, destPath, onRetryLog: msg => _ctx.WriteLog("WARN", msg), ct: ct);
-                    installedRelFiles.Add(normalizedRel);
-                }
-                finally
-                {
-                    if (File.Exists(tempDest))
-                    {
-                        try { File.Delete(tempDest); } catch { }
-                    }
-                }
-            }
-        }
+        await ExtractPayloadBatchAsync(
+            batch, options.ExternalPayloadPath, installDir, installedRelFiles, installedTopDirs, progress, ct).ConfigureAwait(false);
 
         Directory.CreateDirectory(EnsureWithinDirectory(installDir, Path.Combine(installDir, "data")));
         Directory.CreateDirectory(EnsureWithinDirectory(installDir, Path.Combine(installDir, "logs")));
         Directory.CreateDirectory(EnsureWithinDirectory(installDir, Path.Combine(installDir, "backups")));
 
         bool hasAppSubfolder = installedTopDirs.Contains("app") || Directory.Exists(Path.Combine(installDir, "app"));
-        if (previousManifest?.InstalledRelativeFiles is { Count: > 0 } prevFiles)
+        if (IsOwnInstallManifest(previousManifest, Descriptor.ProductName) &&
+            previousManifest?.InstalledRelativeFiles is { Count: > 0 } prevFiles)
         {
             var currentFileSet = new HashSet<string>(installedRelFiles, StringComparer.OrdinalIgnoreCase);
             foreach (string oldRel in prevFiles)
@@ -271,7 +201,7 @@ public sealed partial class InstallerEngine
             Version = InstallerVersion,
             InstalledAtUtc = DateTimeOffset.UtcNow,
             InstallDirectory = installDir,
-            PayloadSha256 = verify.Sha256,
+            PayloadSha256 = batch.CombinedSha256,
             InstalledRelativeFiles = installedRelFiles,
             InstalledTopDirectories = installedTopDirs.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList(),
             CreatedShortcuts = createdShortcuts,
@@ -280,7 +210,8 @@ public sealed partial class InstallerEngine
             ReEngineInstallDir = reEngineDir,
             SuiteInstallDir = suiteDir,
             UmbrellaSubpath = Descriptor.UmbrellaSubpath,
-            MigrateLegacy = effectiveMigrateLegacy
+            MigrateLegacy = effectiveMigrateLegacy,
+            InstallerDeliveryKind = Descriptor.InstallerDeliveryKind
         };
 
         string targetManifestPath = Path.Combine(metaContainerDir, InstallManifestFileName);
@@ -295,9 +226,9 @@ public sealed partial class InstallerEngine
         string doneMsg = $"{actionVerb} {Descriptor.DisplayName} v{InstallerVersion} ({installedRelFiles.Count:N0} files) to '{installDir}'{backupSuffix}.";
         _ctx.WriteLog(
             "INFO",
-            $"{doneMsg} SHA-256={verify.Sha256} Profile={effectiveProfile} ReEngineDir={reEngineDir ?? "none"} SuiteDir={suiteDir ?? "none"} MigrateLegacy={effectiveMigrateLegacy}");
+            $"{doneMsg} SHA-256={batch.CombinedSha256} Profile={effectiveProfile} Delivery={Descriptor.InstallerDeliveryKind} ReEngineDir={reEngineDir ?? "none"} SuiteDir={suiteDir ?? "none"} MigrateLegacy={effectiveMigrateLegacy}");
         progress?.Report(doneMsg);
-        return new InstallerOperationResult(true, installDir, verify.Sha256, installedRelFiles.Count, doneMsg, wasRunning, backupZipPath);
+        return new InstallerOperationResult(true, installDir, batch.CombinedSha256, installedRelFiles.Count, doneMsg, wasRunning, backupZipPath);
     }
 
     private static string? NormalizeOptionalProfile(string? rawProfile) =>

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -31,13 +32,18 @@ def _write_zip(zip_path: Path, entries: dict[str, bytes]) -> None:
 
 
 class TestBuildReleaseUniversal(unittest.TestCase):
-    def test_six_file_sdk_bundle_passes_and_loose_license_fails(self) -> None:
+    def test_six_file_sdk_bundle_passes_lowercase_hex_and_loose_license_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            rel = Path(tmp) / "v0.5.2"
+            rel = Path(tmp) / "v0.5.3"
             rel.mkdir()
             _write_common_docs(rel)
-            _write_zip(rel / "Foundation-v0.5.2.zip", {"Foundation.Core.dll": b"dll"})
-            bru.generate_sha256sums(rel)
+            _write_zip(rel / "Foundation-v0.5.3.zip", {"Foundation.Core.dll": b"dll"})
+            sums_path = bru.generate_sha256sums(rel)
+
+            sums_text = sums_path.read_text(encoding="utf-8")
+            first_digest = sums_text.splitlines()[0].split()[0]
+            self.assertEqual(len(first_digest), 64)
+            self.assertEqual(first_digest, first_digest.lower())
 
             ok, errs = bru.validate_six_file_release_bundle(rel, allow_sdk_zip=True)
             self.assertTrue(ok, errs)
@@ -46,6 +52,46 @@ class TestBuildReleaseUniversal(unittest.TestCase):
             ok_bad, errs_bad = bru.validate_six_file_release_bundle(rel, allow_sdk_zip=True)
             self.assertFalse(ok_bad)
             self.assertTrue(any("Unexpected files" in e for e in errs_bad))
+
+    def test_generate_sha256sums_does_not_mutate_hardlinked_prior_release(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            v_old = Path(tmp) / "v0.5.2"
+            v_new = Path(tmp) / "Latest"
+            v_old.mkdir()
+            v_new.mkdir()
+            _write_common_docs(v_old)
+            _write_zip(v_old / "Foundation-v0.5.2.zip", {"Foundation.Core.dll": b"old"})
+            old_sums = bru.generate_sha256sums(v_old)
+            old_content = old_sums.read_text(encoding="utf-8")
+
+            for f in ("README.md", "FEATURES.md", "RELEASE_NOTES.md", "CHANGELOG.md"):
+                (v_new / f).write_text(f"# {f}\n", encoding="utf-8")
+            _write_zip(v_new / "Foundation-v0.5.3.zip", {"Foundation.Core.dll": b"new"})
+            new_sums = v_new / "SHA256SUMS.txt"
+            os.link(old_sums, new_sums)
+
+            bru.generate_sha256sums(v_new)
+            self.assertEqual(old_sums.read_text(encoding="utf-8"), old_content)
+            self.assertIn("Foundation-v0.5.3.zip", new_sums.read_text(encoding="utf-8"))
+
+    def test_stage_sdk_zip_cli_stages_and_validates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sdk_dir = Path(tmp) / "sdk"
+            rel_dir = Path(tmp) / "Latest"
+            sdk_dir.mkdir()
+            rel_dir.mkdir()
+            (sdk_dir / "Foundation.Core.dll").write_bytes(b"MZ")
+            _write_common_docs(rel_dir)
+
+            rc = bru.main([
+                str(rel_dir),
+                "--stage-sdk-zip", str(sdk_dir),
+                "--version", "0.5.3",
+                "--allow-sdk-zip",
+            ])
+            self.assertEqual(rc, 0)
+            self.assertTrue((rel_dir / "Foundation-v0.5.3.zip").is_file())
+            self.assertIn("Foundation-v0.5.3.zip", (rel_dir / "SHA256SUMS.txt").read_text(encoding="utf-8"))
 
     def test_six_file_classic_app_bundle_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,6 +172,33 @@ class TestBuildReleaseUniversal(unittest.TestCase):
 
             ok_conflict, _ = bru.validate_six_file_release_bundle(rel, allow_sdk_zip=True, allow_portable_zip=True)
             self.assertFalse(ok_conflict)
+
+    def test_eight_file_dual_installer_bundle_passes_and_validates_leaks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            rel = Path(tmp) / "v0.6.0"
+            rel.mkdir()
+            _write_common_docs(rel)
+            (rel / "reEngine-Setup-v0.6.0-win-x64.exe").write_bytes(b"MZ_ONLINE")
+            (rel / "reEngine-Offline-Setup-v0.6.0-win-x64.exe").write_bytes(b"MZ_OFFLINE")
+            _write_zip(rel / "reEngine-v0.6.0-win-x64-Portable.zip", {"reEngine.exe": b"MZ", "app/LICENSE": b"MIT"})
+            bru.generate_sha256sums(rel)
+
+            ok_flag, errs_flag = bru.validate_six_file_release_bundle(rel, allow_dual_installer=True)
+            self.assertTrue(ok_flag, errs_flag)
+            ok_auto, errs_auto = bru.validate_release_bundle(rel)
+            self.assertTrue(ok_auto, errs_auto)
+            self.assertEqual(bru.main([str(rel), "--allow-dual-installer"]), 0)
+
+            _write_zip(rel / "reEngine-v0.6.0-win-x64-Portable.zip", {"reEngine-Offline-Setup-v0.6.0.exe": b"MZ"})
+            ok_leak, errs_leak = bru.validate_release_bundle(rel, allow_dual_installer=True)
+            self.assertFalse(ok_leak)
+            self.assertTrue(any("Portable Release Violation" in e for e in errs_leak))
+
+            (rel / "reEngine-Setup-v0.6.0-win-x64.exe").unlink()
+            _write_zip(rel / "reEngine-v0.6.0-win-x64-Portable.zip", {"reEngine.exe": b"MZ"})
+            ok_missing_online, errs_online = bru.validate_release_bundle(rel, allow_dual_installer=True)
+            self.assertFalse(ok_missing_online)
+            self.assertTrue(any("Online Setup" in e for e in errs_online))
 
 
 if __name__ == "__main__":

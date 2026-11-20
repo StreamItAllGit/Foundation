@@ -54,9 +54,15 @@ public sealed partial class InstallerEngine
     }
 
     public bool HasExistingInstallationArtifacts(string? candidateDir) =>
-        HasExistingInstallationArtifacts(candidateDir, Descriptor.MainExecutableFileName);
+        HasExistingInstallationArtifacts(candidateDir, Descriptor.MainExecutableFileName, Descriptor.ProductName);
 
-    public static bool HasExistingInstallationArtifacts(string? candidateDir, string exeFileName)
+    public static bool HasExistingInstallationArtifacts(string? candidateDir, string exeFileName) =>
+        HasExistingInstallationArtifacts(candidateDir, exeFileName, expectedProductName: null);
+
+    public static bool HasExistingInstallationArtifacts(
+        string? candidateDir,
+        string exeFileName,
+        string? expectedProductName)
     {
         if (string.IsNullOrWhiteSpace(candidateDir))
             return false;
@@ -66,6 +72,14 @@ public sealed partial class InstallerEngine
             string trimmed = candidateDir.Trim();
             if (!Directory.Exists(trimmed))
                 return false;
+
+            InstallManifest? manifest = TryReadInstallManifest(trimmed, out _);
+            if (manifest is not null && !string.IsNullOrWhiteSpace(manifest.ProductName) &&
+                !string.IsNullOrWhiteSpace(expectedProductName) &&
+                !IsOwnInstallManifest(manifest, expectedProductName))
+            {
+                return false;
+            }
 
             return File.Exists(Path.Combine(trimmed, exeFileName)) ||
                    File.Exists(Path.Combine(trimmed, "app", exeFileName)) ||

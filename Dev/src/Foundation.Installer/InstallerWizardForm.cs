@@ -27,6 +27,8 @@ public sealed partial class InstallerWizardForm : Form
     private readonly InstallerEngineCore? _coreEngine;
     private readonly Func<CancellationToken, Action<int, string>, Task<FoundationInstallResult>>? _customInstallAction;
     private readonly string? _externalPayloadPath;
+    private readonly string? _offlineBundlePath;
+    private readonly string _deliveryLabel;
     private readonly bool _isUninstallMode;
     private readonly string _displayName;
     private readonly string _version;
@@ -143,15 +145,18 @@ public sealed partial class InstallerWizardForm : Form
         string? secondaryFlagName = null,
         bool initialMigrateLegacy = false,
         bool? showLegacyMigration = null,
-        Assembly? payloadAssembly = null)
+        Assembly? payloadAssembly = null,
+        string? offlineBundlePath = null)
     {
         _fullEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         _ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
         _payloadAssembly = payloadAssembly ?? _fullEngine.PayloadAssembly;
         _externalPayloadPath = externalPayloadPath;
+        _offlineBundlePath = offlineBundlePath;
         _isUninstallMode = isUninstallMode;
 
         InstallerAppDescriptor desc = _fullEngine.Descriptor;
+        _deliveryLabel = desc.IsOnlineSetup ? "ONLINE SETUP" : "OFFLINE SETUP";
         _displayName = desc.DisplayName;
         _version = desc.Version;
         _subtitle = desc.EffectiveSubtitle;
@@ -224,6 +229,9 @@ public sealed partial class InstallerWizardForm : Form
         _customInstallAction = customInstallAction;
 
         InstallerThemeOptions theme = _coreEngine.Theme;
+        _deliveryLabel = string.Equals(theme.InstallerDeliveryKind, InstallerDeliveryKinds.OnlineSetup, StringComparison.OrdinalIgnoreCase)
+            ? "ONLINE SETUP"
+            : "OFFLINE SETUP";
         _displayName = theme.DisplayName;
         _version = theme.Version;
         _subtitle = theme.Subtitle;
@@ -317,7 +325,7 @@ public sealed partial class InstallerWizardForm : Form
         {
             Text = _isUninstallMode
                 ? $"Version {_version}  •  Preserves data\\, saves\\, and logs\\ unless purged below"
-                : $"Version {_version}  •  {_subtitle}",
+                : $"Version {_version}  •  {_deliveryLabel}  •  {_subtitle}",
             Font = subFont,
             ForeColor = TextMuted,
             AutoSize = false,

@@ -195,6 +195,13 @@ public sealed class FoundationAutomationTests : IDisposable
             string body = JsonSerializer.Serialize(new AutomationSnapshotRequest(glShot));
             HttpResponseMessage resp = await client.PostAsync("/v1/snapshot", new StringContent(body, Encoding.UTF8, "application/json"));
             Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+            HttpResponseMessage rawResp = await client.GetAsync("/v1/snapshot.png");
+            Assert.Equal(HttpStatusCode.OK, rawResp.StatusCode);
+            Assert.Equal("image/png", rawResp.Content.Headers.ContentType?.MediaType);
+            byte[] rawBytes = await rawResp.Content.ReadAsByteArrayAsync();
+            Assert.True(rawBytes.Length > 24);
+            Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, rawBytes[..4]);
         }
 
         using var decoded = new Bitmap(glShot);

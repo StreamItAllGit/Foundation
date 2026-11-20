@@ -138,7 +138,8 @@ public static class StandardInstallerHost
                     secondaryFlagName: cli.SecondaryFlagName,
                     initialMigrateLegacy: explicitMigrate,
                     showLegacyMigration: showLegacy,
-                    payloadAssembly: resolvedAssembly);
+                    payloadAssembly: resolvedAssembly,
+                    offlineBundlePath: cli.OfflineBundlePath);
                 Application.Run(wizard);
                 return new InstallerHostRunResult(wizard.ExitCode, ctx.LogDirectory);
             }
@@ -177,7 +178,7 @@ public static class StandardInstallerHost
 
             if (cli.VerifyOnly)
             {
-                var verify = await engine.VerifyPayloadAsync(cli.PayloadPath);
+                var verify = await engine.VerifyPayloadAsync(cli.PayloadPath, cli.OfflineBundlePath, cli.ProfileId);
                 Console.WriteLine(verify.Message);
                 return new InstallerHostRunResult(verify.Valid ? 0 : 1, ctx.LogDirectory);
             }
@@ -197,7 +198,10 @@ public static class StandardInstallerHost
                 InstallProfile: cli.ProfileId,
                 SecondaryInstallDir: cli.SecondaryDir,
                 SecondaryFlagName: cli.SecondaryFlagName,
-                MigrateLegacy: migrateLegacy));
+                MigrateLegacy: migrateLegacy)
+            {
+                OfflineBundlePath = cli.OfflineBundlePath
+            });
 
             Console.WriteLine(res.Message);
             if (!res.Success)
@@ -244,6 +248,6 @@ public static class StandardInstallerHost
 
     private static void PrintUsage(InstallerAppDescriptor descriptor)
     {
-        Console.WriteLine($"Usage: {descriptor.ProductName}-Setup.exe [--install-dir <dir>] [--profile <lightweight|full>] [--reengine-dir <dir>] [--suite-dir <dir>] [--migrate-legacy] [--silent] [--verify] [--uninstall] [--purge-data] [--dry-run] [--data-dir <dir>] [--log-dir <dir>] [--config <path>]");
+        Console.WriteLine($"Usage: {descriptor.ProductName}-Setup.exe [--install-dir <dir>] [--profile <lightweight|full|custom>] [--offline-bundle <zipOrDir>] [--reengine-dir <dir>] [--suite-dir <dir>] [--migrate-legacy] [--silent] [--verify] [--uninstall] [--purge-data] [--dry-run] [--data-dir <dir>] [--log-dir <dir>] [--config <path>]");
     }
 }

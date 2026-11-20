@@ -12,6 +12,20 @@ using Foundation.Core;
 
 namespace Foundation.Installer;
 
+public static class InstallerDeliveryKinds
+{
+    public const string OnlineSetup = "onlineSetup";
+    public const string OfflineSetup = "offlineSetup";
+    public const string PortableZip = "portableZip";
+}
+
+public sealed record InstallerPayloadAsset(
+    [property: JsonPropertyName("installProfile")] string InstallProfile,
+    [property: JsonPropertyName("fileName")] string FileName,
+    [property: JsonPropertyName("expectedSizeBytes")] long ExpectedSizeBytes,
+    [property: JsonPropertyName("expectedSha256")] string ExpectedSha256,
+    [property: JsonPropertyName("relativeSubdir")] string? RelativeSubdir = null);
+
 public sealed record InstallerAppDescriptor(
     string ProductName,
     string DisplayName,
@@ -39,6 +53,12 @@ public sealed record InstallerAppDescriptor(
     public InstallerMarkupButtons? Buttons { get; init; }
     public IReadOnlyDictionary<string, InstallerMarkupTooltip>? Tooltips { get; init; }
     public IReadOnlyList<SecondaryPathPickerOptions>? SecondaryPickers { get; init; }
+    public string InstallerDeliveryKind { get; init; } = InstallerDeliveryKinds.OfflineSetup;
+    public string? PayloadDownloadUrl { get; init; }
+    public IReadOnlyList<InstallerPayloadAsset>? PayloadAssets { get; init; }
+
+    public bool IsOnlineSetup =>
+        string.Equals(InstallerDeliveryKind, InstallerDeliveryKinds.OnlineSetup, StringComparison.OrdinalIgnoreCase);
 
     public string EffectiveMainExecutableRelativePath =>
         !string.IsNullOrWhiteSpace(MainExecutableRelativePath)
@@ -183,6 +203,9 @@ public sealed class InstallManifest
 
     [JsonPropertyName("migrate_legacy")]
     public bool MigrateLegacy { get; set; }
+
+    [JsonPropertyName("installer_delivery_kind")]
+    public string? InstallerDeliveryKind { get; set; }
 }
 
 public sealed record InstallerOperationResult(
@@ -202,7 +225,10 @@ public sealed record InstallerInstallOptions(
     string? InstallProfile = null,
     string? SecondaryInstallDir = null,
     string? SecondaryFlagName = null,
-    bool MigrateLegacy = false);
+    bool MigrateLegacy = false)
+{
+    public string? OfflineBundlePath { get; init; }
+}
 
 public sealed record InstallerHostRunResult(
     int ExitCode,

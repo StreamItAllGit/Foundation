@@ -28,6 +28,7 @@ public sealed class AutomationLoopbackServer : IAsyncDisposable, IDisposable
     private readonly AutomationServerOptions _options;
     private readonly byte[] _expectedTokenHash;
     private readonly Control? _rootControl;
+    private readonly IAutomationSurfaceTarget? _surfaceTarget;
     private readonly IRenderSurfaceSnapshotProvider? _renderProvider;
     private readonly SandboxResolution _sandbox;
     private readonly TcpListener _listener;
@@ -45,6 +46,25 @@ public sealed class AutomationLoopbackServer : IAsyncDisposable, IDisposable
         Control? rootControl = null,
         IRenderSurfaceSnapshotProvider? renderProvider = null,
         SandboxResolution? sandbox = null)
+        : this(options, rootControl, surfaceTarget: null, renderProvider, sandbox)
+    {
+    }
+
+    public AutomationLoopbackServer(
+        AutomationServerOptions options,
+        IAutomationSurfaceTarget? surfaceTarget,
+        IRenderSurfaceSnapshotProvider? renderProvider = null,
+        SandboxResolution? sandbox = null)
+        : this(options, rootControl: null, surfaceTarget, renderProvider, sandbox)
+    {
+    }
+
+    private AutomationLoopbackServer(
+        AutomationServerOptions options,
+        Control? rootControl,
+        IAutomationSurfaceTarget? surfaceTarget,
+        IRenderSurfaceSnapshotProvider? renderProvider,
+        SandboxResolution? sandbox)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         if (string.IsNullOrWhiteSpace(options.BearerToken))
@@ -52,6 +72,7 @@ public sealed class AutomationLoopbackServer : IAsyncDisposable, IDisposable
 
         _expectedTokenHash = SHA256.HashData(Encoding.UTF8.GetBytes(options.BearerToken.Trim()));
         _rootControl = rootControl;
+        _surfaceTarget = surfaceTarget;
         _renderProvider = renderProvider;
         _sandbox = sandbox ?? SandboxEnvironmentSeam.ResolveCurrent();
         _uiSyncContext = SynchronizationContext.Current;
@@ -128,25 +149,43 @@ public sealed class AutomationLoopbackServer : IAsyncDisposable, IDisposable
             }
             else if (method == "GET" && route == "/v1/tree")
             {
-                AutomationControlNode? tree = RunOnUi(() => Win32VirtualInputDriver.InspectTree(_rootControl));
+                AutomationControlNode? tree = RunOnUi(() => _surfaceTarget is not null && _rootControl is null
+                    ? _surfaceTarget.InspectTree()
+                    : Win32VirtualInputDriver.InspectTree(_rootControl));
                 await WriteJsonResponseAsync(stream, 200, AutomationResponse<AutomationControlNode?>.Ok(tree), ct).ConfigureAwait(false);
             }
             else if (method == "POST" && route == "/v1/pointer")
             {
-                bool ok = RunOnUi(() => Win32VirtualInputDriver.ExecutePointer(_rootControl, DeserializeBody<AutomationPointerRequest>(body)));
+                AutomationPointerRequest req = DeserializeBody<AutomationPointerRequest>(body);
+                bool ok = RunOnUi(() => _surfaceTarget is not null && _rootControl is null
+                    ? _surfaceTarget.ExecutePointer(req)
+                    : Win32VirtualInputDriver.ExecutePointer(_rootControl, req));
                 var resp = ok ? AutomationResponse<bool>.Ok(true) : AutomationResponse<bool>.Fail("No active root control is attached for pointer input.");
                 await WriteJsonResponseAsync(stream, ok ? 200 : 400, resp, ct).ConfigureAwait(false);
             }
             else if (method == "POST" && route == "/v1/keyboard")
             {
-                bool ok = RunOnUi(() => Win32VirtualInputDriver.ExecuteKeyboard(_rootControl, DeserializeBody<AutomationKeyboardRequest>(body)));
+                AutomationKeyboardRequest req = DeserializeBody<AutomationKeyboardRequest>(body);
+                bool ok = RunOnUi(() => _surfaceTarget is not null && _rootControl is null
+                    ? _surfaceTarget.ExecuteKeyboard(req)
+                    : Win32VirtualInputDriver.ExecuteKeyboard(_rootControl, req));
                 var resp = ok ? AutomationResponse<bool>.Ok(true) : AutomationResponse<bool>.Fail("No active root control is attached for keyboard input.");
                 await WriteJsonResponseAsync(stream, ok ? 200 : 400, resp, ct).ConfigureAwait(false);
             }
             else if (method == "POST" && route == "/v1/snapshot")
             {
-                var snap = RunOnUi(() => WindowSnapshotService.CaptureSnapshot(_rootControl, _renderProvider, DeserializeBody<AutomationSnapshotRequest>(body), _options.AllowedSnapshotRoot, _sandbox));
+                AutomationSnapshotRequest req = DeserializeBody<AutomationSnapshotRequest>(body);
+                var snap = RunOnUi(() => _surfaceTarget is not null && _rootControl is null
+                    ? WindowSnapshotService.CaptureSnapshot(_surfaceTarget, _renderProvider, req, _options.AllowedSnapshotRoot, _sandbox)
+                    : WindowSnapshotService.CaptureSnapshot(_rootControl, _renderProvider, req, _options.AllowedSnapshotRoot, _sandbox));
                 await WriteJsonResponseAsync(stream, 200, AutomationResponse<AutomationSnapshotResult>.Ok(snap), ct).ConfigureAwait(false);
+            }
+            else if (method == "GET" && route == "/v1/snapshot.png")
+            {
+                (byte[] pngBytes, _, _) = RunOnUi(() => _surfaceTarget is not null && _rootControl is null
+                    ? WindowSnapshotService.CaptureSnapshotPngBytes(_surfaceTarget, _renderProvider)
+                    : WindowSnapshotService.CaptureSnapshotPngBytes(_rootControl, _renderProvider));
+                await WriteBinaryResponseAsync(stream, 200, "image/png", pngBytes, ct).ConfigureAwait(false);
             }
             else
             {
@@ -253,13 +292,15 @@ public sealed class AutomationLoopbackServer : IAsyncDisposable, IDisposable
         return -1;
     }
 
-    private static async Task WriteJsonResponseAsync<T>(NetworkStream stream, int statusCode, AutomationResponse<T> payload, CancellationToken ct)
+    private static Task WriteJsonResponseAsync<T>(NetworkStream stream, int statusCode, AutomationResponse<T> payload, CancellationToken ct) =>
+        WriteBinaryResponseAsync(stream, statusCode, "application/json; charset=utf-8", Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload, JsonOpts)), ct);
+
+    private static async Task WriteBinaryResponseAsync(NetworkStream stream, int statusCode, string contentType, byte[] bodyBytes, CancellationToken ct)
     {
-        byte[] jsonBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload, JsonOpts));
         string reason = statusCode switch { 200 => "OK", 400 => "Bad Request", 401 => "Unauthorized", 403 => "Forbidden", 404 => "Not Found", 413 => "Payload Too Large", _ => "Error" };
-        string head = $"HTTP/1.1 {statusCode} {reason}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {jsonBytes.Length}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
+        string head = $"HTTP/1.1 {statusCode} {reason}\r\nContent-Type: {contentType}\r\nContent-Length: {bodyBytes.Length}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
         await stream.WriteAsync(Encoding.ASCII.GetBytes(head), ct).ConfigureAwait(false);
-        await stream.WriteAsync(jsonBytes, ct).ConfigureAwait(false);
+        await stream.WriteAsync(bodyBytes, ct).ConfigureAwait(false);
         await stream.FlushAsync(ct).ConfigureAwait(false);
     }
 

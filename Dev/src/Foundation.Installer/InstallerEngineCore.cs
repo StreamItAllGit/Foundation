@@ -140,6 +140,8 @@ public sealed partial class InstallerEngineCore
     public bool HasExistingInstallation(string? targetDir)
     {
         if (string.IsNullOrWhiteSpace(targetDir) || !Directory.Exists(targetDir)) return false;
+        if (InstallerEngine.CheckForeignOwnershipForTheme(targetDir, Theme.AppId, Theme.DisplayName, out _))
+            return false;
         string exeName = Theme.ExecutableFileName ?? $"{Theme.DisplayName}.exe";
         return File.Exists(Path.Combine(targetDir, exeName)) ||
                File.Exists(Path.Combine(targetDir, "app", exeName)) ||
@@ -182,6 +184,11 @@ public sealed partial class InstallerEngineCore
     {
         ArgumentNullException.ThrowIfNull(payloadZipStream);
         string installDir = ResolveTargetInstallDir(targetInstallDir);
+        if (InstallerEngine.CheckForeignOwnershipForTheme(installDir, Theme.AppId, Theme.DisplayName, out string? existingOwner))
+        {
+            return new FoundationInstallResult(false, installDir, string.Empty, 0,
+                $"ProductMismatch: Directory '{installDir}' is owned by '{existingOwner}', not '{Theme.DisplayName}'. Refusing to overwrite.", false);
+        }
         bool wasUpgrade = HasExistingInstallation(installDir);
 
         onProgress?.Invoke(5, $"Preparing {(wasUpgrade ? "upgrade" : "clean installation")} in '{installDir}'...");
@@ -306,6 +313,11 @@ public sealed partial class InstallerEngineCore
         string installDir = ResolveTargetInstallDir(targetInstallDir);
         if (!Directory.Exists(installDir))
             return new FoundationInstallResult(true, installDir, string.Empty, 0, "Directory already absent.", false);
+        if (InstallerEngine.CheckForeignOwnershipForTheme(installDir, Theme.AppId, Theme.DisplayName, out string? existingOwner))
+        {
+            return new FoundationInstallResult(false, installDir, string.Empty, 0,
+                $"ProductMismatch: Directory '{installDir}' is owned by '{existingOwner}', not '{Theme.DisplayName}'. Refusing to uninstall.", false);
+        }
 
         if (purgeUserData) Directory.Delete(installDir, recursive: true);
         else CleanPreviousAppCodePreservingData(installDir);

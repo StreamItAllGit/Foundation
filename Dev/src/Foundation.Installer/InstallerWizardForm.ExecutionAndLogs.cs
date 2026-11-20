@@ -91,6 +91,21 @@ public sealed partial class InstallerWizardForm
         }
 
         string candidate = _txtInstallDir.Text.Trim();
+        InstallDirectoryOwnership? ownership = _fullEngine?.CheckDirectoryOwnership(candidate).Status;
+        if (ownership == InstallDirectoryOwnership.OwnedByForeignProduct ||
+            (_coreEngine != null && InstallerEngine.CheckForeignOwnershipForTheme(candidate, _coreEngine.Theme.AppId, _coreEngine.Theme.DisplayName, out _)))
+        {
+            _lblModeBadge.Text = "FOREIGN APP DETECTED";
+            _lblModeBadge.ForeColor = AccentDanger;
+            if (!_completedSuccessfully)
+            {
+                _btnPrimary.Text = _buttonOverrides?.InstallText ?? "Install Now";
+                _btnPrimary.BackColor = AccentDanger;
+            }
+            UpdateLayoutBounds();
+            return;
+        }
+
         bool existingInstall = _fullEngine != null
             ? _fullEngine.HasExistingInstallationArtifacts(candidate)
             : (_coreEngine != null && _coreEngine.HasExistingInstallation(candidate));
@@ -225,7 +240,10 @@ public sealed partial class InstallerWizardForm
                         InstallProfile: SelectedProfileId,
                         SecondaryInstallDir: _hasSecondaryPicker && !string.IsNullOrWhiteSpace(SecondaryInstallDir) ? SecondaryInstallDir : null,
                         SecondaryFlagName: _secondaryPickerOptions?.FlagName,
-                        MigrateLegacy: MigrateLegacyChecked);
+                        MigrateLegacy: MigrateLegacyChecked)
+                    {
+                        OfflineBundlePath = _offlineBundlePath
+                    };
                     result = await Task.Run(() => _fullEngine.InstallAsync(
                         installOpts,
                         ct: _cts.Token,

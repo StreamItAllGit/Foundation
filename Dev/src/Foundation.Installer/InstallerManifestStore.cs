@@ -43,6 +43,9 @@ public sealed record InstallerMarkupManifest
     [JsonPropertyName("secondaryPickers")] public List<InstallerMarkupSecondaryPicker>? SecondaryPickers { get; init; }
     [JsonPropertyName("allowAutoStart")] public bool? AllowAutoStart { get; init; }
     [JsonPropertyName("allowLegacyMigration")] public bool? AllowLegacyMigration { get; init; }
+    [JsonPropertyName("installerDeliveryKind")] public string InstallerDeliveryKind { get; init; } = InstallerDeliveryKinds.OfflineSetup;
+    [JsonPropertyName("payloadDownloadUrl")] public string? PayloadDownloadUrl { get; init; }
+    [JsonPropertyName("payloadAssets")] public List<InstallerPayloadAsset>? PayloadAssets { get; init; }
 
     [JsonIgnore]
     public string EffectiveDisplayName =>
@@ -92,12 +95,17 @@ public static class InstallerManifestStore
         string layout = NormalizeLayoutMode(manifest.LayoutMode);
         List<string> profiles = NormalizeSupportedProfiles(manifest.SupportedProfiles);
         string defProfile = NormalizeDefaultProfile(manifest.DefaultProfile, profiles);
+        string deliveryKind = NormalizeDeliveryKind(manifest.InstallerDeliveryKind);
+        List<InstallerPayloadAsset>? payloadAssets = NormalizeAndValidatePayloadAssets(manifest.PayloadAssets);
 
         return manifest with
         {
             LayoutMode = layout,
             SupportedProfiles = profiles,
-            DefaultProfile = defProfile
+            DefaultProfile = defProfile,
+            InstallerDeliveryKind = deliveryKind,
+            PayloadDownloadUrl = FirstNonEmpty(manifest.PayloadDownloadUrl),
+            PayloadAssets = payloadAssets
         };
     }
 
@@ -174,7 +182,10 @@ public static class InstallerManifestStore
             BorderHex = FirstNonEmpty(manifest.Theme?.Border) ?? baseDescriptor.BorderHex,
             Buttons = manifest.Buttons ?? baseDescriptor.Buttons,
             Tooltips = manifest.Tooltips ?? baseDescriptor.Tooltips,
-            SecondaryPickers = pickers is { Count: > 0 } ? pickers : baseDescriptor.SecondaryPickers
+            SecondaryPickers = pickers is { Count: > 0 } ? pickers : baseDescriptor.SecondaryPickers,
+            InstallerDeliveryKind = NormalizeDeliveryKind(manifest.InstallerDeliveryKind),
+            PayloadDownloadUrl = FirstNonEmpty(manifest.PayloadDownloadUrl) ?? baseDescriptor.PayloadDownloadUrl,
+            PayloadAssets = manifest.PayloadAssets is { Count: > 0 } ? manifest.PayloadAssets : baseDescriptor.PayloadAssets
         };
     }
 
@@ -226,7 +237,10 @@ public static class InstallerManifestStore
             Tooltips = manifest.Tooltips,
             SecondaryPathPicker = pickers?.FirstOrDefault(),
             SecondaryPickers = pickers,
-            AllowLegacyMigration = manifest.AllowLegacyMigration ?? false
+            AllowLegacyMigration = manifest.AllowLegacyMigration ?? false,
+            InstallerDeliveryKind = NormalizeDeliveryKind(manifest.InstallerDeliveryKind),
+            PayloadDownloadUrl = FirstNonEmpty(manifest.PayloadDownloadUrl),
+            PayloadAssets = manifest.PayloadAssets
         };
     }
 
@@ -259,6 +273,69 @@ public static class InstallerManifestStore
         return supported.Any(p => string.Equals(p, candidate, StringComparison.OrdinalIgnoreCase))
             ? candidate
             : supported[0];
+    }
+
+    public static string NormalizeDeliveryKind(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return InstallerDeliveryKinds.OfflineSetup;
+        return raw.Trim().ToLowerInvariant() switch
+        {
+            "onlinesetup" => InstallerDeliveryKinds.OnlineSetup,
+            "offlinesetup" => InstallerDeliveryKinds.OfflineSetup,
+            "portablezip" => InstallerDeliveryKinds.PortableZip,
+            _ => throw new InvalidDataException($"Unsupported installerDeliveryKind '{raw}'. Expected 'onlineSetup', 'offlineSetup', or 'portableZip'.")
+        };
+    }
+
+    private static List<InstallerPayloadAsset>? NormalizeAndValidatePayloadAssets(List<InstallerPayloadAsset>? rawAssets)
+    {
+        if (rawAssets is null) return null;
+        var list = new List<InstallerPayloadAsset>(rawAssets.Count);
+        foreach (InstallerPayloadAsset item in rawAssets)
+        {
+            string profile = string.IsNullOrWhiteSpace(item.InstallProfile) ? "lightweight" : item.InstallProfile.Trim().ToLowerInvariant();
+            string fileName = (item.FileName ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(fileName) ||
+                fileName.Contains('/') || fileName.Contains('\\') || fileName.Contains(':') ||
+                fileName == "." || fileName == ".." ||
+                fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            {
+                throw new InvalidDataException($"Invalid payloadAssets[].fileName '{item.FileName}'.");
+            }
+            if (item.ExpectedSizeBytes < 0)
+            {
+                throw new InvalidDataException($"Negative payloadAssets[].expectedSizeBytes for '{fileName}'.");
+            }
+
+            string sha = (item.ExpectedSha256 ?? string.Empty).Trim().ToLowerInvariant();
+            if (!string.IsNullOrEmpty(sha) && (sha.Length != 64 || !sha.All(Uri.IsHexDigit)))
+            {
+                throw new InvalidDataException($"Invalid SHA-256 hex digest in payloadAssets[] for '{fileName}'.");
+            }
+
+            string? relSubdir = NormalizeRelativeSubdir(item.RelativeSubdir);
+            list.Add(new InstallerPayloadAsset(profile, fileName, item.ExpectedSizeBytes, sha, relSubdir));
+        }
+        return list;
+    }
+
+    internal static string? NormalizeRelativeSubdir(string? rawSubdir)
+    {
+        if (string.IsNullOrWhiteSpace(rawSubdir)) return null;
+        string trimmed = rawSubdir.Trim();
+        if (Path.IsPathRooted(trimmed) || trimmed.Contains(':') || trimmed.StartsWith('/') || trimmed.StartsWith('\\'))
+        {
+            throw new InvalidDataException($"Invalid rooted relativeSubdir '{rawSubdir}'.");
+        }
+        string[] segs = trimmed.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (string seg in segs)
+        {
+            if (seg == "." || seg == "..")
+            {
+                throw new InvalidDataException($"Path traversal segment '{seg}' is not allowed in relativeSubdir '{rawSubdir}'.");
+            }
+        }
+        return segs.Length == 0 ? null : string.Join('/', segs);
     }
 
     private static string? FirstNonEmpty(params string?[] values) =>

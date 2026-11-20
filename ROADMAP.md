@@ -1,6 +1,6 @@
-# Foundation (`v0.5.2`) — Strategic Roadmap
+# Foundation (`v0.5.3`) — Strategic Roadmap
 
-> **Active Version:** `v0.5.2` (`Beta` — Unified SemVer across all 8 C# assemblies, `@foundation/ui v0.5.2`, and `foundation_core v0.5.2`; Pre-1.0 Beta until `v1.0.0` Going Gold)
+> **Active Version:** `v0.5.3` (`Beta` — Unified SemVer across all 8 C# assemblies, `@foundation/ui v0.5.3`, and `foundation_core v0.5.3`; `v0.6.0` active next until `v1.0.0` Going Gold)
 > **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`
 
 ---
@@ -67,12 +67,19 @@
 - **7-File Portable Release Validation & Focus-Free Mouse Dispatch (`Dev\tools\`, `Foundation.Automation`):** Added `--allow-portable-zip` (and auto-detection when `*-Portable.zip` accompanies `*-Setup-v*.exe`) plus `_inspect_portable_zip()` leak checks in [`build_release_universal.py`](Dev/tools/build_release_universal.py) (`validate_release_bundle`), updated [`Win32VirtualInputDriver.cs`](Dev/src/Foundation.Automation/Win32VirtualInputDriver.cs) (`InvokeManagedMouse`) for focus-free managed WinForms mouse dispatch (`0` `SetFocus()` steals), and added [`TestAssemblyConfig.cs`](Dev/tests/Foundation.Tests/TestAssemblyConfig.cs) (`DisableTestParallelization = true`) for deterministic test isolation.
 - **Verification & Compliance:** `dotnet test Dev\Foundation.sln -c Release` (`50/50` passed, `0` failed, `0` skipped), Python `unittest` (`13/13` OK including `test_build_release_universal.py`), `audit_scanner.py` (`P0: 0, P1: 0, P2: 45, P3: 0`, `110` scanned files), and unified `0.5.2` SemVer lockstep across all C#, TypeScript, Python, and tool manifests.
 
+### ✅ `v0.5.3` — Ownership Guard, Dual Online/Offline Setup, Core Helpers, WinForms-Free Automation & GitHub Pages *(2026-11-20)*
+- **`Foundation.Core` Safety, Rotating Backups & Frame-Pacer Late-Latch:** Added [`RollingFileBackupStore`](Dev/src/Foundation.Core/RollingFileBackupStore.cs) (atomic `.tmp -> Flush(true) -> File.Move` commits, `.bak` mirrors, monotonic sequence collision guards, `AppEnvironment.AssertPathContained` restore, `DefaultMaxBackups = 10` rotation), added VRR late-latch timing (`BeginLateLatchFrame`, `WaitBeforePresent`, `WaitBeforePresentAsync`, `LateLatchMarginMs`) to [`HighResFramePacer`](Dev/src/Foundation.Core/HighResFramePacer.cs), and hardened [`SafeNetworkTransfer`](Dev/src/Foundation.Core/SafeNetworkTransfer.cs) + [`SafeNetworkTransfer.Validation.cs`](Dev/src/Foundation.Core/SafeNetworkTransfer.Validation.cs) (`DownloadVerifiedAsync`, `ValidateRequestUri`, `IsBlockedSsrfAddress`, `AllowAutoRedirect = false`, `MaxRedirects = 5`, `ConnectCallback` DNS IP check, TLS 1.2/1.3, `ExpectedSizeBytes`).
+- **`Foundation.Installer` Product Ownership Guard & Dual Online/Offline Setup:** Added [`InstallerEngine.Ownership.cs`](Dev/src/Foundation.Installer/InstallerEngine.Ownership.cs) (`IsOwnInstallManifest`, `TryReadInstallManifest`, `CheckDirectoryOwnership`, `CheckForeignOwnershipForTheme`, `ProductMismatch:` fail-closed checks run before process stops/backups/extractions/deletions, `FOREIGN APP DETECTED` wizard badge, and wildcard-free uninstaller/trampoline cleanup), plus [`InstallerEngine.OnlinePayload.cs`](Dev/src/Foundation.Installer/InstallerEngine.OnlinePayload.cs) (`InstallerDeliveryKinds`, `InstallerPayloadAsset`, `--offline-bundle <zipOrDir>`, HTTPS + SHA-256 + byte-size verification, profile filtering, safe `relativeSubdir` extraction, and offline fallback remediation).
+- **`Foundation.Automation` & Live GUI Streaming:** Decoupled WinForms out of [`AutomationContracts.cs`](Dev/src/Foundation.Automation/AutomationContracts.cs) (`IAutomationSurfaceTarget`), added `AutomationCliHelper.TryCreateForSurface` + `WinFormsAutomationSurfaceTarget` ([`AutomationCliHelper.cs`](Dev/src/Foundation.Automation/AutomationCliHelper.cs)), wired in-memory `GET /v1/snapshot.png` via `WindowSnapshotService.CaptureSnapshotPngBytes`, and added shared Stage 2 live GUI UDP streaming helpers ([`ExeboxStreamHelpers.ps1`](Dev/tools/ExeboxStreamHelpers.ps1) / [`exebox_stream.py`](Dev/tools/exebox_stream.py)).
+- **Hardlink-Safe Release Tooling, Sandbox Env Propagation & GitHub Pages:** Fixed NTFS hardlink in-place overwrites in [`build_release_universal.py`](Dev/tools/build_release_universal.py) and [`sync_foundation_sdk.py`](Dev/tools/sync_foundation_sdk.py), added `--allow-dual-installer` (8-file validation) and `--stage-sdk-zip`, preserved Windows OS env keys + `--offline-bundle` forwarding in [`run_sandbox_e2e.py`](Dev/tools/run_sandbox_e2e.py), updated [`.github/workflows/release.yml`](.github/workflows/release.yml), and added visibility-gated [`.github/workflows/pages.yml`](.github/workflows/pages.yml) (`https://streamitallgit.github.io/Foundation/`).
+- **Verification & Compliance:** `dotnet test Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` (`55/55` passed, `0` warnings), Python `unittest` (`16/16` OK), `audit_scanner.py` (`P0: 0, P1: 0, P3: 0`), live Stage 2 `InstallerWizardForm` GUI E2E (`GET /v1/snapshot.png` + `ExeboxStreamHelpers.ps1` + 3 inspected PNGs), `run_sandbox_e2e.py --no-subst --offline-bundle` (`12/12`, `hostDiffCount=0`), `59` SDK files published, and verified `v0.5.2`/`v0.5.3`/`Latest` release bundles.
+
 ---
 
 ## Upcoming Horizons (`v0.6.0` $\rightarrow$ `v1.0.0` Going Gold)
 
 ```
-v0.5.2 (Live) ─▶ v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
+v0.5.3 (Live) ─▶ v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
                    │
                    ▼
                 v0.7.0 (JobQueue/Scheduler + Doctor/Backup + NativeAOT Core Subset)

@@ -1,33 +1,38 @@
-# Foundation (`v0.5.2`) — Consumer User Guide & Integration Recipes
+# Foundation (`v0.5.3`) — Consumer User Guide & Integration Recipes
 
 > **Goal:** Copy-paste integration recipes for consuming `Foundation` across C#, React/TypeScript, Vanilla Web, Python, and Stage 2 external 4-drive sandboxes without re-reading SDK source files.
-> **Full API Dictionary:** `Dev\docs\INTERFACES.md`
+> **Full API Dictionary:** [Dev/docs/INTERFACES.md](INTERFACES.md) · **Operations Runbook:** [Dev/docs/OPERATIONS.md](OPERATIONS.md)
 
 ---
 
 ## 1. Syncing Foundation into a Consumer Project
 
-Consumer repositories (`Housekeeping`, `ShadowLibrary`, `reStation`, `KingsFieldRecomp`, `MediaSync`) reference published binaries in `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` (or vendored copies under `<Consumer>\Dev\lib\` synced via `Dev\tools\sync_foundation_sdk.py`):
+Consumer repositories (`Housekeeping`, `ShadowLibrary`, `reStation`, `KingsFieldRecomp`, `MediaSync`) reference published binaries in `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\` (or vendored copies under `<Consumer>\Dev\lib\` synced via [`Dev/tools/sync_foundation_sdk.py`](../tools/sync_foundation_sdk.py)):
 
 ```powershell
-# Verify hub health, pull Latest SDK DLLs/@foundation/ui/foundation_core, and purge retired legacy test artifacts
+# Verify hub health, pull Latest SDK DLLs/@foundation/ui/foundation_core/tools, and purge retired legacy test artifacts
 python <PROJECTS_ROOT>\Foundation\Dev\tools\sync_foundation_sdk.py --sync-consumer <PROJECTS_ROOT>\<ProjectName> --source-version Latest
 ```
 
 > **Rule Reminder:** Consumer development sessions treat `<PROJECTS_ROOT>\Foundation\` and `<PROJECTS_ROOT>\SharedLibs\Foundation\` as **strictly read-only**. Log upstream SDK gaps in `Dev\docs\reports\`.
 
-### 1.1 Validating App & Portable Release Bundles (`--allow-portable-zip`)
-When shipping an app installer paired with a companion `*-Portable.zip`, validate the strict 7-file release layout (`*-Setup-v*.exe`, `*-Portable.zip`, `README.md`, `FEATURES.md`, `RELEASE_NOTES.md`, `CHANGELOG.md`, `SHA256SUMS.txt` — ensuring zero `*Setup*.exe` leaks inside `*-Portable.zip` and zero loose subdirectories):
+### 1.1 Validating SDK, Portable & Dual-Installer Release Bundles (`--allow-portable-zip`, `--allow-dual-installer`, `--stage-sdk-zip`)
+[`Dev/tools/build_release_universal.py`](../tools/build_release_universal.py) validates 6-file SDK/classic bundles (`--allow-sdk-zip`), 7-file app+portable bundles (`--allow-portable-zip`), and 8-file Dual Online+Offline+Portable bundles (`--allow-dual-installer`, checking `*-Setup-v*.exe`, `*-Offline-Setup-v*.exe`, `*-Portable.zip`, `README.md`, `FEATURES.md`, `RELEASE_NOTES.md`, `CHANGELOG.md`, and `SHA256SUMS.txt` with zero `*Setup*.exe` or `-Offline-Setup-` leaks inside `*-Portable.zip` and hardlink-safe `.tmp -> os.replace` checksum writes):
 
 ```powershell
-python <PROJECTS_ROOT>\Foundation\Dev\tools\build_release_universal.py path\to\Releases\Latest --regen-sums --allow-portable-zip
-```
+# 7-file app + portable release bundle
+python Dev\tools\build_release_universal.py path\to\Releases\Latest --regen-sums --allow-portable-zip
 
-*(Note: `build_release_universal.py` also auto-enables 7-file validation whenever a `*-Portable.zip` accompanies `*-Setup-v*.exe`, unless `--allow-sdk-zip` is passed for SDK-only 6-file validation.)*
+# 8-file Dual Online + Offline + Portable release bundle
+python Dev\tools\build_release_universal.py path\to\Releases\Latest --regen-sums --allow-dual-installer
+
+# Stage Foundation-v0.5.3.zip from SDK snapshot & atomically write SHA256SUMS.txt
+python Dev\tools\build_release_universal.py Releases\Latest --stage-sdk-zip path\to\SharedLibs\Foundation\v0.5.3 --version 0.5.3 --allow-sdk-zip
+```
 
 ---
 
-## 2. Core Startup & 4-Drive Sandbox Wiring (`Foundation.Core`)
+## 2. Core Startup, Rolling Backups, Late-Latch Pacing & Safe HTTPS Downloads (`Foundation.Core`)
 
 ```csharp
 using Foundation.Core;
@@ -50,12 +55,35 @@ using var lockHandle = PidSafeLockfile.Acquire(Path.Combine(env.DataDirectory, "
 - Pass `--data-dir`, `--config`, `--log-dir`, or `--port` to override runtime paths; `AppEnvironment.Sandbox` exposes `IsSandboxActive` (process env only; `APP_ISOLATED_TEST=1` always disables Stage 2 sandbox mode so Stage 1 unit tests stay strictly isolated).
 - Call `SandboxEnvironmentSeam.AssertSandboxPathIfActive(candidatePath, env.Sandbox)` before filesystem writes when supporting Stage 2 verification; host escapes throw `InvalidOperationException` with `Data["ExitCode"] = 3`.
 
+### 2.1 Rotating Backups (`RollingFileBackupStore`), VRR Late-Latch (`HighResFramePacer`) & Verified HTTPS Downloads (`SafeNetworkTransfer`)
+```csharp
+// 1. Atomic rotating backups (.tmp -> Flush(true) -> File.Move + .bak + DefaultMaxBackups = 10)
+var backups = new RollingFileBackupStore(Path.Combine(env.DataDirectory, "backups"));
+RollingBackupCommitResult commit = backups.WriteAtomicallyWithBackup(
+    Path.Combine(env.DataDirectory, "vault.json"), jsonPayload, label: "autosave");
+RollingBackupEntry? restored = backups.RestoreLatestBackup(Path.Combine(env.DataDirectory, "vault.json"));
+
+// 2. VRR late-latch wait timing (tracks LastLateLatchWaitMs / AverageLateLatchWaitMs)
+using var pacer = new HighResFramePacer(targetFps: 60.0) { LateLatchMarginMs = 1.5 };
+pacer.BeginLateLatchFrame();
+double waitedMs = pacer.WaitBeforePresent(); // or await pacer.WaitBeforePresentAsync(cancellationToken: ct)
+
+// 3. Verified HTTPS transfer (enforces https://, TLS 1.2/1.3, AllowAutoRedirect = false,
+//    MaxRedirects = 5, DNS IP ConnectCallback SSRF guard, SHA-256 + ExpectedSizeBytes)
+SafeTransferResult transfer = await SafeNetworkTransfer.DownloadVerifiedAsync(
+    new Uri("https://example.com/releases/MyApp-v0.1.0.zip"),
+    Path.Combine(env.DataDirectory, "downloads", "MyApp.zip"),
+    expectedSha256Hex: expectedSha256,
+    expectedSizeBytes: expectedSizeBytes,
+    cancellationToken: ct);
+```
+
 ---
 
-## 3. Drop-In & Declarative Markup Installer (`Foundation.Installer v0.5.2`)
+## 3. Drop-In, Ownership-Guarded & Dual Online/Offline Installer (`Foundation.Installer v0.5.3`)
 
-### 3.1 Tier 1 — Zero-Boilerplate `StandardInstallerHost` + Optional `installer.manifest.json`
-Add a ~15-line `Dev\Installer\Program.cs` referencing `Foundation.Installer.dll`, embedding `payload.zip` as `<ProductName>.Installer.Embedded.payload.zip`, and optionally placing a `schemaVersion: 2` `installer.manifest.json` (`manifestType: "installer-manifest"`) beside the setup executable or embedded in the assembly. `StandardInstallerHost` automatically merges `installer.manifest.json` (`suiteId`, `theme`, `layoutMode`, `supportedProfiles`, 2-line `tooltips`, `secondaryPickers`, `logoPath`/`iconPath`), avoids doubling `ProductName` on versioned `umbrellaSubpath` leaves (`vX.Y.Z*`), and uses self-healing `HKCU\Software\StreamItAll\LastInstallBaseDir` suggestions for fresh installs (keeping existing `InstallLocation` on upgrades and preserving clean user roots such as `D:\Games\Misc`):
+### 3.1 Tier 1 — Zero-Boilerplate `StandardInstallerHost`, Ownership Guard & `installer.manifest.json`
+Add a ~15-line `Dev\Installer\Program.cs` referencing `Foundation.Installer.dll`, embedding `payload.zip` as `<ProductName>.Installer.Embedded.payload.zip` (for Offline Setup) or configuring `"installerDeliveryKind": "onlineSetup"` with `"payloadDownloadUrl"` + `"payloadAssets"` (for compact Online Setup), and optionally placing a `schemaVersion: 2` `installer.manifest.json` (`manifestType: "installer-manifest"`) beside the setup executable or embedded in the assembly. `StandardInstallerHost` automatically merges `installer.manifest.json` (`suiteId`, `installerDeliveryKind`, `payloadDownloadUrl`, `payloadAssets[]`, `theme`, `layoutMode`, `supportedProfiles`, 2-line `tooltips`, `secondaryPickers`, `logoPath`/`iconPath`), avoids doubling `ProductName` on versioned `umbrellaSubpath` leaves (`vX.Y.Z*`), and uses self-healing `HKCU\Software\StreamItAll\LastInstallBaseDir` suggestions for fresh installs:
 
 ```json
 {
@@ -64,18 +92,28 @@ Add a ~15-line `Dev\Installer\Program.cs` referencing `Foundation.Installer.dll`
   "manifestType": "installer-manifest",
   "appId": "myapp",
   "version": "0.1.0",
-  "updatedAtUtc": "2026-11-19T00:00:00Z",
+  "updatedAtUtc": "2026-11-20T00:00:00Z",
   "displayName": "My App",
   "publisher": "StreamItAll",
   "studioName": "StreamItAll",
   "suiteId": "MySuite",
   "layoutMode": "single-line",
   "supportedProfiles": ["lightweight", "full"],
-  "defaultProfile": "lightweight"
+  "defaultProfile": "lightweight",
+  "installerDeliveryKind": "onlineSetup",
+  "payloadDownloadUrl": "https://github.com/Example/MyApp/releases/download/v0.1.0",
+  "payloadAssets": [
+    {
+      "installProfile": "lightweight",
+      "fileName": "MyApp-Core-v0.1.0.zip",
+      "expectedSizeBytes": 1048576,
+      "expectedSha256": "<64-hex-sha256>"
+    }
+  ]
 }
 ```
 
-*(Note: `"suiteId"` is the canonical manifest field; legacy `"suiteName"` remains supported as a read-only JSON fallback when `"suiteId"` is omitted.)*
+*(Note: `"suiteId"` is the canonical manifest field; legacy `"suiteName"` remains supported as a read-only JSON fallback. `"installerDeliveryKind"` defaults to `"offlineSetup"` when omitted, preserving 100% backward compatibility.)*
 
 ```csharp
 using Foundation.Installer;
@@ -90,11 +128,16 @@ var descriptor = new InstallerAppDescriptor(
     BrandAccentHex: "#0EA5E9",
     AllowAutoStart: false,
     StudioName: "StreamItAll",
-    SuiteName: "MySuite");
+    SuiteName: "MySuite")
+{
+    InstallerDeliveryKind = InstallerDeliveryKinds.OfflineSetup // or OnlineSetup + PayloadDownloadUrl + PayloadAssets
+};
 
 return StandardInstallerHost.Run(descriptor, args, typeof(Program).Assembly);
 ```
 
+- **Install-Directory Ownership Guard (`ProductMismatch:` / `FOREIGN APP DETECTED`):** Before stopping running processes, backing up, extracting, or deleting files, both Tier 1 (`InstallerEngine.CheckDirectoryOwnership`) and Tier 2 (`InstallerEngineCore` via `CheckForeignOwnershipForTheme`) inspect `install-manifest.json` and `uninstall_manifest.json` (`IsOwnInstallManifest`). If the target directory belongs to another product, setup refuses silent overwrite or uninstall with a `ProductMismatch:` error and highlights a red **`FOREIGN APP DETECTED`** badge in `InstallerWizardForm`. Both uninstaller cleanup and `BuildSelfDeleteTrampolineCommand` strictly target `Descriptor.UninstallerExeName` (never `"*-Uninstall.exe"` wildcards).
+- **Dual Online/Offline Setup & `--offline-bundle`:** Online Setup installers filter `PayloadAssets` by `--profile`, download over HTTPS with SHA-256 + byte-size verification via `SafeNetworkTransfer.DownloadVerifiedAsync`, extract safe `relativeSubdir` payloads, or verify a local archive/folder passed via `--offline-bundle <zipOrDir>`. Network/offline/hash failures fail closed with actionable guidance pointing to `*-Offline-Setup-v<Ver>.exe`, `*-Portable.zip`, or `--offline-bundle`.
 - **3-Mode Isolation Precedence:**
   1. **Host Live:** `FOUNDATION_SANDBOX_ROOT` unset and no `--data-dir` / `APP_ISOLATED_TEST=1` -> normal `%LOCALAPPDATA%\Programs\...` + host registry + `.lnk` shortcuts.
   2. **Stage 1 Isolated (`APP_ISOLATED_TEST=1` or host `--data-dir`):** `ShouldSuppressHostMutations == true` -> writes suppressed on host registry/shortcuts; canonical `Programs\` rejected.
@@ -102,11 +145,11 @@ return StandardInstallerHost.Run(descriptor, args, typeof(Program).Assembly);
 - **UI & Modals:** `InstallerWizardForm` clamps `_lblTitle` and `_lblSub` with `AutoEllipsis = true` cleanly left of `_lblModeBadge` at DPI-safe heights while preserving `650x460` / `650x570` `ClientSize`, and suppresses modal prompts when `FOUNDATION_SUPPRESS_MODALS=1`.
 
 ### 3.2 Tier 2 — Custom / Low-Level Host (`InstallerThemeOptions` + `InstallerEngineCore`)
-Configure `InstallerThemeOptions` (`AllowAutoStart`, `AllowLegacyMigration`, `AvailableProfiles`, `SecondaryPathPicker`) and construct `InstallerEngineCore(theme, env)`. Under `IsSandboxActive`, `DetectLegacyFlatInstall()` automatically scans `<SandboxDDrive>\Programs\`.
+Configure `InstallerThemeOptions` (`AllowAutoStart`, `AllowLegacyMigration`, `AvailableProfiles`, `SecondaryPathPicker`, `InstallerDeliveryKind`, `PayloadDownloadUrl`, `PayloadAssets`) and construct `InstallerEngineCore(theme, env)`. Under `IsSandboxActive`, `DetectLegacyFlatInstall()` automatically scans `<SandboxDDrive>\Programs\`, and foreign product directories fail closed via `CheckForeignOwnershipForTheme`.
 
 ---
 
-## 4. Clean-Root Launcher, Server, Retro, Sidecars & `Foundation.Automation` (`v0.5.2`)
+## 4. Clean-Root Launcher, Server, Retro, Sidecars & `Foundation.Automation` (`v0.5.3`)
 
 - **`Foundation.Launcher` (Built-in + Extensible via `RootLauncherOptions`):** Built-in sync flags (`--diagnose`, `--doctor`, `--verify`, `--verify-module`, `--wait`, `--open`), value/path options (`--programs-dir`, `--save-dir`, `--preload-media`, `--backend`, `--automation-port`, `--automation-token`), and non-swallowing optional flags (`--suite-tab`, `--window`, `--browser`) work out of the box; pass `RootLauncherOptions` to append app-specific flags:
   ```csharp
@@ -121,18 +164,24 @@ Configure `InstallerThemeOptions` (`AllowAutoStart`, `AllowLegacyMigration`, `Av
   ```
 - **`Foundation.Server` (`net8.0`):** `TieredAuthEngine.LoadOrCreateSigningKey(env.DataDirectory)`, `FoundationTieredAuthMiddleware`, and `SisterAppStandardEndpoints.MapSuiteManifestEndpoints(...)`.
 - **`Foundation.Retro` + `Foundation.Sidecars`:** `ConsoleSystemCatalog.ResolvePlatformId`, `DatTitleNormalizer.ParseFilename`, `SinglePassStreamHasher.HashFileSinglePassAsync`, `HashSidecarService`, `HkLockSentinel.TryAcquireDirectoryHkLock`.
-- **`Foundation.Automation` (Opt-In Loopback, Focus-Free Mouse Dispatch):**
+- **`Foundation.Automation` (Opt-In Loopback, WinForms-Free `IAutomationSurfaceTarget` & `GET /v1/snapshot.png`):**
   ```csharp
   using Foundation.Automation;
 
+  // WinForms host (adapts Control -> WinFormsAutomationSurfaceTarget internally)
   using AutomationLoopbackServer? auto = AutomationCliHelper.TryCreateFromArgs(
       appId: "myapp", args: args, rootControl: mainForm, renderProvider: myRaylibProvider);
-  auto?.Start(); // Disabled unless --automation-port is passed; 127.0.0.1 + Bearer token + Host/Origin gated
+
+  // Or WinForms-free custom engine/SDL3 surface implementing IAutomationSurfaceTarget:
+  // using AutomationLoopbackServer? auto = AutomationCliHelper.TryCreateForSurface(
+  //     appId: "myapp", args: args, surfaceTarget: mySurfaceTarget, renderProvider: myRenderProvider);
+
+  auto?.Start(); // Exposes /v1/{health,tree,pointer,keyboard,snapshot} + in-memory GET /v1/snapshot.png
   ```
 
 ---
 
-## 5. React `@foundation/ui` (`v0.5.2`) & Vanilla Web Integration
+## 5. React `@foundation/ui` (`v0.5.3`) & Vanilla Web Integration
 
 ```tsx
 import { GlobalTerminalDrawer, UniversalDataTable, SchemaSettingsRenderer, ModalDialog, StyledTooltip } from "@foundation/ui";
@@ -146,7 +195,7 @@ For Vanilla JS / FastAPI / Razor hosts, include `foundation-tokens.css`, `founda
 
 ---
 
-## 6. Python `foundation_core` (`v0.5.2`) Quickstart
+## 6. Python `foundation_core` (`v0.5.3`) Quickstart
 
 ```python
 from foundation_core import (
@@ -162,7 +211,7 @@ from foundation_core import (
     resolve_sandbox_environment,
 )
 
-cli = parse_standard_cli_flags(app_name="my_py_app", app_version="0.5.2")
+cli = parse_standard_cli_flags(app_name="my_py_app", app_version="0.5.3")
 sandbox = resolve_sandbox_environment()
 folders = resolve_known_folders(sandbox)
 reg = JsonHivePlatformRegistry.from_sandbox(sandbox) if sandbox.is_sandbox_active else None
@@ -170,7 +219,7 @@ reg = JsonHivePlatformRegistry.from_sandbox(sandbox) if sandbox.is_sandbox_activ
 
 ---
 
-## 7. Stage 2 External 4-Drive Sandbox E2E (`sandbox_ctl.py` + `run_sandbox_e2e.py`)
+## 7. Stage 2 External 4-Drive Sandbox E2E & Live GUI Streaming
 
 Configure `SANDBOX_C_DRIVE`, `SANDBOX_D_DRIVE`, `SANDBOX_REMOVABLE_DRIVE`, `SANDBOX_DISC_DRIVE` (and optional `FOUNDATION_SANDBOX_ROOT`) in `%USERPROFILE%\.gemini\.secrets\.env` or gitignored `Dev\.env` (copy `Dev\.env.example`), then run:
 
@@ -178,7 +227,26 @@ Configure `SANDBOX_C_DRIVE`, `SANDBOX_D_DRIVE`, `SANDBOX_REMOVABLE_DRIVE`, `SAND
 python <PROJECTS_ROOT>\Foundation\Dev\tools\sandbox_ctl.py init
 python <PROJECTS_ROOT>\Foundation\Dev\tools\run_sandbox_e2e.py `
   --app-id myapp --version 0.1.0 --installer Releases\Latest\MyApp-Setup-v0.1.0.exe `
-  --probe-arg --version
+  --offline-bundle path\to\MyApp-Offline-Bundle.zip --probe-arg --version
 ```
 
-The runner executes the 12-point Stage 2 sandbox matrix (`S2-01`..`S2-12`) with scrubbed child environments (`FOUNDATION_SUPPRESS_MODALS=1`), verifies `hostDiffCount == 0`, and emits a structured JSON receipt under `<SandboxRoot>\runs\`.
+The runner executes the 12-point Stage 2 sandbox matrix (`S2-01`..`S2-12`) with scrubbed child environments (`FOUNDATION_SUPPRESS_MODALS=1` plus preserved Windows OS keys `SystemDrive`, `ProgramData`, `ProgramFiles*`, `CommonProgramFiles*`, `ALLUSERSPROFILE`, `PUBLIC`), forwards `--offline-bundle` to install/upgrade runs, verifies `hostDiffCount == 0`, and emits a structured JSON receipt under `<SandboxRoot>\runs\`.
+
+### 7.1 Live GUI UDP Streaming (`ExeboxStreamHelpers.ps1` & `exebox_stream.py`)
+Stage 2 GUI runs can stream live frames to VLC (`udp://@127.0.0.1:5004`) via shared helpers while verifying `GetThreadDesktop()` truthfulness (never auto-launching `Test Viewer.lnk` inside `WinSta0\exebox-*`):
+
+```powershell
+. Dev\tools\ExeboxStreamHelpers.ps1
+$preflight = Initialize-ExeboxTestViewerPreflight -UdpPort 5004
+$stream = Start-ExeboxLiveVlcStream -AutomationPort $port -AutomationToken $token -TargetPid $proc.Id
+# ... drive /v1/pointer, /v1/keyboard, and GET /v1/snapshot.png ...
+Stop-ExeboxLiveVlcStream -StreamProc $stream
+```
+
+*(Python suites import `get_thread_desktop_name`, `is_vlc_viewer_active`, `start_exebox_live_stream`, and `stop_exebox_live_stream` from `Dev\tools\exebox_stream.py`.)*
+
+---
+
+## 8. Public Documentation Site (`.github/workflows/pages.yml`)
+
+When the repository is public (`github.event.repository.visibility == 'public'`), [`.github/workflows/pages.yml`](../../.github/workflows/pages.yml) renders root Markdown docs and `Dev/docs/*.md` (excluding `plans/`, `reports/`, `tests/`, `archive/`, and `AGENTS.md`) into clean dark/light static HTML with `.nojekyll`, `404.html`, `robots.txt`, and `sitemap.xml` at [https://streamitallgit.github.io/Foundation/](https://streamitallgit.github.io/Foundation/).
