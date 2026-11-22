@@ -1,4 +1,4 @@
-# Foundation (`v0.5.4`) — Consumer User Guide & Integration Recipes
+# Foundation (`v0.5.5`) — Consumer User Guide & Integration Recipes
 
 > **Goal:** Copy-paste integration recipes for consuming `Foundation` across C#, React/TypeScript, Vanilla Web, Python, and Stage 2 external 4-drive sandboxes without re-reading SDK source files.
 > **Full API Dictionary:** [Dev/docs/INTERFACES.md](INTERFACES.md) · **Operations Runbook:** [Dev/docs/OPERATIONS.md](OPERATIONS.md)
@@ -26,8 +26,8 @@ python Dev\tools\build_release_universal.py path\to\Releases\Latest --regen-sums
 # 8-file Dual Online + Offline + Portable release bundle
 python Dev\tools\build_release_universal.py path\to\Releases\Latest --regen-sums --allow-dual-installer
 
-# Stage Foundation-v0.5.4.zip from SDK snapshot & atomically write SHA256SUMS.txt
-python Dev\tools\build_release_universal.py Releases\Latest --stage-sdk-zip path\to\SharedLibs\Foundation\v0.5.4 --version 0.5.4 --allow-sdk-zip
+# Stage Foundation-v0.5.5.zip from SDK snapshot & atomically write SHA256SUMS.txt
+python Dev\tools\build_release_universal.py Releases\Latest --stage-sdk-zip path\to\SharedLibs\Foundation\v0.5.5 --version 0.5.5 --allow-sdk-zip
 ```
 
 ---
@@ -80,7 +80,7 @@ SafeTransferResult transfer = await SafeNetworkTransfer.DownloadVerifiedAsync(
 
 ---
 
-## 3. Drop-In, Ownership-Guarded & Dual Online/Offline Installer (`Foundation.Installer v0.5.4`)
+## 3. Drop-In, Ownership-Guarded & Dual Online/Offline Installer (`Foundation.Installer v0.5.5`)
 
 ### 3.1 Tier 1 — Zero-Boilerplate `StandardInstallerHost`, Ownership Guard & `installer.manifest.json`
 Add a ~15-line `Dev\Installer\Program.cs` referencing `Foundation.Installer.dll`, embedding `payload.zip` as `<ProductName>.Installer.Embedded.payload.zip` (for Offline Setup) or configuring `"installerDeliveryKind": "onlineSetup"` with `"payloadDownloadUrl"` + `"payloadAssets"` (for compact Online Setup), and optionally placing a `schemaVersion: 2` `installer.manifest.json` (`manifestType: "installer-manifest"`) beside the setup executable or embedded in the assembly. `StandardInstallerHost` automatically merges `installer.manifest.json` (`suiteId`, `installerDeliveryKind`, `payloadDownloadUrl`, `payloadAssets[]`, `theme`, `layoutMode`, `supportedProfiles`, 2-line `tooltips`, `secondaryPickers`, `logoPath`/`iconPath`), avoids doubling `ProductName` on versioned `umbrellaSubpath` leaves (`vX.Y.Z*`), and uses self-healing `HKCU\Software\StreamItAll\LastInstallBaseDir` suggestions for fresh installs:
@@ -149,7 +149,7 @@ Configure `InstallerThemeOptions` (`AllowAutoStart`, `AllowLegacyMigration`, `Av
 
 ---
 
-## 4. Clean-Root Launcher, Server, Retro, Sidecars & `Foundation.Automation` (`v0.5.4`)
+## 4. Clean-Root Launcher, Server, Retro, Sidecars & `Foundation.Automation` (`v0.5.5`)
 
 - **`Foundation.Launcher` (Built-in + Extensible via `RootLauncherOptions`):** Built-in sync flags (`--diagnose`, `--doctor`, `--verify`, `--verify-module`, `--wait`, `--open`), value/path options (`--programs-dir`, `--save-dir`, `--preload-media`, `--backend`, `--automation-port`, `--automation-token`), and non-swallowing optional flags (`--suite-tab`, `--window`, `--browser`) work out of the box; pass `RootLauncherOptions` to append app-specific flags:
   ```csharp
@@ -181,7 +181,7 @@ Configure `InstallerThemeOptions` (`AllowAutoStart`, `AllowLegacyMigration`, `Av
 
 ---
 
-## 5. React `@foundation/ui` (`v0.5.4`) & Vanilla Web Integration
+## 5. React `@foundation/ui` (`v0.5.5`) & Vanilla Web Integration
 
 ```tsx
 import { GlobalTerminalDrawer, UniversalDataTable, SchemaSettingsRenderer, ModalDialog, StyledTooltip } from "@foundation/ui";
@@ -195,7 +195,7 @@ For Vanilla JS / FastAPI / Razor hosts, include `foundation-tokens.css`, `founda
 
 ---
 
-## 6. Python `foundation_core` (`v0.5.4`, Pure Stdlib) Quickstart
+## 6. Python `foundation_core` (`v0.5.5`, Pure Stdlib) Quickstart
 
 ### 6.1 Subcommand-Safe CLI Flags & `GranularSettingsStore`
 `foundation_core` (`dependencies = []`) defaults `build_standard_cli_parser(..., add_help=False)` and `parse_standard_cli_flags(..., add_help=False, default_config_relative=Path("config") / "settings.json")` so downstream subcommands receive `--help` through `cli.extra_args` and `--config` points to `<data_dir>/config/settings.json` (pass `add_help=True` to opt back into top-level help interception). `ThreeFileSettingsStore` remains preserved alongside `GranularSettingsStore` + `SettingsLoadResult`:
@@ -212,8 +212,8 @@ from foundation_core import (
 )
 
 # 1. Standard CLI flags + downstream subcommand --help passthrough via extra_args
-cli = parse_standard_cli_flags(app_name="my_py_app", app_version="0.5.4")
-parent = build_standard_cli_parser(app_name="my_py_app", app_version="0.5.4")
+cli = parse_standard_cli_flags(app_name="my_py_app", app_version="0.5.5")
+parent = build_standard_cli_parser(app_name="my_py_app", app_version="0.5.5")
 subparser = argparse.ArgumentParser(parents=[parent], add_help=True)
 _, _ = subparser.parse_known_args(cli.extra_args)
 
@@ -261,14 +261,14 @@ with open_wal_sqlite(snap_path, read_only=True) as ro_conn:
     verify_snapshot_integrity(snap_path)
 
 # 2. Standard 31 PID-reuse-safe locks (hostName + appId + ±2s start-time check + refresh_heartbeat)
-with PidSentinelLock(cli.data_dir, app_id="my_py_app", version="0.5.4", lock_filename=".lock") as lock:
+with PidSentinelLock(cli.data_dir, app_id="my_py_app", version="0.5.5", lock_filename=".lock") as lock:
     lock.refresh_heartbeat()
     is_held, envelope = PidSentinelLock.inspect_lock(cli.data_dir / ".lock")
 
 # 3. Structured UTC logs (50-line ring buffer + 30d prune) & Zero-PII camelCase crash JSON (max 20)
-logs = RollingLogSink(cli.log_dir, app_version="0.5.4", default_slice="core")
+logs = RollingLogSink(cli.log_dir, app_version="0.5.5", default_slice="core")
 logs.write_line("INFO", sanitize_pii_text("Started cleanly"))
-dumper = CrashDumper(cli.log_dir, "my_py_app", "0.5.4", recent_logs_provider=logs.recent_lines)
+dumper = CrashDumper(cli.log_dir, "my_py_app", "0.5.5", recent_logs_provider=logs.recent_lines)
 dumper.install_global_hooks()
 
 # 4. Pure-stdlib 127.0.0.1 automation loopback (ExitCode=2 unless <APP>_TEST_AUTOMATION=1)

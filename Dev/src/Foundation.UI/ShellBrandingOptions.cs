@@ -32,7 +32,7 @@ public sealed record ShellBrandingOptions
     public required string DisplayName { get; init; }
 
     /// <summary>Pinned Foundation SDK version (Standard 18: sdkVersion — Full SemVer MAJOR.MINOR.PATCH).</summary>
-    public string SdkVersion { get; init; } = "0.5.4";
+    public string SdkVersion { get; init; } = "0.5.5";
 
     /// <summary>Custom CSS brand accent color ("--brand-accent").</summary>
     public string BrandAccentHex { get; init; } = "#0EA5E9";

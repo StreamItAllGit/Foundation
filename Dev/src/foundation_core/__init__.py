@@ -59,7 +59,7 @@ from .sandbox_seam import (
 )
 from .settings import GranularSettingsStore, SettingsLoadResult, ThreeFileSettingsStore
 
-SDK_VERSION: str = "0.5.4"
+SDK_VERSION: str = "0.5.5"
 MODULE_VERSION: str = "0.1.0"
 
 __all__ = [

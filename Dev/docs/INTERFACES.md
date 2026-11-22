@@ -1,7 +1,7 @@
-# Foundation (`v0.5.4`) — 1-Stop Interfaces & Agent API Reference
+# Foundation (`v0.5.5`) — 1-Stop Interfaces & Agent API Reference
 
 > **Purpose:** Single lookup reference for **every exported C# class/method, React/TS component (`@foundation/ui`), Vanilla JS/CSS asset, Python helper (`foundation_core`), `Dev\tools\*.py` CLI, and file/JSON schema** in `<PROJECTS_ROOT>\Foundation\`.
-> **Snapshot Baseline:** Unified SDK `0.5.4` (`.NET 8`, `@foundation/ui v0.5.4`, `foundation_core v0.5.4`).
+> **Snapshot Baseline:** Unified SDK `0.5.5` (`.NET 8`, `@foundation/ui v0.5.5`, `foundation_core v0.5.5`).
 
 ---
 
@@ -21,8 +21,8 @@
 | Full dark WinForms + CLI Setup/Uninstall Wizard + Ownership Guard + Dual Online/Offline Setup (`v0.5.3`) | `StandardInstallerHost`, `InstallerManifestStore`, `InstallerMarkupManifest`, `InstallerDeliveryKinds`, `InstallerPayloadAsset`, `InstallerAppDescriptor`, `InstallerRuntimeContext`, `InstallDirectoryOwnership`, `WindowsShortcutWriter`, `FileLockRetryHelper`, `InstallerWizardForm` | `using Foundation.Installer;` |
 | Low-level app-dir & suite registry helper (`v0.5.3`) | `InstallerEngineCore`, `InstallerThemeOptions` | `using Foundation.Installer;` |
 | Opt-in `127.0.0.1` UI automation, WinForms-free `IAutomationSurfaceTarget`, virtual pointer/keyboard & PNG snapshots (`v0.5.3`) | `IAutomationSurfaceTarget`, `WinFormsAutomationSurfaceTarget`, `AutomationLoopbackServer`, `AutomationCliHelper`, `Win32VirtualInputDriver`, `WindowSnapshotService`, `IRenderSurfaceSnapshotProvider` | `using Foundation.Automation;` |
-| React components (`@foundation/ui v0.5.4`) & Vanilla terminal | 7 barrel exports + 3 direct submodule imports; Vanilla `FoundationTerminalDrawer` | `@foundation/ui` vs `@foundation/ui/components/<Name>` |
-| Python SDK (`foundation_core v0.5.4`) & Sandbox / Release / Exebox Stream tools | `foundation_core` (`cli`, `settings`, `db`, `locks`, `logging`, `crash_dumper`, `automation`, `sandbox_seam`, `pseudo_registry`), `sandbox_ctl.py`, `run_sandbox_e2e.py`, `sync_foundation_sdk.py`, `build_release_universal.py`, `ExeboxStreamHelpers.ps1`, `exebox_stream.py` | `Dev\src\foundation_core\` / `Dev\tools\` |
+| React components (`@foundation/ui v0.5.5`) & Vanilla terminal | 7 barrel exports + 3 direct submodule imports; Vanilla `FoundationTerminalDrawer` | `@foundation/ui` vs `@foundation/ui/components/<Name>` |
+| Python SDK (`foundation_core v0.5.5`) & Sandbox / Release / Exebox Stream tools | `foundation_core` (`cli`, `settings`, `db`, `locks`, `logging`, `crash_dumper`, `automation`, `sandbox_seam`, `pseudo_registry`), `sandbox_ctl.py`, `run_sandbox_e2e.py`, `sync_foundation_sdk.py`, `build_release_universal.py`, `ExeboxStreamHelpers.ps1`, `exebox_stream.py` | `Dev\src\foundation_core\` / `Dev\tools\` |
 
 ### Top Import & Caller Pitfalls
 1. **React Barrel vs. Direct Submodule Imports (`Dev\src\Foundation.UI\Web\index.ts`):** `CoexistenceWarningBanner`, `HybridPathPicker`, and `SidebarNavRail` are NOT in the `@foundation/ui` barrel—import via `@foundation/ui/components/<Name>`.
@@ -32,9 +32,9 @@
 
 ---
 
-## 1. C# Shared Libraries (`v0.5.4`)
+## 1. C# Shared Libraries (`v0.5.5`)
 
-### 1.1 `Foundation.Core` (`Dev\src\Foundation.Core\`, `net8.0`, `v0.5.4`)
+### 1.1 `Foundation.Core` (`Dev\src\Foundation.Core\`, `net8.0`, `v0.5.5`)
 
 #### 4-Drive Sandbox Seam & Known-Folder Redirection (`v0.4.2`, `v0.5.4` 8.3 & `USERPROFILE` Fix)
 - **`SandboxMountSpec(string DriveRole, string DriveMount, string? DirectoryPath, bool IsEnabled)`**
@@ -113,13 +113,13 @@
   - `AutomationLoopbackServer`: `AutomationLoopbackServer(AutomationServerOptions, Control?, IRenderSurfaceSnapshotProvider?, SandboxResolution?)` and `AutomationLoopbackServer(AutomationServerOptions, IAutomationSurfaceTarget?, IRenderSurfaceSnapshotProvider?, SandboxResolution?)` (`Start()`, `AutomationPort`, `BearerToken`, `IsListening`, `Dispose() / DisposeAsync()`). Binds `127.0.0.1` (`Host`/`Origin` `403`, SHA-256 `FixedTimeEquals` `Bearer` `401`). Routes: `GET /v1/health`, `GET /v1/tree`, `POST /v1/pointer`, `POST /v1/keyboard`, `POST /v1/snapshot`, and `GET /v1/snapshot.png`.
   - `Win32VirtualInputDriver`: `InspectTree(Control? root) -> AutomationControlNode?`, `ExecutePointer(Control? root, AutomationPointerRequest request) -> bool`, `ExecuteKeyboard(Control? root, AutomationKeyboardRequest request) -> bool` (`0` `SendInput` / `0` focus steal).
   - `WindowSnapshotService`: `CaptureSnapshot(...)`, `CaptureSnapshot(..., IAutomationSurfaceTarget? surfaceTarget, ...)` and `CaptureSnapshotPngBytes(...)` (+ `IAutomationSurfaceTarget?` overload).
-- **`Foundation.UI`:** `ShellBrandingOptions` (`SdkVersion = "0.5.4"`), `DisposableWebViewHostForm`, `StaNativeDialogBridgeBase`, `TrayIconBadgeHelper`, `@foundation/ui` (`Web\index.ts` + 3 submodule components + `WebAssets\*`).
+- **`Foundation.UI`:** `ShellBrandingOptions` (`SdkVersion = "0.5.5"`), `DisposableWebViewHostForm`, `StaNativeDialogBridgeBase`, `TrayIconBadgeHelper`, `@foundation/ui` (`Web\index.ts` + 3 submodule components + `WebAssets\*`).
 
 ---
 
-## 2. Python `foundation_core` (`v0.5.4`), `Dev\tools\*` & Standard 18 Contracts
+## 2. Python `foundation_core` (`v0.5.5`), `Dev\tools\*` & Standard 18 Contracts
 
-- **Python `foundation_core` (`Dev\src\foundation_core\`, `SDK_VERSION = "0.5.4"`, `dependencies = []`):**
+- **Python `foundation_core` (`Dev\src\foundation_core\`, `SDK_VERSION = "0.5.5"`, `dependencies = []`):**
   - `sandbox_seam.py`: `CONTAINMENT_EXIT_CODE = 3`, `SandboxContainmentError`, `is_containment_violation`, `SandboxMountSpec`, `SandboxResolution`, `get_subst_mappings`, `resolve_sandbox_environment(env_override=None)` (process env only; `APP_ISOLATED_TEST=1` overrides; normalizes Windows 8.3 short paths via `_to_long_path` and unmaps redirected child `USERPROFILE` folders), `resolve_known_folders`, `get_known_folder`, `is_path_within_sandbox`, `assert_sandbox_path_if_active`, `map_host_path_to_sandbox`.
   - `pseudo_registry.py`: `REGISTRY_HIVE_SCHEMA_URI`, `REGISTRY_HIVE_SCHEMA_VERSION = 1`, `PlatformRegistryHive`, `PlatformRegistryValueKind`, `JsonHivePlatformRegistry` (Standard 18 JSON + PID-safe OS file lock + `.tmp -> fsync -> .bak -> os.replace`; reuses shared `locks.py` process/time helpers).
   - `cli.py` (**Intentional `v0.5.4` Standard 19 Defaults**): `StandardCliOptions`, `assert_path_contained(candidate, root)`, `build_standard_cli_parser(app_name="Application", app_version="0.1.0", default_root=".", *, add_help=False)`, `parse_standard_cli_flags(..., *, add_help=False, default_config_relative=Path("config")/"settings.json")` (`add_help=False` passes `--help` through to subcommands via `extra_args`; `--config` defaults to `<data_dir>/config/settings.json`).
@@ -132,7 +132,7 @@
   - `sandbox_ctl.py`: 4-drive orchestrator (`init`, `mount`, `unmount-removable`, `remount-removable`, `mount-disc`, `unmount-disc`, `status`, `snapshot`, `diff-host`, `reset`), resolving `CLI -> env -> Dev\.env -> %USERPROFILE%\.gemini\.secrets\.env` + dynamic `subst`, exit `3` on host collisions.
   - `run_sandbox_e2e.py`: Standard 02 §4 12-point (`S2-01`..`S2-12`) Stage 2 E2E runner with scrubbed child env (`FOUNDATION_SUPPRESS_MODALS=1`, plus `SystemDrive`, `ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`, `CommonProgramFiles`, `CommonProgramFiles(x86)`, `ALLUSERSPROFILE`, `PUBLIC` via `_env_lookup_ci`), `--offline-bundle <zipOrDir>` forwarding in `s02`/`s09`, 2-tier log sweep, and `hostDiffCount == 0`.
   - `ExeboxStreamHelpers.ps1` / `exebox_stream.py`: Shared Stage 2 live GUI UDP streaming helpers (`Get-ExeboxDesktopName`, `Test-ExeboxVlcViewerActive`, `Initialize-ExeboxTestViewerPreflight`, `Start-ExeboxLiveVlcStream`, `Stop-ExeboxLiveVlcStream` / `get_thread_desktop_name`, `is_vlc_viewer_active`, `start_exebox_live_stream`, `stop_exebox_live_stream`) wired to `exebox-stream`.
-  - `sync_foundation_sdk.py`: `--version 0.5.4`, `--ui-version 0.5.4`, `--publish` (strict 6-file `Releases\Latest\` using atomic hardlink-safe `generate_sha256sums`), `--sync-consumer` (narrowed legacy globs preserving `sandbox_seam.py`/`sandbox_ctl.py`/`run_sandbox_e2e.py`/`exebox_stream.py`/`ExeboxStreamHelpers.ps1`).
+  - `sync_foundation_sdk.py`: `--version 0.5.5`, `--ui-version 0.5.5`, `--publish` (strict 6-file `Releases\Latest\` using atomic hardlink-safe `generate_sha256sums`), `--sync-consumer` (narrowed legacy globs preserving `sandbox_seam.py`/`sandbox_ctl.py`/`run_sandbox_e2e.py`/`exebox_stream.py`/`ExeboxStreamHelpers.ps1`).
   - `build_release_universal.py`: `compute_sha256` (lowercase hex), `generate_sha256sums` (hardlink-safe `.tmp -> os.replace` via `_atomic_write_text`), `stage_sdk_release_zip` (unlink before zip write), `--stage-sdk-zip <sdk_dir> --version <ver>`, and `validate_six_file_release_bundle(..., allow_sdk_zip=..., allow_portable_zip=..., allow_dual_installer=...)` (alias `validate_release_bundle`) enforcing 6-file SDK/classic bundles, 7-file portable bundles (`--allow-portable-zip`), or 8-file dual Online+Offline+Portable bundles (`--allow-dual-installer`, verifying `-Offline-Setup-` leak guard).
 - **Standard 18 / 40 Sandbox JSON Schemas:**
   - `registry.hive.json` (`<SandboxRoot>\registry\registry.hive.json`): `$schema` (`"https://schemas.local/registry-hive.v1.json"`), `schemaVersion: 1`, `sandboxRoot`, `updatedAtUtc`, `registryHives: { HKCU, HKLM, HKCR }` with entries `{ registryValueKind, registryValueData }` (`REG_BINARY` lowercase hex).

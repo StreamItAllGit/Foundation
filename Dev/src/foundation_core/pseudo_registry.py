@@ -108,7 +108,7 @@ class JsonHivePlatformRegistry:
                         if _is_lock_held_by_other(self.lock_path):
                             raise BlockingIOError("Active external holder.")
                         now, (_, p_start) = datetime.now(timezone.utc), _get_process_state(os.getpid())
-                        env = {"$schema": PidSentinelLock.SCHEMA_URI, "schemaVersion": 1, "lockType": "directory-mutation", "appId": self.app_id, "version": "0.5.4", "pid": os.getpid(), "processStartTimeUtc": _utc_iso_ms(p_start), "hostName": socket.gethostname(), "operation": operation, "targetPath": str(self.hive_path.parent), "acquiredAtUtc": _utc_iso_ms(now), "heartbeatAtUtc": _utc_iso_ms(now), "expiresAtUtc": _utc_iso_ms(now + timedelta(minutes=15))}
+                        env = {"$schema": PidSentinelLock.SCHEMA_URI, "schemaVersion": 1, "lockType": "directory-mutation", "appId": self.app_id, "version": "0.5.5", "pid": os.getpid(), "processStartTimeUtc": _utc_iso_ms(p_start), "hostName": socket.gethostname(), "operation": operation, "targetPath": str(self.hive_path.parent), "acquiredAtUtc": _utc_iso_ms(now), "heartbeatAtUtc": _utc_iso_ms(now), "expiresAtUtc": _utc_iso_ms(now + timedelta(minutes=15))}
                         cand.seek(0)
                         cand.truncate(0)
                         cand.write((json.dumps(env, indent=2) + "\n").encode("utf-8"))

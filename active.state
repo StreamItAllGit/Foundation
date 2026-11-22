@@ -7,7 +7,7 @@
   "containerTier": "Tier A (4-Folder)",
   "ecosystemTier": "Tier1_Infrastructure",
   "appArchetype": "SDK",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "activeMilestone": "0.6.0",
   "goalMajorVersion": "1.0.0",
   "stateChangedDate": "2026-11-04",
@@ -27,7 +27,7 @@
     "isInspecterVerified": true,
     "isTessaSynced": true
   },
-  "notes": "Foundation v0.5.4 Gate 2 + Inspecter PASS (55/55 C#, 23/23 Python, 12/12 Stage 2, loopback PNG E2E); SDK published (SharedLibs v0.5.4/Latest, 60 files); Root Quartet, Manual Shelf, tasklist, active.state & task_graph synced by @tessa; ready for final Releases/Archive lock, Git tag/push, GitHub Release & Discord /post.",
+  "notes": "Foundation v0.5.5 CI stability release (tempfile.TemporaryDirectory().resolve() fix in test_std19_31_35_43_and_automation.py for Windows 8.3 short paths; 55/55 .NET + 23/23 Python PASS; immutable v0.5.4 preserved); Root Quartet, Manual Shelf, tasklist, active.state & task_graph synced by @tessa.",
   "discordPost": {
     "isEnabled": true,
     "serverName": null,
@@ -38,5 +38,5 @@
     "secretEnvKey": "DISCORD_WEBHOOK_FOUNDATION",
     "autoPostOnRelease": true
   },
-  "updatedAtUtc": "2026-11-22T11:14:31Z"
+  "updatedAtUtc": "2026-11-22T11:27:17Z"
 }

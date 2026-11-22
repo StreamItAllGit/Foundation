@@ -88,10 +88,10 @@ public sealed class FoundationTerminalDrawerTests
         Assert.Contains("coalesceTerminalLogBatch", indexText);
 
         string pkgText = File.ReadAllText(pkgPath);
-        Assert.Contains("\"version\": \"0.5.4\"", pkgText);
+        Assert.Contains("\"version\": \"0.5.5\"", pkgText);
 
         var branding = new ShellBrandingOptions { AppId = "test", DisplayName = "Test" };
-        Assert.Equal("0.5.4", branding.SdkVersion);
+        Assert.Equal("0.5.5", branding.SdkVersion);
     }
 
     [Fact]
@@ -161,8 +161,8 @@ public sealed class FoundationTerminalDrawerTests
                 ArgumentList =
                 {
                     scriptPath,
-                    "--version", "0.5.4",
-                    "--ui-version", "0.5.4",
+                    "--version", "0.5.5",
+                    "--ui-version", "0.5.5",
                     "--publish",
                     "--sync-consumer", tempConsumer
                 },
@@ -181,7 +181,7 @@ public sealed class FoundationTerminalDrawerTests
 
             foreach (string sharedDir in new[]
             {
-                Path.Combine(tempSharedLibs, "v0.5.4"),
+                Path.Combine(tempSharedLibs, "v0.5.5"),
                 Path.Combine(tempSharedLibs, "Latest")
             })
             {
@@ -202,8 +202,8 @@ public sealed class FoundationTerminalDrawerTests
                 Assert.True(File.Exists(Path.Combine(sharedDir, "sdk-manifest.json")));
 
                 using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(sharedDir, "sdk-manifest.json")));
-                Assert.Equal("0.5.4", doc.RootElement.GetProperty("version").GetString());
-                Assert.Equal("0.5.4", doc.RootElement.GetProperty("uiVersion").GetString());
+                Assert.Equal("0.5.5", doc.RootElement.GetProperty("version").GetString());
+                Assert.Equal("0.5.5", doc.RootElement.GetProperty("uiVersion").GetString());
             }
 
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "Foundation.UI.dll")));

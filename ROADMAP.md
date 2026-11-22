@@ -1,6 +1,6 @@
-# Foundation (`v0.5.4`) — Strategic Roadmap
+# Foundation (`v0.5.5`) — Strategic Roadmap
 
-> **Active Version:** `v0.5.4` (`Beta` — Unified SemVer across all 8 C# assemblies, `@foundation/ui v0.5.4`, and `foundation_core v0.5.4`; `v0.6.0` active next until `v1.0.0` Going Gold)
+> **Active Version:** `v0.5.5` (`Beta` — Unified SemVer across all 8 C# assemblies, `@foundation/ui v0.5.5`, and `foundation_core v0.5.5`; `v0.6.0` active next until `v1.0.0` Going Gold)
 > **Pinned Binary Hub:** `<PROJECTS_ROOT>\SharedLibs\Foundation\Latest\`
 
 ---
@@ -84,12 +84,16 @@
   - [`logging.py`](Dev/src/foundation_core/logging.py), [`crash_dumper.py`](Dev/src/foundation_core/crash_dumper.py) & [`automation.py`](Dev/src/foundation_core/automation.py): Upgraded `RollingLogSink` with structured UTC millisecond lines, 50-line thread-safe `recent_lines()` ring buffer, and 30-day `prune_old_logs()`; added `sanitize_pii_text` (`[USER_HOME]`, `[REDACTED_TOKEN]`) and Zero-PII `camelCase` `crashes/crash_*.json` bundles (`max 20` retention) in `CrashDumper`; added pure-stdlib `AutomationLoopbackServer` (`127.0.0.1`, `Host`/`Origin` `403`, constant-time Bearer `401`, `/v1/{health,state,snapshot,snapshot.png,shutdown}`, `AUTOMATION_DISABLED_EXIT_CODE = 2`, and `encode_rgba_png`).
 - **Verification & Compliance:** `dotnet test Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` (`55/55` passed, `0` warnings), `python -B -m unittest discover -s Dev\tests\foundation_core -v` (`23/23` OK across consecutive runs, `0` warnings), `audit_scanner.py` (`P0: 0, P1: 0, P3: 0`), `run_sandbox_e2e.py --no-subst` (`12/12`, `hostDiffCount=0`), live `AutomationLoopbackServer` E2E (`ExitCode=2` gate, `320x180` PNG snapshot capture, `/v1/shutdown`), and `60` SDK files published to `SharedLibs\Foundation\v0.5.4\` & `Latest\`.
 
+### `v0.5.5` — Windows CI `tempfile` `.resolve()` 8.3 Stability & SDK Lockstep *(2026-11-22)*
+- **CI Short-Path Fixture Normalization (`test_std19_31_35_43_and_automation.py`):** Normalized `tempfile.TemporaryDirectory()` fixture paths with `.resolve()` across `GranularSettingsStore` quarantine and split-file assertions so Windows CI runners (`RUNNER~1` vs. `runneradmin`) resolve identically (`23/23` Python + `55/55` `.NET` passing, `0` warnings).
+- **Unified `0.5.5` SDK Lockstep:** Incremented `.NET 8` assemblies (`SdkVersion = "0.5.5"`), `@foundation/ui` (`0.5.5`), `foundation_core` (`0.5.5`), `Dev\tools\`, manifests, and documentation to `0.5.5` (`60` SDK files published to `SharedLibs\Foundation\v0.5.5\` & `Latest\`) while keeping shipped `v0.5.4` release artifacts immutable.
+
 ---
 
 ## Upcoming Horizons (`v0.6.0` -> `v1.0.0` Going Gold)
 
 ```
-v0.5.4 (Live) --> v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
+v0.5.5 (Live) --> v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-Update)
                     |
                     v
                   v0.7.0 (JobQueue/Scheduler + Doctor/Backup + NativeAOT Core Subset)

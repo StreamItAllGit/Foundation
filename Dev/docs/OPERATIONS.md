@@ -1,4 +1,4 @@
-# Foundation (`v0.5.4`) — Operations, Build & CLI Runbook
+# Foundation (`v0.5.5`) — Operations, Build & CLI Runbook
 
 > **Audience:** Engineers maintaining `Foundation` itself or running `Dev\tools\*`, `sandbox_ctl.py`, `run_sandbox_e2e.py`, `ExeboxStreamHelpers.ps1` / `exebox_stream.py`, `Foundation.Automation`, `foundation_core`, or `StandardInstallerHost` CLIs.
 > **Full Symbol Reference:** [Dev/docs/INTERFACES.md](INTERFACES.md) · **Integration Recipes:** [Dev/docs/USER_GUIDE.md](USER_GUIDE.md)
@@ -12,11 +12,11 @@ Open `Dev\Foundation.code-workspace` in VS Code / Antigravity for preconfigured 
 | Command | Purpose | Notes |
 |---|---|---|
 | `dotnet test <PROJECTS_ROOT>\Foundation\Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` | Compiles all assemblies + runs all C# xUnit tests (`55/55`) | Zero-warning build (`PublishFoundationSdk` defaults to `false`) |
-| `python -B -m unittest discover -s Dev\tests\foundation_core -v` | Runs pure-stdlib Python `foundation_core` & tools tests (`23/23`) | Zero external dependencies (`0` warnings across consecutive runs) |
-| `pytest Dev\tests\foundation_core -q` | Runs the same Python suite via Pytest | Uses isolated `TemporaryDirectory()` fixtures |
+| `python -B -m unittest discover -s Dev\tests\foundation_core -v` | Runs pure-stdlib Python `foundation_core` & tools tests (`23/23`) | Zero external dependencies (`0` warnings; `.resolve()`-normalized temp fixtures for Windows CI 8.3 short paths) |
+| `pytest Dev\tests\foundation_core -q` | Runs the same Python suite via Pytest | Uses `.resolve()`-normalized `TemporaryDirectory()` fixtures |
 
 ### ⚠️ MSBuild Post-Build Side Effect Note (`Foundation.UI.csproj`)
-Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.5.4 --ui-version 0.5.4 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
+Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.5.5 --ui-version 0.5.5 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
 
 ---
 
@@ -25,11 +25,11 @@ Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\
 ### 2.1 `sync_foundation_sdk.py` (`Dev\tools\sync_foundation_sdk.py`, `<= 260` raw lines)
 | Flag | Default / Type | Description |
 |---|---|---|
-| `--publish` | bool | Publishes `60` Release SDK files (`Foundation.*.dll`, `@foundation/ui` `0.5.4`, `foundation_core` `0.5.4` incl. `automation.py`, `Dev\tools\` incl. `ExeboxStreamHelpers.ps1` & `exebox_stream.py`) to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus hardlink-safe 6-file `Releases\Latest\` (without loose `LICENSE`, delegating checksums to `generate_sha256sums`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
+| `--publish` | bool | Publishes `60` Release SDK files (`Foundation.*.dll`, `@foundation/ui` `0.5.5`, `foundation_core` `0.5.5` incl. `automation.py`, `Dev\tools\` incl. `ExeboxStreamHelpers.ps1` & `exebox_stream.py`) to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus hardlink-safe 6-file `Releases\Latest\` (without loose `LICENSE`, delegating checksums to `generate_sha256sums`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
 | `--sync-consumer` | `<ProjectRoot>` | Copies pinned SDK DLLs, `WebAssets`, and `foundation_core` into consumer `Dev\lib\` and removes only retired legacy test globs (`tools/verify_sandbox_universal.py`, `Foundation.Sandbox.*`, `*VisibleTest*`, `*InstallerSandboxContext*`) so `sandbox_seam.py`, `sandbox_ctl.py`, `run_sandbox_e2e.py`, `ExeboxStreamHelpers.ps1`, and `exebox_stream.py` survive |
-| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.5.4`) |
+| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.5.5`) |
 | `--web-dir` | Path (optional) | Optional consumer frontend directory target for `WebAssets` |
-| `--version` / `--ui-version` | `0.5.4` | Foundation SDK / `@foundation/ui` SemVer |
+| `--version` / `--ui-version` | `0.5.5` | Foundation SDK / `@foundation/ui` SemVer |
 | `--configuration` | `Release` | Build configuration (`Release`/`Debug`) |
 
 ### 2.2 `build_release_universal.py` (`Dev\tools\build_release_universal.py`)
@@ -83,7 +83,7 @@ Shared desktop preflight and `exebox-stream` UDP `5004` streaming wrappers for S
 
 ---
 
-## 4. `StandardInstallerHost` (`v0.5.4`), `RootLauncherOptions`, `Foundation.Automation` & `foundation_core` CLI Reference
+## 4. `StandardInstallerHost` (`v0.5.5`), `RootLauncherOptions`, `Foundation.Automation` & `foundation_core` CLI Reference
 
 | Switch / Alias | Argument | Behavior |
 |---|---|---|
@@ -118,7 +118,7 @@ Shared desktop preflight and `exebox-stream` UDP `5004` streaming wrappers for S
 ## 6. CI Signing, Public Docs Workflow (`pages.yml`), Release Flow & Pre-Public Checklist
 
 - **Release & SignPath Workflow ([`.github/workflows/release.yml`](../../.github/workflows/release.yml)):** `meta` runs with scoped `$ErrorActionPreference = 'Stop'`, `$PSNativeCommandUseErrorActionPreference = $true`, and explicit `$LASTEXITCODE` checks across `dotnet test`, `python -m unittest`, `dotnet build`, `sync_foundation_sdk.py --publish` (staging `SharedLibs\Foundation` into `RUNNER_TEMP`), and `build_release_universal.py Releases/Latest --stage-sdk-zip ... --version ... --allow-sdk-zip`, while leaving `sign`'s `gh release view` probe intact; uploads unsigned SDK ZIP for SignPath when `SIGNPATH_PROJECT_SLUG` is configured and attaches signed assets to tagged GitHub Releases (`--prerelease` on `v0.*` / prerelease tags).
-- **Local `v0.5.4` Build & Packaging Flow:** After Gate 2 + Inspecter sign-off, publish single-pass SDK snapshots (`sync_foundation_sdk.py --publish --version 0.5.4 --ui-version 0.5.4`), stage hardlinked 6-file `Releases\v0.5.4\` + `Latest\` bundles (`build_release_universal.py --regen-sums --allow-sdk-zip`), archive `Archive\Foundation-v0.5.4-src.7z`, sync Root Quartet / Manual Shelf / state files, commit & tag `v0.5.4` on `main`, and verify all GitHub Actions workflows green.
+- **Local `v0.5.5` Build & Packaging Flow:** After Gate 2 + Inspecter sign-off (preserving immutable shipped `v0.5.4` release artifacts), publish single-pass SDK snapshots (`sync_foundation_sdk.py --publish --version 0.5.5 --ui-version 0.5.5`), stage hardlinked 6-file `Releases\v0.5.5\` + `Latest\` bundles (`build_release_universal.py --regen-sums --allow-sdk-zip`), archive `Archive\Foundation-v0.5.5-src.7z`, sync Root Quartet / Manual Shelf / state files, commit & tag `v0.5.5` on `main`, and verify all GitHub Actions workflows green.
 - **Documentation Site Workflow ([`.github/workflows/pages.yml`](../../.github/workflows/pages.yml)):** Visibility-gated (`if: github.event.repository.visibility == 'public'`) static HTML generator converting root Markdown docs and `Dev/docs/*.md` (excluding `plans/`, `reports/`, `tests/`, `archive/`, and `AGENTS.md`) plus `.nojekyll`, `404.html`, `robots.txt`, and `sitemap.xml` to [https://streamitallgit.github.io/Foundation/](https://streamitallgit.github.io/Foundation/).
 
 > [!CAUTION]

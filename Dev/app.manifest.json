@@ -3,7 +3,7 @@
   "schemaVersion": 2,
   "manifestType": "standalone-app",
   "appId": "foundation",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "updatedAtUtc": "2026-11-22T10:45:00Z",
   "displayName": "Foundation Shared SDK",
   "containerTier": "Tier A (4-Folder)",
@@ -11,7 +11,7 @@
   "appArchetype": "SDK",
   "activeMilestone": "0.6.0",
   "goalMajorVersion": "1.0.0",
-  "sdkVersion": "0.5.4",
+  "sdkVersion": "0.5.5",
   "upstreamResearchPath": null,
   "downstreamProjects": [
     "Mother",

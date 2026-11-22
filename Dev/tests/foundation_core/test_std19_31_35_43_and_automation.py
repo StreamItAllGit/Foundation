@@ -47,7 +47,7 @@ from foundation_core import (  # noqa: E402
 class TestFoundationCoreNeuroPlayParity(unittest.TestCase):
     def test_cli_subcommand_help_passthrough_and_std19_default_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             opts = parse_standard_cli_flags(["train", "--help", "--data-dir", str(root / "data")], default_root=root, app_name="NeuroPlay", app_version="0.1.1")
             self.assertEqual(opts.data_dir, (root / "data").resolve())
             self.assertEqual(opts.config_path, (root / "data" / "config" / "settings.json").resolve())
@@ -64,7 +64,7 @@ class TestFoundationCoreNeuroPlayParity(unittest.TestCase):
 
     def test_granular_settings_store_std19_migration_quarantine_splits_and_extra(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            data_dir = Path(tmp) / "data"
+            data_dir = (Path(tmp) / "data").resolve()
             store = GranularSettingsStore(data_dir, max_snapshots=20)
             cfg_path = store.resolve_settings_path("settings.json")
             cfg_path.parent.mkdir(parents=True, exist_ok=True)
@@ -120,7 +120,7 @@ class TestFoundationCoreNeuroPlayParity(unittest.TestCase):
 
     def test_sqlite_user_version_migrations_rollback_readonly_and_vacuum_into(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             db_path = root / "db" / "app.db"
             mig_dir = root / "migrations"
             mig_dir.mkdir(parents=True)
@@ -159,7 +159,7 @@ class TestFoundationCoreNeuroPlayParity(unittest.TestCase):
 
     def test_pid_sentinel_lock_reuse_guard_heartbeat_and_legacy_read_aliases(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "lock_dir"
+            target = (Path(tmp) / "lock_dir").resolve()
             lock = PidSentinelLock(target, "neuroplay", "daemon", lock_filename="neuroplay.lock", lease_seconds=60.0)
             self.assertTrue(lock.acquire())
             try:
@@ -197,7 +197,7 @@ class TestFoundationCoreNeuroPlayParity(unittest.TestCase):
 
     def test_logging_std35_ring_buffer_and_crash_dumper_std43_pii_scrub_retention(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            log_dir = Path(tmp) / "logs"
+            log_dir = (Path(tmp) / "logs").resolve()
             sink = RollingLogSink(log_dir, app_version="0.5.4", default_slice="core.worker", ring_buffer_size=50, retention_days=30)
             for idx in range(60):
                 line = sink.write_line("info", f"step {idx}")
@@ -244,7 +244,7 @@ class TestFoundationCoreNeuroPlayParity(unittest.TestCase):
         opts = parse_automation_cli_args("neuroplay", ["--automation-port", "0", "--automation-token", "np-secret-054"], env={"NEUROPLAY_TEST_AUTOMATION": "1"})
         self.assertIsNotNone(opts)
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             shot_root = root / "snaps"
             shot_root.mkdir()
             rgba = bytes([14, 165, 233, 255] * 16)

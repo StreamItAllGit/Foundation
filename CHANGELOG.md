@@ -7,6 +7,13 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-11-22
+### Fixed
+- **CI Windows 8.3 Short-Path Test Assertion (`test_std19_31_35_43_and_automation.py`):** Normalized `tempfile.TemporaryDirectory()` fixture paths with `.resolve()` across test cases so `GranularSettingsStore` quarantine and split-file assertions match cleanly on GitHub `windows-latest` runners (`RUNNER~1` vs. `runneradmin`).
+
+### Changed
+- **Unified `0.5.5` SDK Version Lockstep:** Incremented `.NET 8` assemblies (`SdkVersion = "0.5.5"`), `@foundation/ui` (`0.5.5`), `foundation_core` (`0.5.5`), `Dev\tools\`, manifests, and Manual Shelf to `0.5.5` while preserving immutable shipped `0.5.4` release artifacts.
+
 ## [0.5.4] - 2026-11-22
 ### Added
 - **Standard 19 Granular Settings (`foundation_core.settings`):** Added `GranularSettingsStore` and `SettingsLoadResult` alongside existing `ThreeFileSettingsStore`, supporting `<data_dir>/config/settings.json` + optional `settings.<domain>.json` splits, 20-snapshot `config_history/` pruning, `quarantine/` recovery (`.bak -> config_history -> default`), sequential `schemaVersion` migrations, and unknown top-level field preservation.
