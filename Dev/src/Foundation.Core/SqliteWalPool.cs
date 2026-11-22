@@ -20,6 +20,8 @@ public sealed class SqliteWalPool
     public string DatabasePath { get; }
     public string ConnectionString { get; }
     public int BusyTimeoutMs { get; }
+    private readonly object _pragmaGate = new();
+    private bool _journalModeInitialized;
 
     public SqliteWalPool(string databasePath, int busyTimeoutMs = 15000, bool pooling = true)
     {
@@ -48,7 +50,11 @@ public sealed class SqliteWalPool
     {
         var conn = new SqliteConnection(ConnectionString);
         conn.Open();
-        ApplyStandardPragmas(conn, BusyTimeoutMs);
+        lock (_pragmaGate)
+        {
+            ApplyStandardPragmas(conn, BusyTimeoutMs, initializeJournalMode: !_journalModeInitialized);
+            _journalModeInitialized = true;
+        }
         return conn;
     }
 
@@ -56,16 +62,29 @@ public sealed class SqliteWalPool
     {
         var conn = new SqliteConnection(ConnectionString);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
-        ApplyStandardPragmas(conn, BusyTimeoutMs);
+        lock (_pragmaGate)
+        {
+            ApplyStandardPragmas(conn, BusyTimeoutMs, initializeJournalMode: !_journalModeInitialized);
+            _journalModeInitialized = true;
+        }
         return conn;
     }
 
     public static void ApplyStandardPragmas(SqliteConnection connection, int busyTimeoutMs = 15000)
     {
+        ApplyStandardPragmas(connection, busyTimeoutMs, initializeJournalMode: true);
+    }
+
+    private static void ApplyStandardPragmas(
+        SqliteConnection connection,
+        int busyTimeoutMs,
+        bool initializeJournalMode)
+    {
         ArgumentNullException.ThrowIfNull(connection);
         using var cmd = connection.CreateCommand();
+        string journalMode = initializeJournalMode ? "PRAGMA journal_mode = WAL;" : "";
         cmd.CommandText = $"""
-            PRAGMA journal_mode = WAL;
+            {journalMode}
             PRAGMA busy_timeout = {Math.Max(1000, busyTimeoutMs)};
             PRAGMA synchronous = NORMAL;
             PRAGMA foreign_keys = ON;
