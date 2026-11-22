@@ -123,6 +123,34 @@ public static class KnownFolderPaths
             }
         }
 
+        if (folder is Environment.SpecialFolder.Desktop or Environment.SpecialFolder.DesktopDirectory
+            or Environment.SpecialFolder.MyDocuments or Environment.SpecialFolder.Personal)
+        {
+            string? hostProfile = TryGetWinKnownFolder(Environment.SpecialFolder.UserProfile);
+            string? envProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+            if (!string.IsNullOrWhiteSpace(hostProfile))
+            {
+                string normHostProfile = SandboxEnvironmentSeam.TryToLongPath(SandboxEnvironmentSeam.NormalizePath(hostProfile));
+                string fallbackFolder = folder is Environment.SpecialFolder.Desktop or Environment.SpecialFolder.DesktopDirectory
+                    ? "Desktop"
+                    : "Documents";
+                if (!string.IsNullOrWhiteSpace(envProfile))
+                {
+                    string normEnvProfile = SandboxEnvironmentSeam.TryToLongPath(SandboxEnvironmentSeam.NormalizePath(envProfile));
+                    if (!string.Equals(normHostProfile, normEnvProfile, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string normRaw = string.IsNullOrWhiteSpace(raw) ? string.Empty : SandboxEnvironmentSeam.TryToLongPath(SandboxEnvironmentSeam.NormalizePath(raw));
+                        if (!string.IsNullOrWhiteSpace(normRaw) &&
+                            TryRemapPrefix(normRaw, normEnvProfile, normHostProfile, out string unmapped))
+                        {
+                            return unmapped;
+                        }
+                        return Path.Combine(normHostProfile, fallbackFolder);
+                    }
+                }
+            }
+        }
+
         return raw;
     }
 

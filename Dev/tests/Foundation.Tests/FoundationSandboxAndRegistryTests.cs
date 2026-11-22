@@ -576,6 +576,10 @@ public sealed class FoundationSandboxAndRegistryTests : IDisposable
             Assert.True(resolved.IsSandboxActive);
             string hostPrograms = KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.Programs);
             Assert.False(hostPrograms.StartsWith(sandboxProfile, StringComparison.OrdinalIgnoreCase));
+            string hostDesktop = KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            string hostDocs = KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.MyDocuments);
+            Assert.False(hostDesktop.StartsWith(sandboxProfile, StringComparison.OrdinalIgnoreCase));
+            Assert.False(hostDocs.StartsWith(sandboxProfile, StringComparison.OrdinalIgnoreCase));
 
             string hostShortcut = Path.Combine(hostPrograms, "ProbeApp", "ProbeApp.lnk");
             string mapped = KnownFolderPaths.MapHostPathToSandbox(hostShortcut, res);

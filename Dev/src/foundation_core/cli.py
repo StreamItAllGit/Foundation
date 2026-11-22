@@ -1,7 +1,7 @@
 # @module: foundation_core.cli
-# @purpose: Standard 02 & Standard 10 CLI flag parser (--data-dir, --config, --log-dir, --version, --help) with fail-closed path containment checks.
+# @purpose: Standard 02, Standard 10 & Standard 19 CLI flag parser (--data-dir, --config, --log-dir, --version) with subcommand --help pass-through and fail-closed path containment.
 # @depends-on: argparse, dataclasses, pathlib
-# @exports: StandardCliOptions, parse_standard_cli_flags, assert_path_contained
+# @exports: StandardCliOptions, build_standard_cli_parser, parse_standard_cli_flags, assert_path_contained
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
+
 
 def assert_path_contained(candidate_path: str | Path, allowed_root: str | Path) -> Path:
     """Fail-closed containment check ensuring candidate_path resolves strictly inside allowed_root."""
@@ -20,6 +21,7 @@ def assert_path_contained(candidate_path: str | Path, allowed_root: str | Path) 
         )
     return resolved_candidate
 
+
 @dataclass(frozen=True)
 class StandardCliOptions:
     data_dir: Path
@@ -27,26 +29,47 @@ class StandardCliOptions:
     log_dir: Path
     extra_args: list[str]
 
+
+def build_standard_cli_parser(
+    app_name: str = "Application",
+    app_version: str = "0.1.0",
+    default_root: str | Path = ".",
+    *,
+    add_help: bool = False,
+) -> argparse.ArgumentParser:
+    """Builds a parent-reusable ArgumentParser for Standard 19/02 runtime overrides."""
+    base = Path(default_root).resolve()
+    parser = argparse.ArgumentParser(prog=app_name, add_help=add_help)
+    parser.add_argument("--version", action="version", version=f"{app_name} v{app_version}")
+    parser.add_argument("--data-dir", type=Path, default=base / "data", help="Isolated data directory")
+    parser.add_argument("--config", type=Path, default=None, help="Explicit primary config file path")
+    parser.add_argument("--log-dir", type=Path, default=base / "logs", help="Isolated log directory")
+    return parser
+
+
 def parse_standard_cli_flags(
     argv: Sequence[str] | None = None,
     default_root: str | Path = ".",
     app_name: str = "Application",
     app_version: str = "0.1.0",
+    *,
+    add_help: bool = False,
+    default_config_relative: str | Path = Path("config") / "settings.json",
 ) -> StandardCliOptions:
-    base = Path(default_root).resolve()
-    parser = argparse.ArgumentParser(prog=app_name, add_help=True)
-    parser.add_argument("--version", action="version", version=f"{app_name} v{app_version}")
-    parser.add_argument("--data-dir", type=Path, default=base / "data", help="Isolated data directory")
-    parser.add_argument("--config", type=Path, default=None, help="Explicit primary config file path")
-    parser.add_argument("--log-dir", type=Path, default=base / "logs", help="Isolated log directory")
-
+    """Parses Standard 19/02 flags; defaults add_help=False (passes subcommand --help) and config/settings.json."""
+    parser = build_standard_cli_parser(
+        app_name=app_name,
+        app_version=app_version,
+        default_root=default_root,
+        add_help=add_help,
+    )
     known, unknown = parser.parse_known_args(argv)
     data_dir = Path(known.data_dir).resolve()
     log_dir = Path(known.log_dir).resolve()
     config_path = (
         Path(known.config).resolve()
         if known.config is not None
-        else (data_dir / "app.settings.json").resolve()
+        else (data_dir / default_config_relative).resolve()
     )
 
     return StandardCliOptions(

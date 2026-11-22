@@ -210,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-portable-zip", action="store_true", help="Validate 7-file app bundle (*-Setup-v*.exe + *-Portable.zip)")
     parser.add_argument("--allow-dual-installer", action="store_true", help="Validate 8-file Dual-Installer bundle (*-Setup-v*.exe + *-Offline-Setup-v*.exe + *-Portable.zip)")
     parser.add_argument("--stage-sdk-zip", type=Path, help="Stage Foundation-v<version>.zip from this SDK directory into release_dir before validating")
-    parser.add_argument("--version", default="", help="Version string used with --stage-sdk-zip (e.g. 0.5.3)")
+    parser.add_argument("--version", default="", help="Version string used with --stage-sdk-zip (e.g. 0.5.4)")
     args = parser.parse_args(argv)
 
     if args.stage_sdk_zip is not None:

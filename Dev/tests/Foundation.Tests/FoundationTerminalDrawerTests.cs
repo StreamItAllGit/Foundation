@@ -88,10 +88,10 @@ public sealed class FoundationTerminalDrawerTests
         Assert.Contains("coalesceTerminalLogBatch", indexText);
 
         string pkgText = File.ReadAllText(pkgPath);
-        Assert.Contains("\"version\": \"0.5.3\"", pkgText);
+        Assert.Contains("\"version\": \"0.5.4\"", pkgText);
 
         var branding = new ShellBrandingOptions { AppId = "test", DisplayName = "Test" };
-        Assert.Equal("0.5.3", branding.SdkVersion);
+        Assert.Equal("0.5.4", branding.SdkVersion);
     }
 
     [Fact]
@@ -161,8 +161,8 @@ public sealed class FoundationTerminalDrawerTests
                 ArgumentList =
                 {
                     scriptPath,
-                    "--version", "0.5.3",
-                    "--ui-version", "0.5.3",
+                    "--version", "0.5.4",
+                    "--ui-version", "0.5.4",
                     "--publish",
                     "--sync-consumer", tempConsumer
                 },
@@ -181,7 +181,7 @@ public sealed class FoundationTerminalDrawerTests
 
             foreach (string sharedDir in new[]
             {
-                Path.Combine(tempSharedLibs, "v0.5.3"),
+                Path.Combine(tempSharedLibs, "v0.5.4"),
                 Path.Combine(tempSharedLibs, "Latest")
             })
             {
@@ -191,6 +191,7 @@ public sealed class FoundationTerminalDrawerTests
                 Assert.True(File.Exists(Path.Combine(sharedDir, "WebAssets", "foundation-terminal.css")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "WebAssets", "components", "GlobalTerminalDrawer.tsx")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "foundation_core", "__init__.py")));
+                Assert.True(File.Exists(Path.Combine(sharedDir, "foundation_core", "automation.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "foundation_core", "sandbox_seam.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "foundation_core", "pseudo_registry.py")));
                 Assert.True(File.Exists(Path.Combine(sharedDir, "tools", "sync_foundation_sdk.py")));
@@ -201,14 +202,15 @@ public sealed class FoundationTerminalDrawerTests
                 Assert.True(File.Exists(Path.Combine(sharedDir, "sdk-manifest.json")));
 
                 using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(sharedDir, "sdk-manifest.json")));
-                Assert.Equal("0.5.3", doc.RootElement.GetProperty("version").GetString());
-                Assert.Equal("0.5.3", doc.RootElement.GetProperty("uiVersion").GetString());
+                Assert.Equal("0.5.4", doc.RootElement.GetProperty("version").GetString());
+                Assert.Equal("0.5.4", doc.RootElement.GetProperty("uiVersion").GetString());
             }
 
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "Foundation.UI.dll")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "WebAssets", "foundation-terminal.js")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "WebAssets", "components", "GlobalTerminalDrawer.tsx")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "foundation_core", "__init__.py")));
+            Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "foundation_core", "automation.py")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "foundation_core", "sandbox_seam.py")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "foundation_core", "pseudo_registry.py")));
             Assert.True(File.Exists(Path.Combine(tempConsumer, "Dev", "lib", "Foundation", "foundation_core", "sandbox_seam.py")));

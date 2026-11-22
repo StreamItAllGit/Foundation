@@ -22,7 +22,7 @@ from typing import Any
 winreg = __import__("winreg") if os.name == "nt" else None
 DEV_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = DEV_ROOT.parent
-SDK_VERSION = "0.5.3"
+SDK_VERSION = "0.5.4"
 ROLE_DIRS = {"SANDBOX_C_DRIVE": "C", "SANDBOX_D_DRIVE": "D", "SANDBOX_REMOVABLE_DRIVE": "E"}
 
 
@@ -211,6 +211,8 @@ def unmount_disc(cfg: dict[str, Any], iso_path: Path | None = None) -> dict[str,
 
 def _scan_host_state() -> tuple[dict[str, list[int]], dict[str, str]]:
     skip = {"data", "logs", "cache", "webview2_cache", "ebwebview", "gpu_cache", "code cache", "node_modules"}
+    transient_dirs = {".tmp.driveupload", ".tmp.drivedownload"}
+    junk_files = {"desktop.ini", "thumbs.db", "ehthumbs.db", ".ds_store"}
     desk_menu = [p for p in (Path(os.environ["USERPROFILE"]) / "Desktop" if os.environ.get("USERPROFILE") else None, Path(os.environ["APPDATA"]) / "Microsoft/Windows/Start Menu/Programs" if os.environ.get("APPDATA") else None) if p and p.exists()]
     files: dict[str, list[int]] = {}
     stack = [(r, 0, 8) for r in desk_menu] + [(r, 0, 3) for r in _host_programs_roots(get_subst_mappings()) if r.exists()]
@@ -219,8 +221,11 @@ def _scan_host_state() -> tuple[dict[str, list[int]], dict[str, str]]:
         try:
             with os.scandir(cur) as it:
                 for e in it:
+                    name_low = e.name.lower()
                     is_dir = e.is_dir(follow_symlinks=False)
-                    if is_dir and max_d == 3 and e.name.lower() in skip:
+                    if is_dir and (name_low in transient_dirs or (max_d == 3 and name_low in skip)):
+                        continue
+                    if not is_dir and (name_low in junk_files or e.name.startswith("._")):
                         continue
                     st = e.stat(follow_symlinks=False)
                     files[e.path] = [0 if is_dir else st.st_size, st.st_mtime_ns]

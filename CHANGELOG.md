@@ -7,6 +7,24 @@ and this project adheres to strict 3-part [Semantic Versioning (`MAJOR.MINOR.PAT
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-11-22
+### Added
+- **Standard 19 Granular Settings (`foundation_core.settings`):** Added `GranularSettingsStore` and `SettingsLoadResult` alongside existing `ThreeFileSettingsStore`, supporting `<data_dir>/config/settings.json` + optional `settings.<domain>.json` splits, 20-snapshot `config_history/` pruning, `quarantine/` recovery (`.bak -> config_history -> default`), sequential `schemaVersion` migrations, and unknown top-level field preservation.
+- **SQLite WAL Snapshot Integrity & `PRAGMA user_version` (`foundation_core.db`):** Added `read_only=True` (`?mode=ro`, `uri=True`, zero `mkdir`, `PRAGMA query_only = ON`) to `open_wal_sqlite`, plus `split_sql_statements`, `vacuum_backup_sqlite`, `verify_snapshot_integrity`, `apply_sql_migrations`, explicit `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` transaction control, and automatic `_foundation_schema_migrations` -> `PRAGMA user_version` legacy bridge.
+- **Zero-PII Standard 43 Crash Bundles & Standard 35 Logging (`foundation_core.logging`, `crash_dumper`):** Upgraded `RollingLogSink` with Standard 35 UTC ms lines, thread-safe 50-line `recent_lines()` ring buffer, and 30-day `prune_old_logs()`; added `sanitize_pii_text` (`[USER_HOME]`, `[REDACTED_TOKEN]`) and Zero-PII `camelCase` `crashes/crash_*.json` bundles with `max 20` retention in `CrashDumper`.
+- **Pure-Stdlib Python Automation Server (`foundation_core.automation`):** Added `AutomationLoopbackServer`, `AutomationServerOptions`, `AutomationDisabledError` (`AUTOMATION_DISABLED_EXIT_CODE = 2`), `parse_automation_cli_args` (`0 <= port <= 65535`, `<APP>_TEST_AUTOMATION=1` fail-closed), and stdlib `encode_rgba_png`, matching C# `Foundation.Automation` wire contracts across `/v1/{health,state,snapshot,snapshot.png,shutdown}`.
+- **Subcommand Help Passthrough Builder (`foundation_core.cli`):** Added `build_standard_cli_parser(..., add_help=False)` forwarding downstream subcommand `--help` arguments via `extra_args`.
+
+### Changed
+- **Intentional Standard 19 CLI Defaults (`foundation_core.cli`):** Switched `parse_standard_cli_flags` defaults to `add_help=False` and `--config` `<data_dir>/config/settings.json` (pass `add_help=True` to opt back into top-level help interception).
+- **Unified `0.5.4` SDK Version Lockstep:** Aligned `.NET 8` assemblies (`SdkVersion = "0.5.4"`), `@foundation/ui` (`0.5.4`), `foundation_core` (`0.5.4`), `Dev\tools\sandbox_ctl.py` / `sync_foundation_sdk.py`, `Dev\app.manifest.json`, and `Dev\Directory.Build.props`.
+- **Standard 31 PID-Reuse Lock Hardening (`foundation_core.locks`, `pseudo_registry`):** Centralized `utc_iso_ms`, `parse_iso_utc`, `get_process_state`, and `get_process_start_time_utc` in `locks.py` (shared by `pseudo_registry.py`); upgraded `PidSentinelLock` with `hostName` + `appId` (accepting legacy `hostname`/`host`/`ownerAppId` on read), 4-step `±2s` PID-reuse eviction, `inspect_lock`, and `refresh_heartbeat`.
+- **Release Workflow Fail-Fast Guards (`.github\workflows\release.yml`):** Scoped `$ErrorActionPreference = 'Stop'`, `$PSNativeCommandUseErrorActionPreference = $true`, and `$LASTEXITCODE` checks cleanly to the `meta` build/stage step while leaving `sign`'s `gh release view` probe intact.
+
+### Fixed
+- **CI Stage 2 Sandbox 8.3 Short-Path & Child-`USERPROFILE` Collisions (`sandbox_seam.py`, `SandboxEnvironmentSeam.cs`, `KnownFolderPaths.cs`):** Resolved CI failure `44810959469` by normalizing Windows 8.3 short paths (`GetLongPathNameW` / `RUNNER~1` -> `runneradmin`) and unmapping redirected child-`USERPROFILE` `Desktop`/`Documents`/`AppData` paths before host-collision checks.
+- **Local Git Tag Integrity:** Repaired corrupt local `refs/tags/v0.4.1-hf.1` from `origin` (`git fsck --no-progress` clean).
+
 ## [0.5.3] - 2026-11-20
 ### Added
 - **`Foundation.Core` Rotating Backups, Frame-Pacer Late-Latch & HTTPS/SSRF Validation:**

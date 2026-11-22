@@ -36,21 +36,28 @@ jobs:
         id: meta
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
           $state = Get-Content -LiteralPath "active.state" -Raw | ConvertFrom-Json
           $ver = [string]$state.version
           "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
           dotnet test Dev/Foundation.sln -c Release -p:TreatWarningsAsErrors=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m unittest discover -s Dev/tests/foundation_core -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build Dev/Foundation.sln -c Release -p:TreatWarningsAsErrors=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $env:FOUNDATION_SHARED_LIBS_ROOT = Join-Path $env:RUNNER_TEMP "SharedLibs/Foundation"
           python Dev/tools/sync_foundation_sdk.py --version $ver --ui-version $ver --configuration Release --publish
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force -Path "Releases/Latest" | Out-Null
           Copy-Item -LiteralPath "README.md", "FEATURES.md", "CHANGELOG.md" -Destination "Releases/Latest" -Force
           $releaseNotes = "# Foundation v$ver`n`nAutomated release build of the Foundation Shared SDK (v$ver). See CHANGELOG.md and README.md for full details.`n"
           [System.IO.File]::WriteAllText((Join-Path (Resolve-Path "Releases/Latest") "RELEASE_NOTES.md"), $releaseNotes, [System.Text.UTF8Encoding]::new($false))
           python Dev/tools/build_release_universal.py Releases/Latest --stage-sdk-zip (Join-Path $env:FOUNDATION_SHARED_LIBS_ROOT "v$ver") --version $ver --allow-sdk-zip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload unsigned SDK ZIP for SignPath
         id: upload-unsigned

@@ -1,6 +1,6 @@
-# Foundation (`v0.5.3`) — Operations, Build & CLI Runbook
+# Foundation (`v0.5.4`) — Operations, Build & CLI Runbook
 
-> **Audience:** Engineers maintaining `Foundation` itself or running `Dev\tools\*`, `sandbox_ctl.py`, `run_sandbox_e2e.py`, `ExeboxStreamHelpers.ps1` / `exebox_stream.py`, `Foundation.Automation`, or `StandardInstallerHost` CLIs.
+> **Audience:** Engineers maintaining `Foundation` itself or running `Dev\tools\*`, `sandbox_ctl.py`, `run_sandbox_e2e.py`, `ExeboxStreamHelpers.ps1` / `exebox_stream.py`, `Foundation.Automation`, `foundation_core`, or `StandardInstallerHost` CLIs.
 > **Full Symbol Reference:** [Dev/docs/INTERFACES.md](INTERFACES.md) · **Integration Recipes:** [Dev/docs/USER_GUIDE.md](USER_GUIDE.md)
 
 ---
@@ -12,11 +12,11 @@ Open `Dev\Foundation.code-workspace` in VS Code / Antigravity for preconfigured 
 | Command | Purpose | Notes |
 |---|---|---|
 | `dotnet test <PROJECTS_ROOT>\Foundation\Dev\Foundation.sln -c Release -p:TreatWarningsAsErrors=true` | Compiles all assemblies + runs all C# xUnit tests (`55/55`) | Zero-warning build (`PublishFoundationSdk` defaults to `false`) |
-| `python -m unittest discover -s Dev\tests\foundation_core -v` | Runs pure-stdlib Python `foundation_core` & tools tests (`16/16`) | Zero external dependencies |
+| `python -B -m unittest discover -s Dev\tests\foundation_core -v` | Runs pure-stdlib Python `foundation_core` & tools tests (`23/23`) | Zero external dependencies (`0` warnings across consecutive runs) |
 | `pytest Dev\tests\foundation_core -q` | Runs the same Python suite via Pytest | Uses isolated `TemporaryDirectory()` fixtures |
 
 ### ⚠️ MSBuild Post-Build Side Effect Note (`Foundation.UI.csproj`)
-Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.5.3 --ui-version 0.5.3 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
+Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\` into `WebAssets\` and invokes `sync_foundation_sdk.py --version 0.5.4 --ui-version 0.5.4 --publish`. Keep `PublishFoundationSdk=false` during normal builds and read-only `/audit` sweeps.
 
 ---
 
@@ -25,11 +25,11 @@ Building `Foundation.UI.csproj` with `-p:PublishFoundationSdk=true` copies `Web\
 ### 2.1 `sync_foundation_sdk.py` (`Dev\tools\sync_foundation_sdk.py`, `<= 260` raw lines)
 | Flag | Default / Type | Description |
 |---|---|---|
-| `--publish` | bool | Publishes `59` Release SDK files (`Foundation.*.dll`, `@foundation/ui` `0.5.3`, `foundation_core` `0.5.3`, `Dev\tools\` incl. `ExeboxStreamHelpers.ps1` & `exebox_stream.py`) to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus hardlink-safe 6-file `Releases\Latest\` (without loose `LICENSE`, delegating checksums to `generate_sha256sums`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
+| `--publish` | bool | Publishes `60` Release SDK files (`Foundation.*.dll`, `@foundation/ui` `0.5.4`, `foundation_core` `0.5.4` incl. `automation.py`, `Dev\tools\` incl. `ExeboxStreamHelpers.ps1` & `exebox_stream.py`) to `SharedLibs\Foundation\v<version>`, `Latest`, and `Builds\v<version>\app` (`app\LICENSE`, zero `AGENTS.md`), plus hardlink-safe 6-file `Releases\Latest\` (without loose `LICENSE`, delegating checksums to `generate_sha256sums`) unless `FOUNDATION_SKIP_RELEASE_ZIP` is set |
 | `--sync-consumer` | `<ProjectRoot>` | Copies pinned SDK DLLs, `WebAssets`, and `foundation_core` into consumer `Dev\lib\` and removes only retired legacy test globs (`tools/verify_sandbox_universal.py`, `Foundation.Sandbox.*`, `*VisibleTest*`, `*InstallerSandboxContext*`) so `sandbox_seam.py`, `sandbox_ctl.py`, `run_sandbox_e2e.py`, `ExeboxStreamHelpers.ps1`, and `exebox_stream.py` survive |
-| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.5.3`) |
+| `--source-version` | `Latest` | Source folder inside `SharedLibs\Foundation\` (`Latest` or `v0.5.4`) |
 | `--web-dir` | Path (optional) | Optional consumer frontend directory target for `WebAssets` |
-| `--version` / `--ui-version` | `0.5.3` | Foundation SDK / `@foundation/ui` SemVer |
+| `--version` / `--ui-version` | `0.5.4` | Foundation SDK / `@foundation/ui` SemVer |
 | `--configuration` | `Release` | Build configuration (`Release`/`Debug`) |
 
 ### 2.2 `build_release_universal.py` (`Dev\tools\build_release_universal.py`)
@@ -50,7 +50,7 @@ Writes `SHA256SUMS.txt` (lowercase SHA-256 hex) atomically via `_atomic_write_te
 ## 3. 4-Drive Sandbox Orchestrator, Stage 2 Runner & Live GUI Streaming
 
 ### 3.1 `sandbox_ctl.py` (`Dev\tools\sandbox_ctl.py`)
-Resolves `SANDBOX_C_DRIVE`, `SANDBOX_D_DRIVE`, `SANDBOX_REMOVABLE_DRIVE`, `SANDBOX_DISC_DRIVE`, and `FOUNDATION_SANDBOX_ROOT` in order **`CLI -> process env -> Dev\.env -> %USERPROFILE%\.gemini\.secrets\.env`**, parsing `subst` output dynamically so already-mounted drives succeed idempotently and inferring `FOUNDATION_SANDBOX_ROOT` from `Path(subst_target).parent` if unset. Exits `3` on any host path or drive collision.
+Resolves `SANDBOX_C_DRIVE`, `SANDBOX_D_DRIVE`, `SANDBOX_REMOVABLE_DRIVE`, `SANDBOX_DISC_DRIVE`, and `FOUNDATION_SANDBOX_ROOT` in order **`CLI -> process env -> Dev\.env -> %USERPROFILE%\.gemini\.secrets\.env`**, parsing `subst` output dynamically so already-mounted drives succeed idempotently and inferring `FOUNDATION_SANDBOX_ROOT` from `Path(subst_target).parent` if unset. Exits `3` on any host path or drive collision. Both C# (`SandboxEnvironmentSeam.TryToLongPath`, `KnownFolderPaths.GetHostFolderPath`) and Python (`sandbox_seam._to_long_path`, `resolve_known_folders`) normalize Windows 8.3 short paths via `GetLongPathNameW` and unmap redirected child-`USERPROFILE` `Desktop`/`Documents`/`AppData` folders before collision checks. `_scan_host_state()` excludes transient Drive sync folders (`.tmp.driveupload`, `.tmp.drivedownload`) and OS junk (`desktop.ini`, `Thumbs.db`, `ehthumbs.db`, `.DS_Store`, `._*`).
 
 | Subcommand | Flags | Behavior |
 |---|---|---|
@@ -83,7 +83,7 @@ Shared desktop preflight and `exebox-stream` UDP `5004` streaming wrappers for S
 
 ---
 
-## 4. `StandardInstallerHost` (`v0.5.3`), `RootLauncherOptions` & `Foundation.Automation` CLI Reference
+## 4. `StandardInstallerHost` (`v0.5.4`), `RootLauncherOptions`, `Foundation.Automation` & `foundation_core` CLI Reference
 
 | Switch / Alias | Argument | Behavior |
 |---|---|---|
@@ -100,22 +100,25 @@ Shared desktop preflight and `exebox-stream` UDP `5004` streaming wrappers for S
 - **`2`**: CLI argument parsing failure (unknown option or missing value).
 - **`3`**: Production/Sandbox Containment Violation (`SandboxEnvironmentSeam.IsContainmentViolation` — host OS/user/host-`Programs` escape aborted fail-closed).
 
-- **`--automation-port <port>` & `--automation-token <token>` (`Foundation.Automation`):** Opt-in `127.0.0.1` loopback HTTP/JSON control surface (`AutomationCliHelper.TryCreateFromArgs` for WinForms or `AutomationCliHelper.TryCreateForSurface` for WinForms-free `IAutomationSurfaceTarget` targets); defaults to disabled unless `--automation-port` is supplied. Exposes `/v1/{health,tree,pointer,keyboard,snapshot}` plus in-memory `GET /v1/snapshot.png` (`image/png`).
+- **`--automation-port <port>` & `--automation-token <token>` (`Foundation.Automation` & `foundation_core.automation`):** Opt-in `127.0.0.1` loopback HTTP/JSON control surface (`AutomationCliHelper.TryCreateFromArgs` for WinForms, `AutomationCliHelper.TryCreateForSurface` for WinForms-free `IAutomationSurfaceTarget` targets, or Python `parse_automation_cli_args` + `AutomationLoopbackServer` with `0 <= port <= 65535`); defaults to disabled unless `--automation-port` is supplied, failing closed with `ExitCode = 2` (`AUTOMATION_DISABLED_EXIT_CODE = 2`) unless `<APP>_TEST_AUTOMATION=1` (or explicit test build authorization) is active. C# exposes `/v1/{health,tree,pointer,keyboard,snapshot,snapshot.png}`; Python exposes `/v1/{health,state,snapshot,snapshot.png,shutdown}` (`encode_rgba_png`).
+- **`foundation_core.cli` Standard 19 Defaults (`v0.5.4`):** `build_standard_cli_parser(..., add_help=False)` and `parse_standard_cli_flags(..., add_help=False, default_config_relative=Path("config") / "settings.json")` pass subcommand `--help` through via `extra_args` and resolve `--config` to `<data_dir>/config/settings.json` by default (`add_help=True` opts back into top-level help).
 - **`RootLauncherHost` + `RootLauncherOptions` (`Foundation.Launcher`):** Built-in sync flags include `--diagnose`, `--doctor`, `--verify`, `--verify-module` (plus `--wait`, `--open`, `--check-updates`, `--register-assoc`, `--dry-run`, `--version`, `--help`); built-in path/value flags include `--programs-dir`, `--save-dir`, `--preload-media`, `--backend`, `--automation-port`, `--automation-token`; optional-value switches (`--suite-tab`, `--window`, `--browser`) consume an adjacent non-flag value without swallowing trailing sync flags.
 
 ---
 
-## 5. Runtime Diagnostics (`SQLite WAL`, `Locks`, `Backups`, `Frame Pacer`, `Transfers`)
-- **`SqliteWalPool` (`.NET`) & `open_wal_sqlite` (`Python`):** `SqliteCacheMode.Default`, `WAL`, `busy_timeout = 15000`, `synchronous = NORMAL`, `foreign_keys = ON`, `temp_store = MEMORY`, `cache_size = -65536` (`64 MB`).
-- **Locks, Rotating Backups & Crash Bundles:** `JsonHivePlatformRegistry` locks `<SandboxRoot>\locks\registry.hive.lock` via named Mutex + `PidSafeLockfile`; `RollingFileBackupStore` writes `.tmp -> Flush(true) -> File.Move` + `.bak` snapshots (`DefaultMaxBackups = 10`, monotonic sequence collision guard, `AssertPathContained` restore); unhandled crashes emit `logs\crashes\crash_<appId>_<ts>.json`.
+## 5. Runtime Diagnostics (`SQLite WAL`, `Settings`, `Locks`, `Backups`, `Logs & Crashes`, `Frame Pacer`, `Transfers`)
+- **`SqliteWalPool` (`.NET`) & `foundation_core.db` (`Python`):** `SqliteCacheMode.Default`, `WAL`, `busy_timeout = 15000`, `synchronous = NORMAL`, `foreign_keys = ON`, `temp_store = MEMORY`, `cache_size = -65536` (`64 MB`). Python adds `open_wal_sqlite(read_only=True)` (`?mode=ro`, `uri=True`, `PRAGMA query_only = ON`), `split_sql_statements` (with comment stripping), `vacuum_backup_sqlite`, `verify_snapshot_integrity`, and `SqliteSchemaMigrationRunner` (`PRAGMA user_version` + `_foundation_schema_migrations` legacy bridge + explicit `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` transactions + `apply_sql_migrations`).
+- **Granular Settings & Rotating Backups:** `GranularSettingsStore` (`foundation_core.settings`, alongside preserved `ThreeFileSettingsStore`) stores `<data_dir>/config/settings.json` + optional `settings.<domain>.json` splits, rotates 20 `config_history/` snapshots, quarantines corrupt JSON to `quarantine/` with `.bak -> config_history -> default` recovery, executes `schemaVersion` migrations, and preserves unknown keys via `SettingsLoadResult.extra` / `save_atomic(..., extra=...)`. `RollingFileBackupStore` (`.NET`) writes `.tmp -> Flush(true) -> File.Move` + `.bak` snapshots (`DefaultMaxBackups = 10`, monotonic sequence collision guard, `AssertPathContained` restore).
+- **Locks, Logs & Crash Bundles:** `JsonHivePlatformRegistry` locks `<SandboxRoot>\locks\registry.hive.lock` via named Mutex + `PidSafeLockfile` (with Python Windows `os.open` retry guards in `pseudo_registry.py`); `PidSentinelLock` emits `hostName` + `appId` (accepting legacy `hostname`/`host`/`ownerAppId` aliases on read), enforces 4-step `±2s` PID-reuse eviction, and exposes `inspect_lock()` + `refresh_heartbeat()` (centralizing `utc_iso_ms`, `parse_iso_utc`, `get_process_state`, `get_process_start_time_utc`). `RollingLogSink` writes Standard 35 UTC ms lines with a 50-line thread-safe `recent_lines()` ring buffer and 30-day `prune_old_logs()`; `CrashDumper` applies `sanitize_pii_text` (`[USER_HOME]`, `[REDACTED_TOKEN]`) and writes Zero-PII `camelCase` `logs\crashes\crash_*.json` bundles (`max 20` retention).
 - **VRR Late-Latch Timing (`HighResFramePacer`):** `BeginLateLatchFrame()` + `WaitBeforePresent()` / `WaitBeforePresentAsync()` with clamped `LateLatchMarginMs` and rolling `LastLateLatchWaitMs` / `AverageLateLatchWaitMs` telemetry.
 - **Safe Downloads (`SafeNetworkTransfer`):** `.partial_<jobId>`, `1.2x + 512 MB` reserve, HTTP `416` recovery, `10s` connect / `30s` `ResponseHeadersTimeout` / `30s` read-stall timeouts, plus `DownloadVerifiedAsync` (`https://`, `AllowAutoRedirect = false`, `MaxRedirects = 5`, DNS IP `ConnectCallback` SSRF guard, TLS 1.2/1.3, `ExpectedSizeBytes`).
 
 ---
 
-## 6. CI Signing, Public Docs Workflow (`pages.yml`) & Pre-Public Checklist
+## 6. CI Signing, Public Docs Workflow (`pages.yml`), Release Flow & Pre-Public Checklist
 
-- **Release & SignPath Workflow ([`.github/workflows/release.yml`](../../.github/workflows/release.yml)):** Runs `dotnet test`, Python `unittest`, `dotnet build`, stages `SharedLibs\Foundation` into `RUNNER_TEMP`, runs `sync_foundation_sdk.py --publish` and `build_release_universal.py Releases/Latest --stage-sdk-zip ... --version ... --allow-sdk-zip`, submits the unsigned SDK ZIP to SignPath when `SIGNPATH_PROJECT_SLUG` is configured, and uploads signed assets to tagged GitHub Releases (`--prerelease` on `v0.*` / prerelease tags).
+- **Release & SignPath Workflow ([`.github/workflows/release.yml`](../../.github/workflows/release.yml)):** `meta` runs with scoped `$ErrorActionPreference = 'Stop'`, `$PSNativeCommandUseErrorActionPreference = $true`, and explicit `$LASTEXITCODE` checks across `dotnet test`, `python -m unittest`, `dotnet build`, `sync_foundation_sdk.py --publish` (staging `SharedLibs\Foundation` into `RUNNER_TEMP`), and `build_release_universal.py Releases/Latest --stage-sdk-zip ... --version ... --allow-sdk-zip`, while leaving `sign`'s `gh release view` probe intact; uploads unsigned SDK ZIP for SignPath when `SIGNPATH_PROJECT_SLUG` is configured and attaches signed assets to tagged GitHub Releases (`--prerelease` on `v0.*` / prerelease tags).
+- **Local `v0.5.4` Build & Packaging Flow:** After Gate 2 + Inspecter sign-off, publish single-pass SDK snapshots (`sync_foundation_sdk.py --publish --version 0.5.4 --ui-version 0.5.4`), stage hardlinked 6-file `Releases\v0.5.4\` + `Latest\` bundles (`build_release_universal.py --regen-sums --allow-sdk-zip`), archive `Archive\Foundation-v0.5.4-src.7z`, sync Root Quartet / Manual Shelf / state files, commit & tag `v0.5.4` on `main`, and verify all GitHub Actions workflows green.
 - **Documentation Site Workflow ([`.github/workflows/pages.yml`](../../.github/workflows/pages.yml)):** Visibility-gated (`if: github.event.repository.visibility == 'public'`) static HTML generator converting root Markdown docs and `Dev/docs/*.md` (excluding `plans/`, `reports/`, `tests/`, `archive/`, and `AGENTS.md`) plus `.nojekyll`, `404.html`, `robots.txt`, and `sitemap.xml` to [https://streamitallgit.github.io/Foundation/](https://streamitallgit.github.io/Foundation/).
 
 > [!CAUTION]

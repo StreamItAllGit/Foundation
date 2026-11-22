@@ -61,6 +61,9 @@ public static class SandboxEnvironmentSeam
     [DllImport("kernel32.dll", EntryPoint = "QueryDosDeviceW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int QueryDosDeviceNative(string lpDeviceName, StringBuilder lpTargetPath, int ucchMax);
 
+    [DllImport("kernel32.dll", EntryPoint = "GetLongPathNameW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetLongPathNameNative(string lpszShortPath, [Out] StringBuilder lpszLongPath, uint cchBuffer);
+
     public static SandboxResolution ResolveCurrent() => Resolve(null);
 
     public static SandboxResolution Resolve(IReadOnlyDictionary<string, string?>? envOverride)
@@ -216,22 +219,75 @@ public static class SandboxEnvironmentSeam
         Directory.Exists(Path.Combine(normDrive, "Windows")) || Directory.Exists(Path.Combine(normDrive, "Programs")) ||
         Directory.Exists(Path.Combine(normDrive, "Projects")) || Directory.Exists(Path.Combine(normDrive, "Users"));
 
+    internal static string TryToLongPath(string path)
+    {
+        if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(path))
+            return path;
+
+        try
+        {
+            string norm = NormalizePath(path);
+            var suffix = new Stack<string>();
+            string cur = norm;
+            while (!Directory.Exists(cur) && !File.Exists(cur))
+            {
+                string? parent = Path.GetDirectoryName(cur);
+                if (string.IsNullOrWhiteSpace(parent) || string.Equals(parent, cur, StringComparison.OrdinalIgnoreCase))
+                    break;
+                suffix.Push(Path.GetFileName(cur));
+                cur = parent;
+            }
+
+            if (Directory.Exists(cur) || File.Exists(cur))
+            {
+                var sb = new StringBuilder(1024);
+                uint len = GetLongPathNameNative(cur, sb, (uint)sb.Capacity);
+                if (len > sb.Capacity)
+                {
+                    sb = new StringBuilder((int)len + 1);
+                    len = GetLongPathNameNative(cur, sb, (uint)sb.Capacity);
+                }
+                if (len > 0 && sb.Length > 0)
+                    cur = sb.ToString();
+            }
+
+            while (suffix.Count > 0)
+                cur = Path.Combine(cur, suffix.Pop());
+            return NormalizePath(cur);
+        }
+        catch (Exception ex)
+        {
+            _ = ex; // Fallback cleanly when Win32 long-path probe is unavailable.
+            return path;
+        }
+    }
+
     private static bool IsHostProtectedCollision(string normPath, IReadOnlySet<string> substDriveRoots)
     {
-        string? tempRoot = TryNormalize(Path.GetTempPath());
-        bool insideTemp = tempRoot is not null && IsChildPath(normPath, tempRoot, false);
+        string longCandidate = TryToLongPath(normPath);
+        string? tempRoot = TryNormalize(Path.GetTempPath()) is { } t0 ? TryToLongPath(t0) : null;
+        string? hostLocalApp = TryNormalize(KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.LocalApplicationData)) is { } la0
+            ? TryToLongPath(la0)
+            : null;
+        string? hostLocalTemp = hostLocalApp is not null ? TryToLongPath(NormalizePath(Path.Combine(hostLocalApp, "Temp"))) : null;
+        bool insideTemp = (tempRoot is not null && IsChildPath(longCandidate, tempRoot, false)) ||
+            (hostLocalTemp is not null && IsChildPath(longCandidate, hostLocalTemp, false));
 
         foreach (var sf in SystemProtectedFolders)
             if (TryNormalize(KnownFolderPaths.GetHostFolderPath(sf)) is { } r && (IsChildPath(r, normPath, true) || IsChildPath(normPath, r, true))) return true;
 
-        if (TryNormalize(KnownFolderPaths.GetHostFolderPath(Environment.SpecialFolder.LocalApplicationData)) is { } localApp)
+        if (hostLocalApp is not null)
         {
-            string localPrograms = NormalizePath(Path.Combine(localApp, "Programs"));
-            if (IsChildPath(localPrograms, normPath, true) || IsChildPath(normPath, localPrograms, true)) return true;
+            string localPrograms = TryToLongPath(NormalizePath(Path.Combine(hostLocalApp, "Programs")));
+            if (IsChildPath(localPrograms, longCandidate, true) || IsChildPath(longCandidate, localPrograms, true)) return true;
         }
 
         foreach (var uf in UserProtectedFolders)
-            if (TryNormalize(KnownFolderPaths.GetHostFolderPath(uf)) is { } uRoot && (IsChildPath(uRoot, normPath, true) || (!insideTemp && IsChildPath(normPath, uRoot, true)))) return true;
+            if (TryNormalize(KnownFolderPaths.GetHostFolderPath(uf)) is { } uRoot)
+            {
+                string longURoot = TryToLongPath(uRoot);
+                if (IsChildPath(longURoot, longCandidate, true) || (!insideTemp && IsChildPath(longCandidate, longURoot, true))) return true;
+            }
 
         if (Path.GetPathRoot(normPath) is { Length: > 0 } driveRoot)
         {
@@ -247,10 +303,17 @@ public static class SandboxEnvironmentSeam
         return false;
     }
 
-    private static bool IsChildPath(string candidate, string root, bool allowEqual) =>
-        string.Equals(candidate, root, StringComparison.OrdinalIgnoreCase)
+    private static bool IsChildPath(string candidate, string root, bool allowEqual)
+    {
+        if (candidate.Contains('~') || root.Contains('~'))
+        {
+            candidate = TryToLongPath(candidate);
+            root = TryToLongPath(root);
+        }
+        return string.Equals(candidate, root, StringComparison.OrdinalIgnoreCase)
             ? allowEqual
             : candidate.StartsWith(root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string StripExtendedPrefix(string path) =>
         path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase) ? @"\\" + path[8..]

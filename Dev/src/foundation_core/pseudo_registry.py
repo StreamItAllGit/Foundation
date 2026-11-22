@@ -1,12 +1,11 @@
 # @module: foundation_core.pseudo_registry
 # @purpose: Cross-process atomic JSON pseudo-registry (HKCU/HKLM/HKCR, Standard 18 schema) with PidSafeLockEnvelope + OS lock coordination.
-# @depends-on: contextlib, ctypes, datetime, enum, json, os, pathlib, re, shutil, socket, threading, time, typing, .locks, .sandbox_seam
+# @depends-on: contextlib, datetime, enum, json, os, pathlib, re, shutil, socket, threading, time, typing, .locks, .sandbox_seam
 # @exports: REGISTRY_HIVE_SCHEMA_URI, REGISTRY_HIVE_SCHEMA_VERSION, PlatformRegistryHive, PlatformRegistryValueKind, JsonHivePlatformRegistry
 
 from __future__ import annotations
 
 from contextlib import contextmanager, suppress
-import ctypes
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 import json
@@ -19,7 +18,7 @@ import threading
 import time
 from typing import Any, Iterator
 
-from .locks import PidSentinelLock
+from .locks import PidSentinelLock, get_process_state, parse_iso_utc, utc_iso_ms
 from .sandbox_seam import SandboxResolution, resolve_sandbox_environment
 
 REGISTRY_HIVE_SCHEMA_URI: str = "https://schemas.local/registry-hive.v1.json"
@@ -37,33 +36,9 @@ class PlatformRegistryValueKind(StrEnum):
 _HIVE_MAP = {"HKCU": "HKCU", "HKEYCURRENTUSER": "HKCU", "CURRENTUSER": "HKCU", "HKLM": "HKLM", "HKEYLOCALMACHINE": "HKLM", "LOCALMACHINE": "HKLM", "HKCR": "HKCR", "HKEYCLASSESROOT": "HKCR", "CLASSESROOT": "HKCR"}
 _KIND_MAP = {k.name.replace("_", ""): k.value for k in PlatformRegistryValueKind} | {k.value.replace("_", ""): k.value for k in PlatformRegistryValueKind}
 
-def _utc_iso_ms(dt: datetime | None = None) -> str:
-    cur = (dt or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    return cur.strftime("%Y-%m-%dT%H:%M:%S.") + f"{cur.microsecond // 1000:03d}Z"
-
-def _parse_iso_utc(raw: Any) -> datetime | None:
-    with suppress(ValueError):
-        if isinstance(raw, str) and (s := raw.strip()):
-            dt = datetime.fromisoformat((s[:-1] + "+00:00") if s.endswith("Z") else s)
-            return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-    return None
-
-def _get_process_state(pid: int) -> tuple[bool, datetime | None]:
-    if pid <= 0:
-        return (False, None)
-    if os.name != "nt":
-        return (PidSentinelLock.is_pid_alive(pid), None)
-    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    if not (handle := k32.OpenProcess(0x1000, False, pid)):
-        return (ctypes.get_last_error() == 5, None)
-    try:
-        code, ct, et, kt, ut = ctypes.c_uint32(), ctypes.c_uint64(), ctypes.c_uint64(), ctypes.c_uint64(), ctypes.c_uint64()
-        if not k32.GetExitCodeProcess(handle, ctypes.byref(code)) or code.value != 259:
-            return (False, None)
-        ok = k32.GetProcessTimes(handle, ctypes.byref(ct), ctypes.byref(et), ctypes.byref(kt), ctypes.byref(ut))
-        return (True, datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(microseconds=max(0, (ct.value - 116444736000000000) // 10)) if ok else None)
-    finally:
-        k32.CloseHandle(handle)
+_utc_iso_ms = utc_iso_ms
+_parse_iso_utc = parse_iso_utc
+_get_process_state = get_process_state
 
 def _normalize_target(hive: str | PlatformRegistryHive, subkey: str) -> tuple[str, str]:
     if (hive_name := _HIVE_MAP.get(str(hive).strip().upper().replace("_", ""))) is None:
@@ -93,17 +68,8 @@ def _os_lock_op(fd: int, lock: bool) -> None:
     fcntl.flock(fd, (fcntl.LOCK_EX | fcntl.LOCK_NB) if lock else fcntl.LOCK_UN)
 
 def _is_lock_held_by_other(lock_path: Path) -> bool:
-    with suppress(OSError, ValueError, TypeError):
-        env = json.loads(raw) if lock_path.exists() and (raw := lock_path.read_text(encoding="utf-8").strip()) else {}
-        pid, expires = int(env.get("pid", -1)), _parse_iso_utc(env.get("expiresAtUtc"))
-        if pid <= 0 or pid == os.getpid() or (expires is not None and expires < datetime.now(timezone.utc)):
-            return False
-        if (host := str(env.get("hostName", ""))) and host.lower() != socket.gethostname().lower():
-            return True
-        alive, actual_start = _get_process_state(pid)
-        expected_start = _parse_iso_utc(env.get("processStartTimeUtc"))
-        return alive and not (expected_start and actual_start and abs((actual_start - expected_start).total_seconds()) > 2.0)
-    return False
+    held, env = PidSentinelLock.inspect_lock(lock_path)
+    return bool(held and env is not None and int(env.get("pid", -1)) != os.getpid())
 
 class JsonHivePlatformRegistry:
     """Atomic cross-process JSON pseudo-registry matching Standard 18 registry.hive.json schema."""
@@ -133,14 +99,16 @@ class JsonHivePlatformRegistry:
             self.lock_path.parent.mkdir(parents=True, exist_ok=True)
             while True:
                 if not _is_lock_held_by_other(self.lock_path):
-                    cand, locked = os.fdopen(os.open(str(self.lock_path), os.O_RDWR | os.O_CREAT, 0o666), "r+b", buffering=0), False
+                    cand: Any = None
+                    locked = False
                     try:
+                        cand = os.fdopen(os.open(str(self.lock_path), os.O_RDWR | os.O_CREAT, 0o666), "r+b", buffering=0)
                         _os_lock_op(cand.fileno(), True)
                         locked = True
                         if _is_lock_held_by_other(self.lock_path):
                             raise BlockingIOError("Active external holder.")
                         now, (_, p_start) = datetime.now(timezone.utc), _get_process_state(os.getpid())
-                        env = {"schemaVersion": 1, "appId": self.app_id, "pid": os.getpid(), "processStartTimeUtc": _utc_iso_ms(p_start), "hostName": socket.gethostname(), "operation": operation, "acquiredAtUtc": _utc_iso_ms(now), "heartbeatAtUtc": _utc_iso_ms(now), "expiresAtUtc": _utc_iso_ms(now + timedelta(minutes=15))}
+                        env = {"$schema": PidSentinelLock.SCHEMA_URI, "schemaVersion": 1, "lockType": "directory-mutation", "appId": self.app_id, "version": "0.5.4", "pid": os.getpid(), "processStartTimeUtc": _utc_iso_ms(p_start), "hostName": socket.gethostname(), "operation": operation, "targetPath": str(self.hive_path.parent), "acquiredAtUtc": _utc_iso_ms(now), "heartbeatAtUtc": _utc_iso_ms(now), "expiresAtUtc": _utc_iso_ms(now + timedelta(minutes=15))}
                         cand.seek(0)
                         cand.truncate(0)
                         cand.write((json.dumps(env, indent=2) + "\n").encode("utf-8"))
@@ -148,9 +116,12 @@ class JsonHivePlatformRegistry:
                         fh = cand
                         break
                     except OSError:
-                        if locked:
-                            _os_lock_op(cand.fileno(), False)
-                        cand.close()
+                        if cand is not None:
+                            if locked:
+                                with suppress(OSError):
+                                    _os_lock_op(cand.fileno(), False)
+                            with suppress(OSError):
+                                cand.close()
                 if (rem := deadline - time.monotonic()) <= 0:
                     raise TimeoutError(f"Timed out acquiring '{self.lock_path}'.")
                 time.sleep(min(backoff, max(0.005, rem)) + ((time.monotonic_ns() % 7) * 0.001))

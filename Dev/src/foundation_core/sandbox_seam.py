@@ -84,8 +84,30 @@ def _normalize_path(raw: str | Path) -> Path:
         text = f"{text[0].upper()}:{os.sep}"
     return Path(os.path.abspath(text))
 
+def _to_long_path(path: Path) -> Path:
+    norm = _normalize_path(path)
+    if os.name != "nt":
+        return norm
+    suffix: list[str] = []
+    cur = norm
+    while not cur.exists() and cur.parent != cur:
+        suffix.append(cur.name)
+        cur = cur.parent
+    if cur.exists():
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        buf = ctypes.create_unicode_buffer(1024)
+        needed = k32.GetLongPathNameW(str(cur), buf, len(buf))
+        if needed > len(buf):
+            buf = ctypes.create_unicode_buffer(needed + 1)
+            needed = k32.GetLongPathNameW(str(cur), buf, len(buf))
+        if needed > 0 and buf.value:
+            cur = Path(buf.value)
+    for part in reversed(suffix):
+        cur = cur / part
+    return Path(os.path.abspath(str(cur)))
+
 def _norm_key(path: Path) -> Path:
-    return Path(os.path.normcase(os.path.abspath(str(path))))
+    return Path(os.path.normcase(os.path.abspath(str(_to_long_path(path)))))
 
 def _is_same_or_child(candidate: Path, root: Path) -> bool:
     cand_k, root_k = _norm_key(candidate), _norm_key(root)
@@ -148,18 +170,33 @@ def _collect_host_collision_roots(subst_map: Mapping[str, Path], scopes: list[Pa
     for k, evs in (("Windows", ("SystemRoot", "WINDIR")), ("ProgramFiles", ("ProgramFiles",)), ("ProgramFilesX86", ("ProgramFiles(x86)",)), ("ProgramData", ("ProgramData",))):
         if val := win_kf.get(k) or next((_normalize_path(e) for v in evs if (e := os.environ.get(v))), None):
             forbidden.append(val)
-    la = win_kf.get("LocalAppData") or next((p for v in (os.environ.get("LOCALAPPDATA"),) if v and _is_host_env(p := _normalize_path(v))), None)
-    ra = win_kf.get("RoamingAppData") or next((p for v in (os.environ.get("APPDATA"),) if v and _is_host_env(p := _normalize_path(v))), None)
+    env_profile = _to_long_path(_normalize_path(raw_up)) if (raw_up := os.environ.get("USERPROFILE")) else None
+    def _unmap_kf(kf_key: str, default_rel: tuple[str, ...], fallback_home: Path) -> Path:
+        cand = _to_long_path(raw_kf) if (raw_kf := win_kf.get(kf_key)) is not None else fallback_home.joinpath(*default_rel)
+        if env_profile is not None and _is_same_or_child(cand, env_profile) and not _is_same_or_child(cand, fallback_home):
+            rel = cand.parts[len(env_profile.parts) :]
+            cand = fallback_home.joinpath(*rel) if rel else fallback_home.joinpath(*default_rel)
+        return fallback_home.joinpath(*default_rel) if any(_is_same_or_child(cand, sc) for sc in scopes) else cand
+    homes = [p for raw in (win_kf.get("Profile"), Path.home(), os.environ.get("USERPROFILE"), os.environ.get("HOME")) if raw and _is_host_env(p := _to_long_path(_normalize_path(raw)))]
+    if "Profile" in win_kf and not any(_is_same_or_child(win_kf["Profile"], sc) for sc in scopes):
+        homes = [_to_long_path(win_kf["Profile"])]
+    primary_home = homes[0] if homes else None
+    la_raw = _unmap_kf("LocalAppData", ("AppData", "Local"), primary_home) if primary_home is not None and "LocalAppData" in win_kf else win_kf.get("LocalAppData")
+    ra_raw = _unmap_kf("RoamingAppData", ("AppData", "Roaming"), primary_home) if primary_home is not None and "RoamingAppData" in win_kf else win_kf.get("RoamingAppData")
+    la = la_raw if la_raw is not None and not any(_is_same_or_child(la_raw, sc) for sc in scopes) else next((p for v in (os.environ.get("LOCALAPPDATA"),) if v and _is_host_env(p := _to_long_path(_normalize_path(v)))), None)
+    ra = ra_raw if ra_raw is not None and not any(_is_same_or_child(ra_raw, sc) for sc in scopes) else next((p for v in (os.environ.get("APPDATA"),) if v and _is_host_env(p := _to_long_path(_normalize_path(v)))), None)
     if la is not None:
         user_homes.append(la)
         forbidden.append(la / "Programs")
         temp_roots.append(la / "Temp")
     if ra is not None:
         forbidden.append(ra)
-    homes = [win_kf["Profile"]] if "Profile" in win_kf else [p for raw in (Path.home(), os.environ.get("USERPROFILE"), os.environ.get("HOME")) if raw and _is_host_env(p := _normalize_path(raw))]
     for h in homes:
         user_homes.append(h)
-        forbidden.extend((win_kf.get("Desktop") or (h / "Desktop"), win_kf.get("Documents") or (h / "Documents")))
+        for kf_key, default_sub in (("Desktop", ("Desktop",)), ("Documents", ("Documents",))):
+            resolved_kf = _unmap_kf(kf_key, default_sub, h)
+            if not any(_is_same_or_child(resolved_kf, sc) for sc in scopes):
+                forbidden.append(resolved_kf)
     with suppress(OSError):
         if not any(_is_same_or_child(st := _normalize_path(tempfile.gettempdir()), sc) for sc in scopes):
             temp_roots.append(st)

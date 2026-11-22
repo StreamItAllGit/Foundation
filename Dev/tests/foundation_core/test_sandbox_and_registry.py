@@ -93,7 +93,7 @@ def _isolated_tool_env(fake_home: Path) -> dict[str, str]:
 
 class TestSandboxSeam(unittest.TestCase):
     def test_sdk_version_and_inactive_production_safety(self) -> None:
-        self.assertEqual(foundation_core.SDK_VERSION, "0.5.3")
+        self.assertEqual(foundation_core.SDK_VERSION, "0.5.4")
         desktop_name = exebox_stream.get_thread_desktop_name()
         self.assertTrue(bool(desktop_name))
         res = resolve_sandbox_environment(env_override={})
@@ -174,6 +174,42 @@ class TestSandboxSeam(unittest.TestCase):
             with self.assertRaises(SandboxContainmentError) as col_ctx:
                 resolve_sandbox_environment(env_override={"FOUNDATION_SANDBOX_ROOT": str(Path(host_local) / "Programs")})
             self.assertEqual(col_ctx.exception.exit_code, CONTAINMENT_EXIT_CODE)
+
+    def test_redirected_userprofile_and_windows_short_8_3_path_do_not_false_collide(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            long_parent = Path(tmp) / "Runner Admin Home"
+            sbx = long_parent / "sandbox"
+            c_dir = sbx / "C"
+            prof = c_dir / "Users" / "Sandbox"
+            (prof / "AppData" / "Local" / "Temp").mkdir(parents=True, exist_ok=True)
+            (prof / "Desktop").mkdir(parents=True, exist_ok=True)
+
+            short_sbx = str(sbx)
+            if os.name == "nt":
+                k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                buf = ctypes.create_unicode_buffer(1024)
+                if k32.GetShortPathNameW(str(sbx), buf, len(buf)) > 0 and buf.value:
+                    short_sbx = buf.value
+
+            child_code = "\n".join([
+                "import sys",
+                f"sys.path.insert(0, {repr(str(SRC_ROOT))})",
+                "from foundation_core.sandbox_seam import resolve_sandbox_environment, is_path_within_sandbox",
+                "res = resolve_sandbox_environment()",
+                "assert res.is_sandbox_active",
+                "assert is_path_within_sandbox(str(res.sandbox_profile_dir / 'Desktop'), res)",
+            ])
+            child_env = dict(os.environ)
+            child_env["FOUNDATION_SANDBOX_ROOT"] = short_sbx
+            child_env["SANDBOX_C_DRIVE"] = str(c_dir)
+            child_env["FOUNDATION_SANDBOX_PROFILE_DIR"] = str(prof)
+            child_env["USERPROFILE"] = str(prof)
+            child_env["LOCALAPPDATA"] = str(prof / "AppData" / "Local")
+            child_env["APPDATA"] = str(prof / "AppData" / "Roaming")
+            child_env["TEMP"] = str(prof / "AppData" / "Local" / "Temp")
+            child_env["TMP"] = str(prof / "AppData" / "Local" / "Temp")
+            proc = subprocess.run([sys.executable, "-B", "-c", child_code], env=child_env, capture_output=True, text=True, timeout=20, check=False)
+            self.assertEqual(proc.returncode, 0, f"{proc.stderr}\n{proc.stdout}")
 
 
 class TestPseudoRegistry(unittest.TestCase):
@@ -291,9 +327,20 @@ class TestPseudoRegistry(unittest.TestCase):
                 )
                 for w in range(4)
             ]
-            for proc in procs:
-                out, err = proc.communicate(timeout=30)
-                self.assertEqual(proc.returncode, 0, f"Worker failed: {err}\n{out}")
+            try:
+                for proc in procs:
+                    out, err = proc.communicate(timeout=30)
+                    self.assertEqual(proc.returncode, 0, f"Worker failed: {err}\n{out}")
+            finally:
+                for proc in procs:
+                    if proc.poll() is None:
+                        proc.kill()
+                    if proc.stdout is not None:
+                        proc.stdout.close()
+                    if proc.stderr is not None:
+                        proc.stderr.close()
+                    if proc.returncode is None:
+                        proc.wait(timeout=5)
 
             for w in range(4):
                 for i in range(8):
@@ -332,7 +379,7 @@ class TestSandboxToolsCli(unittest.TestCase):
             manifest = json.loads((sbx_root / "sandbox.manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["schemaVersion"], 2)
             self.assertEqual(manifest["appId"], "foundation-sandbox")
-            self.assertEqual(manifest["version"], "0.5.3")
+            self.assertEqual(manifest["version"], "0.5.4")
             self.assertNotIn("manifestType", manifest)
             self.assertEqual(len(manifest["sandboxMounts"]), 4)
             self.assertTrue((sbx_root / "registry" / "registry.baseline.json").is_file())
