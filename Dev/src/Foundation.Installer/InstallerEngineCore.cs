@@ -46,7 +46,6 @@ public sealed record FoundationInstallResult(
 public sealed partial class InstallerEngineCore
 {
     private const long MaxExpandedPayloadBytes = 2L * 1024 * 1024 * 1024;
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
     private static readonly HashSet<string> ProtectedTopDirectories = new(StringComparer.OrdinalIgnoreCase)
     {
         "data", "logs", "backups", "drops", "saves_vault", "_Quarantine", "registry"
@@ -258,7 +257,7 @@ public sealed partial class InstallerEngineCore
                 PayloadSha256 = payloadSha256,
                 InstalledRelativeFiles = installedFiles
             };
-            File.WriteAllText(Path.Combine(installDir, "app", "install-manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions), new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(installDir, "app", "install-manifest.json"), JsonSerializer.Serialize(manifest, FoundationInstallerJsonContext.Default.FoundationInstallManifest), new UTF8Encoding(false));
             RegisterSuiteManifestIfPresent(installDir);
             InstallerEngine.TrySaveLastInstallBaseDir(
                 Registry,
@@ -284,7 +283,7 @@ public sealed partial class InstallerEngineCore
 
         try
         {
-            var manifest = JsonSerializer.Deserialize<FoundationInstallManifest>(File.ReadAllText(manifestPath, Encoding.UTF8), JsonOptions);
+            var manifest = JsonSerializer.Deserialize(File.ReadAllText(manifestPath, Encoding.UTF8), FoundationInstallerJsonContext.Default.FoundationInstallManifest);
             if (manifest is null || manifest.InstalledRelativeFiles.Count == 0)
             {
                 diagnosticMessage = "Install manifest is empty or unreadable.";

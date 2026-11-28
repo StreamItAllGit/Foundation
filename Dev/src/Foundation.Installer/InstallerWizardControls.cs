@@ -1,56 +1,263 @@
 // @module: Foundation.Installer.UI.Controls
-// @purpose: Provides color parsing, DWM dark titlebar styling, and factory helpers for the 650x434 / 650x544 Deep Slate Dark WinForms Setup Wizard.
-// @depends-on: System, System.Drawing, System.Globalization, System.Runtime.InteropServices, System.Windows.Forms
-// @exports: InstallerWizardControls
+// @purpose: Lightweight NativeAOT-safe control abstractions, hex color utilities, and DWM dark titlebar helpers replacing WinForms Control/Color types.
+// @depends-on: System, System.Collections.Generic, System.Globalization, System.IO, System.Linq, System.Reflection
+// @exports: WizardPoint, WizardSize, WizardColor, WizardControl, WizardPanel, WizardLabel, WizardTextBox, WizardButton, WizardCheckBox, WizardRadioButton, WizardProgressBar, InstallerWizardControls
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Windows.Forms;
 
 namespace Foundation.Installer;
 
-/// <summary>
-/// Shared dark-theme control builders and hex color utilities for Foundation.Installer's Setup Wizard (Standard 09).
-/// </summary>
-public static class InstallerWizardControls
+public readonly record struct WizardPoint(int X, int Y);
+
+public readonly record struct WizardSize(int Width, int Height);
+
+public readonly record struct WizardColor(byte R, byte G, byte B, byte A = 255)
 {
-    public static readonly Color TextPrimary = Color.FromArgb(236, 240, 248);
-    public static readonly Color TextMuted = Color.FromArgb(148, 163, 184);
-    public static readonly Color BgInput = Color.FromArgb(17, 21, 29);
-    public static readonly Color BorderSubtle = Color.FromArgb(42, 51, 68);
-    public static readonly Color AccentEmerald = Color.FromArgb(16, 185, 129);
-    public static readonly Color AccentDanger = Color.FromArgb(239, 68, 68);
-    private const int DwmUseImmersiveDarkMode = 20;
+    public static WizardColor White => new(255, 255, 255, 255);
+    public static WizardColor Transparent => new(0, 0, 0, 0);
 
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+    public static WizardColor FromRgb(int r, int g, int b) =>
+        new((byte)Math.Clamp(r, 0, 255), (byte)Math.Clamp(g, 0, 255), (byte)Math.Clamp(b, 0, 255), 255);
 
-    public static void EnableDarkTitleBar(IntPtr hwnd)
+    public uint ToColorRef() => (uint)(R | (G << 8) | (B << 16));
+}
+
+public class WizardControl : IDisposable
+{
+    private string _text = string.Empty;
+    private WizardPoint _location;
+    private WizardSize _size;
+    private bool _visible = true;
+    private bool _enabled = true;
+    private WizardColor _foreColor = InstallerWizardControls.TextPrimary;
+    private WizardColor _backColor = WizardColor.Transparent;
+    private WizardColor? _borderColor;
+    private Action<WizardControl, string>? _syncCallback;
+
+    public string Name { get; set; } = string.Empty;
+    public IntPtr NativeHwnd { get; internal set; }
+    public WizardControl? Parent { get; internal set; }
+    public string FontFamily { get; set; } = "Segoe UI";
+    public float FontSize { get; set; } = 9.0f;
+    public bool Bold { get; set; }
+    public bool AutoSize { get; set; }
+    public bool AutoEllipsis { get; set; }
+    public int BorderSize { get; set; }
+    public string? TooltipText { get; internal set; }
+
+    public string Text
     {
-        if (hwnd == IntPtr.Zero) return;
-        try
+        get => _text;
+        set
         {
-            int useDark = 1;
-            DwmSetWindowAttribute(hwnd, DwmUseImmersiveDarkMode, ref useDark, sizeof(int));
-        }
-        catch (Exception ex)
-        {
-            _ = ex; // Systems without DWM dark titlebar support proceed with default window frame.
+            string next = value ?? string.Empty;
+            if (string.Equals(_text, next, StringComparison.Ordinal)) return;
+            _text = next;
+            _syncCallback?.Invoke(this, nameof(Text));
+            TextChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
-    public static Color ParseHexColor(string? hex, Color fallback)
+    public WizardPoint Location
+    {
+        get => _location;
+        set { if (_location != value) { _location = value; _syncCallback?.Invoke(this, nameof(Location)); } }
+    }
+
+    public int Left { get => _location.X; set => Location = new WizardPoint(value, _location.Y); }
+    public int Top { get => _location.Y; set => Location = new WizardPoint(_location.X, value); }
+
+    public WizardSize Size
+    {
+        get => _size;
+        set { if (_size != value) { _size = value; _syncCallback?.Invoke(this, nameof(Size)); } }
+    }
+
+    public WizardSize ClientSize => _size;
+    public int Width { get => _size.Width; set => Size = new WizardSize(value, _size.Height); }
+    public int Height { get => _size.Height; set => Size = new WizardSize(_size.Width, value); }
+    public int Right => _location.X + _size.Width;
+    public int Bottom => _location.Y + _size.Height;
+
+    public bool Visible
+    {
+        get => _visible;
+        set { if (_visible != value) { _visible = value; _syncCallback?.Invoke(this, nameof(Visible)); } }
+    }
+
+    public bool Enabled
+    {
+        get => _enabled;
+        set { if (_enabled != value) { _enabled = value; _syncCallback?.Invoke(this, nameof(Enabled)); } }
+    }
+
+    public WizardColor ForeColor
+    {
+        get => _foreColor;
+        set { if (_foreColor != value) { _foreColor = value; _syncCallback?.Invoke(this, nameof(ForeColor)); } }
+    }
+
+    public WizardColor BackColor
+    {
+        get => _backColor;
+        set { if (_backColor != value) { _backColor = value; _syncCallback?.Invoke(this, nameof(BackColor)); } }
+    }
+
+    public WizardColor? BorderColor
+    {
+        get => _borderColor;
+        set { if (_borderColor != value) { _borderColor = value; _syncCallback?.Invoke(this, nameof(BorderColor)); } }
+    }
+
+    public event EventHandler? TextChanged;
+
+    internal void AttachSyncCallback(Action<WizardControl, string> callback) => _syncCallback = callback;
+
+    internal void SetTextFromNative(string value)
+    {
+        string next = value ?? string.Empty;
+        if (string.Equals(_text, next, StringComparison.Ordinal)) return;
+        _text = next;
+        TextChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public virtual void Dispose() { }
+}
+
+public sealed class WizardPanel : WizardControl
+{
+    public List<WizardControl> Controls { get; } = new();
+
+    public void AddControl(WizardControl child)
+    {
+        child.Parent = this;
+        Controls.Add(child);
+    }
+}
+
+public sealed class WizardLabel : WizardControl
+{
+    public int PreferredWidth => InstallerWizardControls.MeasureLabelWidth(Text, FontFamily, FontSize, Bold);
+}
+
+public sealed class WizardTextBox : WizardControl
+{
+    public bool Multiline { get; set; }
+    public bool ReadOnly { get; set; }
+    public string PlaceholderText { get; set; } = string.Empty;
+
+    public void AppendText(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        Text += text;
+    }
+}
+
+public sealed class WizardButton : WizardControl
+{
+    public bool TextAlignLeft { get; set; }
+    public event EventHandler? Click;
+    internal void RaiseClick() => Click?.Invoke(this, EventArgs.Empty);
+}
+
+public sealed class WizardCheckBox : WizardControl
+{
+    private bool _checked;
+    public event EventHandler? CheckedChanged;
+
+    public bool Checked
+    {
+        get => _checked;
+        set
+        {
+            if (_checked == value) return;
+            _checked = value;
+            CheckedChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+}
+
+public sealed class WizardRadioButton : WizardControl
+{
+    private bool _checked;
+    public event EventHandler? CheckedChanged;
+
+    public bool Checked
+    {
+        get => _checked;
+        set
+        {
+            if (_checked == value) return;
+            _checked = value;
+            if (_checked && Parent is WizardPanel panel)
+            {
+                foreach (WizardControl sibling in panel.Controls)
+                {
+                    if (!ReferenceEquals(sibling, this) && sibling is WizardRadioButton rb && rb._checked)
+                    {
+                        rb.Checked = false;
+                    }
+                }
+            }
+            CheckedChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+}
+
+public sealed class WizardProgressBar : WizardControl
+{
+    private int _value;
+    private bool _isMarquee;
+    public int Minimum { get; set; }
+    public int Maximum { get; set; } = 100;
+
+    public int Value
+    {
+        get => _value;
+        set
+        {
+            int clamped = Math.Clamp(value, Minimum, Maximum);
+            if (_value == clamped) return;
+            _value = clamped;
+        }
+    }
+
+    public bool IsMarquee
+    {
+        get => _isMarquee;
+        set => _isMarquee = value;
+    }
+}
+
+public static class InstallerWizardControls
+{
+    public static readonly WizardColor TextPrimary = WizardColor.FromRgb(236, 240, 248);
+    public static readonly WizardColor TextMuted = WizardColor.FromRgb(148, 163, 184);
+    public static readonly WizardColor BgInput = WizardColor.FromRgb(17, 21, 29);
+    public static readonly WizardColor BorderSubtle = WizardColor.FromRgb(42, 51, 68);
+    public static readonly WizardColor AccentEmerald = WizardColor.FromRgb(16, 185, 129);
+    public static readonly WizardColor AccentDanger = WizardColor.FromRgb(239, 68, 68);
+
+    public static void EnableDarkTitleBar(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero || !OperatingSystem.IsWindows()) return;
+        try
+        {
+            int useDark = 1;
+            _ = Win32Native.DwmSetWindowAttribute(hwnd, Win32Native.DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, sizeof(int));
+        }
+        catch (Exception ex)
+        {
+            _ = ex;
+        }
+    }
+
+    public static WizardColor ParseHexColor(string? hex, WizardColor fallback)
     {
         if (string.IsNullOrWhiteSpace(hex))
-        {
             return fallback;
-        }
 
         string cleaned = hex.Trim().TrimStart('#');
         if (cleaned.Length == 6 &&
@@ -58,191 +265,138 @@ public static class InstallerWizardControls
             int.TryParse(cleaned.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int g) &&
             int.TryParse(cleaned.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int b))
         {
-            return Color.FromArgb(r, g, b);
+            return WizardColor.FromRgb(r, g, b);
         }
 
         return fallback;
     }
 
-    public static CheckBox CreateDarkCheckBox(string text, int x, int y, bool isChecked, Color? foreColor = null)
+    public static int MeasureLabelWidth(string? text, string fontFamily, float fontSizePt, bool bold)
     {
-        return new CheckBox
+        if (string.IsNullOrEmpty(text)) return 0;
+        if (OperatingSystem.IsWindows())
+        {
+            IntPtr hdc = Win32Native.GetDC(IntPtr.Zero);
+            if (hdc != IntPtr.Zero)
+            {
+                try
+                {
+                    int pxHeight = -Math.Max(11, (int)Math.Round(fontSizePt * 96.0 / 72.0));
+                    IntPtr hfont = Win32Native.CreateFontW(pxHeight, 0, 0, 0, bold ? 700 : 400, 0, 0, 0, 1, 0, 0, 5, 0, fontFamily);
+                    if (hfont != IntPtr.Zero)
+                    {
+                        IntPtr old = Win32Native.SelectObject(hdc, hfont);
+                        try
+                        {
+                            if (Win32Native.GetTextExtentPoint32W(hdc, text, text.Length, out Win32Native.SIZE sz))
+                                return Math.Max(16, sz.cx + 4);
+                        }
+                        finally
+                        {
+                            _ = Win32Native.SelectObject(hdc, old);
+                            _ = Win32Native.DeleteObject(hfont);
+                        }
+                    }
+                }
+                finally
+                {
+                    _ = Win32Native.ReleaseDC(IntPtr.Zero, hdc);
+                }
+            }
+        }
+        return (int)Math.Ceiling(text.Length * fontSizePt * (bold ? 0.85 : 0.75)) + 6;
+    }
+
+    public static WizardCheckBox CreateDarkCheckBox(string text, int x, int y, bool isChecked, WizardColor? foreColor = null) =>
+        new()
         {
             Text = text,
             Checked = isChecked,
             AutoSize = true,
-            Location = new Point(x, y),
+            Location = new WizardPoint(x, y),
+            Size = new WizardSize(560, 22),
             ForeColor = foreColor ?? TextPrimary,
-            BackColor = Color.Transparent,
-            Font = new Font("Segoe UI", 9.0f, FontStyle.Regular),
-            Cursor = Cursors.Hand
+            FontFamily = "Segoe UI",
+            FontSize = 9.0f
         };
-    }
 
-    public static RadioButton CreateDarkRadioButton(string text, int x, int y, bool isChecked, Color? foreColor = null)
-    {
-        return new RadioButton
+    public static WizardRadioButton CreateDarkRadioButton(string text, int x, int y, bool isChecked, WizardColor? foreColor = null) =>
+        new()
         {
             Text = text,
             Checked = isChecked,
             AutoSize = true,
-            Location = new Point(x, y),
+            Location = new WizardPoint(x, y),
+            Size = new WizardSize(150, 22),
             ForeColor = foreColor ?? TextPrimary,
-            BackColor = Color.Transparent,
-            Font = new Font("Segoe UI", 9.0f, FontStyle.Regular),
-            Cursor = Cursors.Hand
+            FontFamily = "Segoe UI",
+            FontSize = 9.0f
         };
-    }
 
-    public static TextBox CreateDarkPathTextBox(string text, Point location, int width)
-    {
-        return new TextBox
+    public static WizardTextBox CreateDarkPathTextBox(string text, WizardPoint location, int width) =>
+        new()
         {
             Text = text,
             Location = location,
-            Width = width,
-            Height = 29,
+            Size = new WizardSize(width, 29),
             BackColor = BgInput,
             ForeColor = TextPrimary,
-            BorderStyle = BorderStyle.FixedSingle,
-            Font = new Font("Consolas", 9.5f, FontStyle.Regular),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left
+            FontFamily = "Consolas",
+            FontSize = 9.5f
         };
-    }
 
-    public static Label CreateSectionLabel(string text, Point location, Color? foreColor = null)
-    {
-        return new Label
+    public static WizardLabel CreateSectionLabel(string text, WizardPoint location, WizardColor? foreColor = null) =>
+        new()
         {
             Text = text,
-            Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold),
-            ForeColor = foreColor ?? TextPrimary,
+            FontFamily = "Segoe UI Semibold",
+            FontSize = 9.5f,
+            Bold = true,
             AutoSize = true,
-            Location = location
+            Location = location,
+            Size = new WizardSize(Math.Max(120, MeasureLabelWidth(text, "Segoe UI Semibold", 9.5f, true)), 20),
+            ForeColor = foreColor ?? TextPrimary
         };
-    }
 
-    public static Button CreateFlatButton(
+    public static WizardButton CreateFlatButton(
         string text,
-        Point location,
-        Size size,
-        Color backColor,
-        Color foreColor,
-        Color? borderColor = null,
-        bool bold = false)
-    {
-        var btn = new Button
+        WizardPoint location,
+        WizardSize size,
+        WizardColor backColor,
+        WizardColor foreColor,
+        WizardColor? borderColor = null,
+        bool bold = false) =>
+        new()
         {
             Text = text,
             Location = location,
             Size = size,
-            FlatStyle = FlatStyle.Flat,
             BackColor = backColor,
             ForeColor = foreColor,
-            Font = new Font(bold ? "Segoe UI Semibold" : "Segoe UI", 9.25f, bold ? FontStyle.Bold : FontStyle.Regular),
-            Cursor = Cursors.Hand,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left
+            BorderColor = borderColor,
+            BorderSize = borderColor.HasValue ? 1 : 0,
+            FontFamily = bold ? "Segoe UI Semibold" : "Segoe UI",
+            FontSize = 9.25f,
+            Bold = bold
         };
-        btn.FlatAppearance.BorderSize = borderColor.HasValue ? 1 : 0;
-        if (borderColor.HasValue)
-        {
-            btn.FlatAppearance.BorderColor = borderColor.Value;
-        }
-        return btn;
-    }
-
-    public static TextBox CreateDarkLogTextBox(Point location, Size size)
-    {
-        return new TextBox
-        {
-            Location = location,
-            Size = size,
-            Multiline = true,
-            ReadOnly = true,
-            ScrollBars = ScrollBars.Vertical,
-            BackColor = BgInput,
-            ForeColor = TextMuted,
-            BorderStyle = BorderStyle.FixedSingle,
-            Font = new Font("Consolas", 8.5f, FontStyle.Regular),
-            Visible = false,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left
-        };
-    }
-
-    public static ToolTip CreateDarkTooltipController() =>
-        new() { AutoPopDelay = 8000, InitialDelay = 300, ReshowDelay = 100, ShowAlways = true };
 
     public static void ApplyTooltips(
-        ToolTip controller,
+        IDictionary<WizardControl, string> store,
         IReadOnlyDictionary<string, InstallerMarkupTooltip>? tooltips,
-        IReadOnlyDictionary<string, Control> controlMap)
+        IReadOnlyDictionary<string, WizardControl> controlMap)
     {
         if (tooltips is null || tooltips.Count == 0) return;
-        foreach (KeyValuePair<string, Control> kv in controlMap)
+        foreach (KeyValuePair<string, WizardControl> kv in controlMap)
         {
             if (tooltips.TryGetValue(kv.Key, out InstallerMarkupTooltip? tip))
             {
                 string formatted = tip.FormatTwoLine();
                 if (!string.IsNullOrWhiteSpace(formatted))
-                    controller.SetToolTip(kv.Value, formatted);
-            }
-        }
-    }
-
-    public static Image? TryLoadImage(string? pathOrResource, Assembly? assembly)
-    {
-        if (string.IsNullOrWhiteSpace(pathOrResource)) return null;
-        string trimmed = pathOrResource.Trim();
-        try
-        {
-            string resolved = Path.IsPathRooted(trimmed) ? trimmed : Path.Combine(AppContext.BaseDirectory, trimmed);
-            if (File.Exists(resolved))
-            {
-                using var fs = File.OpenRead(resolved);
-                using var img = Image.FromStream(fs);
-                return new Bitmap(img);
-            }
-
-            if (assembly is not null)
-            {
-                string? resName = assembly.GetManifestResourceNames()
-                    .FirstOrDefault(n => n.EndsWith(trimmed, StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrWhiteSpace(resName))
                 {
-                    using Stream? stream = assembly.GetManifestResourceStream(resName);
-                    if (stream is not null)
-                    {
-                        using var img = Image.FromStream(stream);
-                        return new Bitmap(img);
-                    }
+                    kv.Value.TooltipText = formatted;
+                    store[kv.Value] = formatted;
                 }
             }
         }
-        catch (Exception ex) { _ = ex; /* optional logo load failure falls back cleanly */ }
-        return null;
-    }
-
-    public static Icon? TryLoadIcon(string? pathOrResource, Assembly? assembly)
-    {
-        if (string.IsNullOrWhiteSpace(pathOrResource)) return null;
-        string trimmed = pathOrResource.Trim();
-        try
-        {
-            string resolved = Path.IsPathRooted(trimmed) ? trimmed : Path.Combine(AppContext.BaseDirectory, trimmed);
-            if (File.Exists(resolved)) return new Icon(resolved);
-
-            if (assembly is not null)
-            {
-                string? resName = assembly.GetManifestResourceNames()
-                    .FirstOrDefault(n => n.EndsWith(trimmed, StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrWhiteSpace(resName))
-                {
-                    using Stream? stream = assembly.GetManifestResourceStream(resName);
-                    if (stream is not null) return new Icon(stream);
-                }
-            }
-        }
-        catch (Exception ex) { _ = ex; /* optional logo load failure falls back cleanly */ }
-        return null;
     }
 }

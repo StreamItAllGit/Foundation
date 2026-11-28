@@ -51,12 +51,6 @@ public sealed record PidSafeLockEnvelope
 /// </summary>
 public sealed class PidSafeLockfile : IDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true
-    };
-
     private bool _disposed;
 
     public string LockFilePath { get; }
@@ -165,7 +159,7 @@ public sealed class PidSafeLockfile : IDisposable
         try
         {
             string raw = File.ReadAllText(lockFilePath, Encoding.UTF8);
-            envelope = JsonSerializer.Deserialize<PidSafeLockEnvelope>(raw, JsonOptions);
+            envelope = JsonSerializer.Deserialize(raw, FoundationCoreJsonContext.Default.PidSafeLockEnvelope);
             if (envelope is null || envelope.Pid <= 0)
             {
                 return false;
@@ -230,7 +224,7 @@ public sealed class PidSafeLockfile : IDisposable
         string tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
         try
         {
-            string json = JsonSerializer.Serialize(envelope, JsonOptions);
+            string json = JsonSerializer.Serialize(envelope, FoundationCoreJsonContext.Default.PidSafeLockEnvelope);
             File.WriteAllText(tempPath, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             File.Move(tempPath, path, overwrite: true);
         }

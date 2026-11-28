@@ -15,6 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Fixtures\TestSlim.uninstaller.exe.gz" LogicalName="SlimTestApp.Installer.Embedded.uninstaller.exe.gz" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Foundation.Core\Foundation.Core.csproj" />
     <ProjectReference Include="..\..\src\Foundation.Retro\Foundation.Retro.csproj" />
     <ProjectReference Include="..\..\src\Foundation.Sidecars\Foundation.Sidecars.csproj" />

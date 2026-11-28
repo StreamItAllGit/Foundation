@@ -1,4 +1,4 @@
-# Foundation (`v0.5.5` — Beta)
+# Foundation (`v0.5.6` — Beta)
 
 [![Beta Release](https://img.shields.io/github/v/release/StreamItAllGit/Foundation?include_prereleases&label=Beta%20Release&color=f59e0b)](https://github.com/StreamItAllGit/Foundation/releases)
 [![Documentation Site](https://img.shields.io/badge/Docs-GitHub%20Pages-0ea5e9)](https://streamitallgit.github.io/Foundation/)
@@ -8,15 +8,45 @@
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB)
 ![React / TypeScript](https://img.shields.io/badge/React%20%2F%20TypeScript-19-61DAFB)
 
-> **Release Status:** **Beta (`v0.5.5` — Pre-1.0)**. Foundation and all sibling projects default to Beta until explicitly promoted out of Beta at `v1.0.0`.
+> **Release Status:** **Beta (`v0.5.6` — Pre-1.0)**. Foundation and all sibling projects default to Beta until explicitly promoted out of Beta at `v1.0.0`.
 
-**Modular `.NET 8`, React/TypeScript, and Python SDK** for Windows desktop applications (`Foundation.Core`, `Foundation.Retro`, `Foundation.Sidecars`, `Foundation.Server`, `Foundation.Launcher`, `Foundation.UI` + `@foundation/ui`, `Foundation.Installer`, `Foundation.Automation`, Python `foundation_core`, and cross-platform/sandbox automation scripts).
+**Modular `.NET 8`, React/TypeScript, and pure-stdlib Python SDK** for Windows desktop apps, installers, sandboxing, SQLite persistence, and UI automation.
 
-> **What's New in `v0.5.5`:** Normalized `tempfile.TemporaryDirectory()` fixture paths with `.resolve()` across Python `GranularSettingsStore` tests for Windows CI 8.3 short-path stability (`23/23` Python + `55/55` `.NET` passing) alongside unified `0.5.5` SDK lockstep, building on `v0.5.4`'s Windows 8.3 (`GetLongPathNameW`) and child-`USERPROFILE` sandbox unmapping, `.tmp.driveupload`/`.tmp.drivedownload` and OS junk scan exclusions, scoped `.github/workflows/release.yml` fail-fast guards, and pure-stdlib `foundation_core` parity (`cli.py` subcommand `--help` passthrough & `config/settings.json` default, `GranularSettingsStore`, `PRAGMA user_version` `SqliteSchemaMigrationRunner`, `PidSentinelLock` `±2s` PID-reuse verification & heartbeats, `RollingLogSink`, Zero-PII `CrashDumper`, and `AutomationLoopbackServer`).
+> **Highlights in `v0.5.6`:** NativeAOT-ready Win32 P/Invoke `Foundation.Installer` (zero WinForms/runtime bloat) + slim embedded uninstaller extraction + Start Menu collision guard, pure-stdlib Python `foundation_core.{secrets,sidecars}` DPAPI/hash-sidecar parity, lock-free `SqliteWalPool` WAL init, and verified ReleaseHub GitHub/R2 fallback updates ([full release notes](CHANGELOG.md#056---2026-11-28)).
+
+```mermaid
+flowchart LR
+  App["Desktop / Web / Python App"] --> Core["Foundation.Core / foundation_core"]
+  App --> UI["Foundation.UI + @foundation/ui (React 19)"]
+  App --> Inst["Foundation.Installer (NativeAOT Win32)"]
+  App --> Auto["Foundation.Automation (127.0.0.1 Loopback)"]
+  Core --> DB["SQLite WAL + DPAPI Secrets + 4-Drive Sandbox"]
+```
 
 ---
 
-## 1. Documentation & Navigation Map
+## 1. Hello World (Consumer Quickstart)
+
+```csharp
+using Foundation.Core;
+
+var env = new AppEnvironment("myapp", args);
+var walPool = new SqliteWalPool(Path.Combine(env.DataDirectory, "app.db"));
+await using var conn = await walPool.OpenConnectionAsync();
+```
+
+```python
+from foundation_core import DpapiSecretStore, open_wal_sqlite, parse_standard_cli_flags
+
+opts = parse_standard_cli_flags(app_name="MyApp", app_version="0.1.0")
+DpapiSecretStore(opts.data_dir).set_secret("apiToken", "example")
+with open_wal_sqlite(opts.data_dir / "app.db") as conn:
+    conn.execute("SELECT 1").fetchone()
+```
+
+---
+
+## 2. Documentation & Navigation Map
 
 | What You Need | Destination | Summary |
 |---|---|---|
@@ -29,7 +59,7 @@
 
 ---
 
-## 2. Subproject Architecture Overview (`v0.5.5` — Beta)
+## 3. Subproject Architecture Overview (`v0.5.6` — Beta)
 
 - **C# Core & Runtime (`Dev/src/Foundation.Core/` — `27` files, `net8.0`):**
   - Environment, sandboxing & registry: [`AppEnvironment`](Dev/src/Foundation.Core/AppEnvironment.cs) (`--data-dir`, `--config`, `--log-dir`, `--port`, `--dry-run`, `UiPresentationMode`), [`KnownFolderPaths`](Dev/src/Foundation.Core/KnownFolderPaths.cs) (with child-`USERPROFILE` `Desktop`/`Documents`/`AppData` unmapping), [`SandboxEnvironmentSeam`](Dev/src/Foundation.Core/SandboxEnvironmentSeam.cs) (`ExitCode = 3` containment guards with Windows 8.3 `GetLongPathNameW` normalization), [`JsonHivePlatformRegistry`](Dev/src/Foundation.Core/JsonHivePlatformRegistry.cs) (`IPlatformRegistry` atomic `.tmp -> .bak` hive + `WindowsPlatformRegistry`), [`SandboxDriveController`](Dev/src/Foundation.Core/SandboxDriveController.cs).
@@ -40,17 +70,17 @@
   - **Web & Auth Server (`Foundation.Server`, `3` files):** Tiered localhost/Tailscale/PBKDF2/HMAC authentication and `/api/v1/suite/manifest` endpoints.
   - **Clean-Root Launcher (`Foundation.Launcher`, `2` files):** [`RootLauncherHost`](Dev/src/Foundation.Launcher/RootLauncherHost.cs) + [`RootLauncherOptions`](Dev/src/Foundation.Launcher/RootLauncherOptions.cs) (zero-dependency `AttachConsole(-1)` shim, extensible sync/value/path flags including suite diagnostics/automation switches, non-swallowing optional flags, relative arg rebasing, Ctrl+C forwarding).
   - **Desktop & Web UI (`Foundation.UI` + `@foundation/ui`):** `AppEnvironment`-aware [`DisposableWebViewHostForm`](Dev/src/Foundation.UI/Desktop/DisposableWebViewHostForm.cs), STA dialogs, tray badges, React 19 UI components, and Vanilla ES terminal drawer.
-  - **Declarative, Ownership-Guarded & Dual Online/Offline Installer (`Foundation.Installer`, `20` files):** Tier 1 [`StandardInstallerHost`](Dev/src/Foundation.Installer/StandardInstallerHost.cs), declarative [`InstallerManifestStore`](Dev/src/Foundation.Installer/InstallerManifestStore.cs) (`installer.manifest.json` `schemaVersion: 2`, canonical `suiteId` with `suiteName` legacy fallback, `installerDeliveryKind` [`onlineSetup` / `offlineSetup` / `portableZip`], `payloadDownloadUrl`, `payloadAssets[]`, `single-line` / `multi-line`, `lightweight` / `full` / `custom`, 2-line tooltips, theme tokens, `logoPath`/`iconPath`), [`InstallerEngine.Ownership.cs`](Dev/src/Foundation.Installer/InstallerEngine.Ownership.cs) (`ProductName` directory-ownership guard with `ProductMismatch:` refusal + `FOREIGN APP DETECTED` badge and wildcard-free uninstaller/trampoline cleanup), [`InstallerEngine.OnlinePayload.cs`](Dev/src/Foundation.Installer/InstallerEngine.OnlinePayload.cs) (HTTPS + SHA-256 + byte-size verified downloads & `--offline-bundle <zipOrDir>` fallback), version-leaf-safe umbrella subpaths, and self-healing `HKCU\Software\StreamItAll\LastInstallBaseDir` fresh-install memory.
+  - **Declarative, Ownership-Guarded & Dual Online/Offline Installer (`Foundation.Installer`):** NativeAOT-ready Win32 [`StandardInstallerHost`](Dev/src/Foundation.Installer/StandardInstallerHost.cs), declarative [`InstallerManifestStore`](Dev/src/Foundation.Installer/InstallerManifestStore.cs) (`installer.manifest.json` `schemaVersion: 2`, canonical `suiteId` with `suiteName` legacy fallback, `installerDeliveryKind` [`onlineSetup` / `offlineSetup` / `portableZip`], `payloadDownloadUrl`, `payloadFallbackUrls`, `betaPin`, `payloadAssets[]`, `single-line` / `multi-line`, `lightweight` / `full` / `custom`, 2-line tooltips, theme tokens, slim embedded `.uninstaller.exe.gz` extraction), [`InstallerEngine.Ownership.cs`](Dev/src/Foundation.Installer/InstallerEngine.Ownership.cs) (`ProductName` directory-ownership guard with `ProductMismatch:` refusal + `FOREIGN APP DETECTED` badge and wildcard-free uninstaller/trampoline cleanup), [`InstallerEngine.OnlinePayload.cs`](Dev/src/Foundation.Installer/InstallerEngine.OnlinePayload.cs) (HTTPS + SHA-256 + byte-size verified downloads & `--offline-bundle <zipOrDir>` fallback), Start Menu file-collision guard, single-profile radio collapse, and self-healing `HKCU\Software\StreamItAll\LastInstallBaseDir` fresh-install memory.
   - **Focus-Free UI Automation (`Foundation.Automation`, `5` files):** Opt-in `127.0.0.1` loopback server ([`AutomationLoopbackServer`](Dev/src/Foundation.Automation/AutomationLoopbackServer.cs)) with Bearer `401` + `Host`/`Origin` `403` enforcement, WinForms-free [`IAutomationSurfaceTarget`](Dev/src/Foundation.Automation/AutomationContracts.cs) + [`AutomationCliHelper`](Dev/src/Foundation.Automation/AutomationCliHelper.cs) (`TryCreateForSurface` + `WinFormsAutomationSurfaceTarget`), focus-free managed mouse dispatch (`Win32VirtualInputDriver`, `0` `SendInput` or `SetFocus()` steals) & window-scoped keyboard/tree inspection, and PNG window/framebuffer snapshots (`POST /v1/snapshot` & in-memory `GET /v1/snapshot.png`).
 - **Python SDK & Dev Tooling ([`Dev/src/foundation_core/`](Dev/src/foundation_core/) + [`Dev/tools/`](Dev/tools/)):**
-  - Pure-stdlib Python `foundation_core` (`0.5.5`, `dependencies = []`) with 1:1 C# 4-drive sandbox (`sandbox_seam.py` with 8.3 `GetLongPathNameW` and child-`USERPROFILE` unmapping) and atomic JSON pseudo-registry (`pseudo_registry.py`) parity, subcommand `--help` CLI passthrough and `<data_dir>/config/settings.json` defaults (`cli.py`), `GranularSettingsStore` with domain splits, 20-snapshot history, quarantine recovery, schema migrations, and unknown-key preservation (`settings.py`), `PRAGMA user_version` SQLite WAL + read-only `VACUUM INTO` integrity checks (`db.py`), `±2s` PID-reuse verification + heartbeats (`locks.py`), structured ring-buffered logging (`logging.py`), Zero-PII crash JSON bundles (`crash_dumper.py`), and loopback HTTP + PNG snapshot parity (`automation.py`), plus universal sandbox orchestration (`sandbox_ctl.py` excluding `.tmp.driveupload`/`.tmp.drivedownload` and OS junk), 12-point isolated sandbox E2E verification (`run_sandbox_e2e.py`), shared live GUI UDP streaming helpers (`ExeboxStreamHelpers.ps1` / `exebox_stream.py`), SDK packaging, and hardlink-safe atomic 6/7/8-file (`--allow-portable-zip`, `--allow-dual-installer`, `--stage-sdk-zip`) release validation scripts.
+  - Pure-stdlib Python `foundation_core` (`0.5.6`, `dependencies = []`) with 1:1 C# 4-drive sandbox (`sandbox_seam.py` with 8.3 `GetLongPathNameW` and child-`USERPROFILE` unmapping) and atomic JSON pseudo-registry (`pseudo_registry.py`) parity, Windows `crypt32` DPAPI secret vault (`secrets.py`), streaming hashing / `.hash` v1 / `.archive_hashes.json` / `.hklock` sidecars (`sidecars.py`), subcommand `--help` CLI passthrough and `<data_dir>/config/settings.json` defaults (`cli.py`), `GranularSettingsStore` (`settings.py`), `PRAGMA user_version` SQLite WAL + read-only `VACUUM INTO` integrity checks (`db.py`), `±2s` PID-reuse verification + heartbeats (`locks.py`), structured ring-buffered logging (`logging.py`), Zero-PII crash JSON bundles (`crash_dumper.py`), and loopback HTTP + PNG snapshot parity (`automation.py`), plus universal sandbox orchestration (`sandbox_ctl.py`), 12-point isolated sandbox E2E verification (`run_sandbox_e2e.py`), WebSocket + UDP live GUI stream helpers (`ExeboxStreamHelpers.ps1` / `exebox_stream.py`), and hardlink-safe atomic release validation scripts.
 
 ---
 
-## 3. Quickstart & Verification
+## 4. Build & Test Verification
 
 ### Prerequisites
-- **.NET 8 SDK** (`net8.0` cross-platform; `net8.0-windows` on Windows for WinForms/Installer/Automation)
+- **.NET 8 SDK** (`net8.0` cross-platform libraries + `net8.0-windows` NativeAOT-ready Win32 Installer / UI / Automation targets)
 - **Python 3.12+** (`unittest` works with stdlib only; `pytest` optional)
 
 ```powershell
@@ -64,7 +94,7 @@ dotnet test Dev/Foundation.sln -c Release -p:TreatWarningsAsErrors=true
 python -m unittest discover -s Dev/tests/foundation_core -v
 
 # 3. Publish compiled SDK snapshot (DLLs, @foundation/ui, foundation_core, tools)
-python Dev/tools/sync_foundation_sdk.py --publish --version 0.5.5 --ui-version 0.5.5 --configuration Release
+python Dev/tools/sync_foundation_sdk.py --publish --version 0.5.6 --ui-version 0.5.6 --configuration Release
 
 # 4. Sync pinned SDK into a downstream consumer directory
 python Dev/tools/sync_foundation_sdk.py --sync-consumer path/to/ConsumerProject
@@ -78,17 +108,17 @@ python Dev/tools/run_sandbox_e2e.py --app-id myapp --version 0.1.0 --installer p
 
 ---
 
-## 4. Releases, Governance & License
+## 5. Releases, Governance & License
 
-- **GitHub Beta Releases:** [github.com/StreamItAllGit/Foundation/releases](https://github.com/StreamItAllGit/Foundation/releases) (`v0.5.5` Beta SDK ZIP, release notes & SHA-256 checksums)
-- **Lifecycle State:** [active.state](active.state) (`v0.5.5` — Beta, Public Repository)
+- **GitHub Beta Releases:** [github.com/StreamItAllGit/Foundation/releases](https://github.com/StreamItAllGit/Foundation/releases) (`v0.5.6` Beta SDK ZIP, release notes & SHA-256 checksums)
+- **Lifecycle State:** [active.state](active.state) (`v0.5.6` — Beta, Public Repository)
 - **License:** Distributed under the [MIT License](LICENSE).
 - **Security & Contributing:** See [SECURITY.md](SECURITY.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Clean-Room & Zero-PII Guarantee:** Contains zero copyrighted ROMs, BIOS dumps, proprietary keys, or workstation-specific credentials/paths.
 
 ---
 
-## 5. Code Signing Policy
+## 6. Code Signing Policy
 
 Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 
@@ -99,7 +129,7 @@ Free code signing provided by [SignPath.io](https://signpath.io/), certificate b
 
 ---
 
-## 6. Technical Manuals (`Dev/docs/`)
+## 7. Technical Manuals (`Dev/docs/`)
 
 - **Documentation Site (GitHub Pages):** [https://streamitallgit.github.io/Foundation/](https://streamitallgit.github.io/Foundation/) — Browsable HTML reference built automatically by [`.github/workflows/pages.yml`](.github/workflows/pages.yml)
 - [Dev/docs/INTERFACES.md](Dev/docs/INTERFACES.md) — **API Dictionary** (C# classes/signatures including `RollingFileBackupStore`, `SafeNetworkTransfer.DownloadVerifiedAsync`, `QrCodeEncoder`, `Foundation.Automation` `IAutomationSurfaceTarget`, `InstallerManifestStore`, `@foundation/ui` props, Vanilla JS/CSS, `foundation_core`, `Dev/tools/*` CLIs & JSON schemas)

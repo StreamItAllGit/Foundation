@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>Foundation.Installer</AssemblyName>
     <RootNamespace>Foundation.Installer</RootNamespace>
     <Title>Foundation Dark Setup Wizard &amp; Installer Engine</Title>

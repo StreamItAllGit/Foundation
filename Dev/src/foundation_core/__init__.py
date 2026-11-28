@@ -1,7 +1,7 @@
 # @module: foundation_core
 # @purpose: Python 3.12+ multi-module SDK parity with Foundation.Core (path containment, 4-drive sandbox seam, atomic JSON pseudo-registry, Standard 19 settings, SQLite WAL/user_version, PID-safe lockfiles, Standard 35/43 logs/crashes, opt-in loopback automation).
-# @depends-on: .automation, .cli, .crash_dumper, .db, .locks, .logging, .pseudo_registry, .sandbox_seam, .settings
-# @exports: SDK_VERSION, MODULE_VERSION, AUTOMATION_DISABLED_EXIT_CODE, AutomationDisabledError, AutomationServerOptions, encode_rgba_png, parse_automation_cli_args, AutomationLoopbackServer, StandardCliOptions, build_standard_cli_parser, parse_standard_cli_flags, assert_path_contained, open_wal_sqlite, SqliteSchemaMigrationRunner, recover_corrupt_sqlite, split_sql_statements, verify_snapshot_integrity, vacuum_backup_sqlite, emit_heartbeat, RollingLogSink, ThreeFileSettingsStore, SettingsLoadResult, GranularSettingsStore, sanitize_pii_text, CrashDumper, utc_iso_ms, parse_iso_utc, get_process_state, get_process_start_time_utc, PidSentinelLock, CONTAINMENT_EXIT_CODE, SandboxContainmentError, is_containment_violation, SandboxMountSpec, SandboxResolution, get_subst_mappings, resolve_sandbox_environment, resolve_known_folders, get_known_folder, is_path_within_sandbox, assert_sandbox_path_if_active, map_host_path_to_sandbox, REGISTRY_HIVE_SCHEMA_URI, REGISTRY_HIVE_SCHEMA_VERSION, PlatformRegistryHive, PlatformRegistryValueKind, JsonHivePlatformRegistry
+# @depends-on: .automation, .cli, .crash_dumper, .db, .locks, .logging, .pseudo_registry, .sandbox_seam, .secrets, .settings, .sidecars
+# @exports: SDK_VERSION, MODULE_VERSION, AUTOMATION_DISABLED_EXIT_CODE, AutomationDisabledError, AutomationServerOptions, encode_rgba_png, parse_automation_cli_args, AutomationLoopbackServer, StandardCliOptions, build_standard_cli_parser, parse_standard_cli_flags, assert_path_contained, open_wal_sqlite, SqliteSchemaMigrationRunner, recover_corrupt_sqlite, split_sql_statements, verify_snapshot_integrity, vacuum_backup_sqlite, emit_heartbeat, RollingLogSink, ThreeFileSettingsStore, SettingsLoadResult, GranularSettingsStore, sanitize_pii_text, CrashDumper, utc_iso_ms, parse_iso_utc, get_process_state, get_process_start_time_utc, PidSentinelLock, CONTAINMENT_EXIT_CODE, SandboxContainmentError, is_containment_violation, SandboxMountSpec, SandboxResolution, get_subst_mappings, resolve_sandbox_environment, resolve_known_folders, get_known_folder, is_path_within_sandbox, assert_sandbox_path_if_active, map_host_path_to_sandbox, DPAPI_ENTROPY, DpapiDecryptError, DpapiSecretStore, HashFilePlacement, FileHashDigest, HashSidecarEntry, HashSidecarDocument, compute_crc32_hex, compute_file_hashes, get_hash_sidecar_path, normalize_relative_paths_stripping_single_wrapper, compute_composite_folder_sha1, format_hash_sidecar, parse_hash_sidecar, read_hash_sidecar, write_hash_sidecar_atomic, read_archive_hashes_json, write_archive_hashes_json_atomic, is_temporary_or_partial_filename, is_active_foreign_hklock, has_active_foreign_lock_in_directory, try_acquire_directory_hklock, release_directory_hklock, DirectoryHkLock, REGISTRY_HIVE_SCHEMA_URI, REGISTRY_HIVE_SCHEMA_VERSION, PlatformRegistryHive, PlatformRegistryValueKind, JsonHivePlatformRegistry
 
 from __future__ import annotations
 
@@ -57,9 +57,33 @@ from .sandbox_seam import (
     resolve_known_folders,
     resolve_sandbox_environment,
 )
+from .secrets import DPAPI_ENTROPY, DpapiDecryptError, DpapiSecretStore
 from .settings import GranularSettingsStore, SettingsLoadResult, ThreeFileSettingsStore
+from .sidecars import (
+    DirectoryHkLock,
+    FileHashDigest,
+    HashFilePlacement,
+    HashSidecarDocument,
+    HashSidecarEntry,
+    compute_composite_folder_sha1,
+    compute_crc32_hex,
+    compute_file_hashes,
+    format_hash_sidecar,
+    get_hash_sidecar_path,
+    has_active_foreign_lock_in_directory,
+    is_active_foreign_hklock,
+    is_temporary_or_partial_filename,
+    normalize_relative_paths_stripping_single_wrapper,
+    parse_hash_sidecar,
+    read_archive_hashes_json,
+    read_hash_sidecar,
+    release_directory_hklock,
+    try_acquire_directory_hklock,
+    write_archive_hashes_json_atomic,
+    write_hash_sidecar_atomic,
+)
 
-SDK_VERSION: str = "0.5.5"
+SDK_VERSION: str = "0.5.6"
 MODULE_VERSION: str = "0.1.0"
 
 __all__ = [
@@ -110,4 +134,28 @@ __all__ = [
     "PlatformRegistryHive",
     "PlatformRegistryValueKind",
     "JsonHivePlatformRegistry",
+    "DPAPI_ENTROPY",
+    "DpapiDecryptError",
+    "DpapiSecretStore",
+    "HashFilePlacement",
+    "FileHashDigest",
+    "HashSidecarEntry",
+    "HashSidecarDocument",
+    "compute_crc32_hex",
+    "compute_file_hashes",
+    "get_hash_sidecar_path",
+    "normalize_relative_paths_stripping_single_wrapper",
+    "compute_composite_folder_sha1",
+    "format_hash_sidecar",
+    "parse_hash_sidecar",
+    "read_hash_sidecar",
+    "write_hash_sidecar_atomic",
+    "read_archive_hashes_json",
+    "write_archive_hashes_json_atomic",
+    "is_temporary_or_partial_filename",
+    "is_active_foreign_hklock",
+    "has_active_foreign_lock_in_directory",
+    "try_acquire_directory_hklock",
+    "release_directory_hklock",
+    "DirectoryHkLock",
 ]

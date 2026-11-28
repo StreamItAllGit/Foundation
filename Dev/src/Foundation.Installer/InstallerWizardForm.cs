@@ -1,22 +1,20 @@
 // @module: Foundation.Installer.UI.Wizard
-// @purpose: Reusable 650x460 (collapsed) / 650x570 (expanded) Dark WinForms Setup/Upgrade/Uninstall Wizard supporting both InstallerEngine and InstallerEngineCore.
-// @depends-on: System, System.Drawing, System.IO, System.Threading, System.Threading.Tasks, System.Windows.Forms, Foundation.Core
-// @exports: InstallerWizardForm (partial: constructors, properties, header/destination controls)
+// @purpose: Reusable 650x460 (collapsed) / 650x570 (expanded) Pure Win32 NativeAOT Dark Setup/Upgrade/Uninstall Wizard supporting both InstallerEngine and InstallerEngineCore.
+// @depends-on: System, System.Collections.Generic, System.IO, System.Linq, System.Reflection, System.Threading, System.Threading.Tasks, Foundation.Core
+// @exports: InstallerWizardForm
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using Foundation.Core;
 
 namespace Foundation.Installer;
 
-public sealed partial class InstallerWizardForm : Form
+public sealed partial class InstallerWizardForm : IDisposable
 {
     public const int DefaultClientWidth = 650;
     public const int CollapsedClientHeight = 434;
@@ -33,9 +31,9 @@ public sealed partial class InstallerWizardForm : Form
     private readonly string _displayName;
     private readonly string _version;
     private readonly string _subtitle;
-    private readonly Color _accentColor;
-    private readonly Color _bgPrimary;
-    private readonly Color _bgCard;
+    private readonly WizardColor _accentColor;
+    private readonly WizardColor _bgPrimary;
+    private readonly WizardColor _bgCard;
     private readonly bool _allowAutoStart;
     private readonly SecondaryPathPickerOptions? _secondaryPickerOptions;
     private readonly bool _hasSecondaryPicker;
@@ -43,84 +41,91 @@ public sealed partial class InstallerWizardForm : Form
     private readonly string? _legacyDetectedPath;
     private readonly string _layoutMode;
     private readonly IReadOnlyList<string> _supportedProfiles;
-    private readonly string? _logoPath;
     private readonly string? _iconPath;
-    private readonly Color _textPrimary;
-    private readonly Color _borderSubtle;
+    private readonly WizardColor _textPrimary;
+    private readonly WizardColor _borderSubtle;
     private readonly InstallerMarkupButtons? _buttonOverrides;
     private readonly IReadOnlyDictionary<string, InstallerMarkupTooltip>? _tooltips;
     private readonly Assembly _payloadAssembly;
 
-    private Panel _headerPanel = null!;
-    private Panel _bodyPanel = null!;
-    private Panel _footerPanel = null!;
-    private Panel _optionsPanel = null!;
-    private PictureBox _picAppIcon = null!;
-    private Label _lblTitle = null!;
-    private Label _lblSub = null!;
-    private Label _lblDirHeader = null!;
-    private TextBox _txtInstallDir = null!;
-    private Button _btnBrowse = null!;
-    private Label _lblSecondaryDirHeader = null!;
-    private TextBox _txtSecondaryDir = null!;
-    private Button _btnSecondaryBrowse = null!;
-    private Label _lblProfileHeader = null!;
-    private RadioButton _rbProfileLightweight = null!;
-    private RadioButton _rbProfileFull = null!;
-    private RadioButton _rbProfileCustom = null!;
-    private ToolTip _wizardToolTip = null!;
-    private CheckBox _chkShortcuts = null!;
-    private CheckBox _chkAutoStart = null!;
-    private CheckBox _chkLaunchAfter = null!;
-    private CheckBox _chkMigrateLegacy = null!;
-    private CheckBox _chkPurgeData = null!;
-    private Label _lblModeBadge = null!;
-    private Label _lblStatus = null!;
-    private ProgressBar _progressBar = null!;
-    private Button _btnToggleDetails = null!;
-    private TextBox _txtLog = null!;
-    private Button _btnPrimary = null!;
-    private Button _btnCancel = null!;
+    private WizardPanel _headerPanel = null!;
+    private WizardPanel _optionsPanel = null!;
+    private WizardPanel _footerPanel = null!;
+    private WizardLabel _lblTitle = null!;
+    private WizardLabel _lblSub = null!;
+    private WizardLabel _lblDirHeader = null!;
+    private WizardTextBox _txtInstallDir = null!;
+    private WizardButton _btnBrowse = null!;
+    private WizardLabel _lblSecondaryDirHeader = null!;
+    private WizardTextBox _txtSecondaryDir = null!;
+    private WizardButton _btnSecondaryBrowse = null!;
+    private WizardLabel _lblOptionsHeader = null!;
+    private WizardLabel _lblProfileHeader = null!;
+    private WizardRadioButton _rbProfileLightweight = null!;
+    private WizardRadioButton _rbProfileFull = null!;
+    private WizardRadioButton _rbProfileCustom = null!;
+    private WizardCheckBox _chkShortcuts = null!;
+    private WizardCheckBox _chkAutoStart = null!;
+    private WizardCheckBox _chkLaunchAfter = null!;
+    private WizardCheckBox _chkMigrateLegacy = null!;
+    private WizardCheckBox _chkPurgeData = null!;
+    private WizardLabel _lblModeBadge = null!;
+    private WizardLabel _lblStatus = null!;
+    private WizardProgressBar _progressBar = null!;
+    private WizardButton _btnToggleDetails = null!;
+    private WizardTextBox _txtLog = null!;
+    private WizardButton _btnPrimary = null!;
+    private WizardButton _btnCancel = null!;
+
+    private readonly Dictionary<WizardControl, string> _toolTipMap = new();
+    private readonly List<WizardControl> _allControls = new();
+    private readonly ConcurrentQueue<Action> _uiQueue = new();
 
     private CancellationTokenSource? _cts;
+    private WizardSize _clientSize = new(DefaultClientWidth, CollapsedClientHeight);
+    private string _windowText = string.Empty;
     private bool _controlsInitialized;
     private bool _completedSuccessfully;
     private bool _isDetailsExpanded;
+    private bool _disposed;
     private string _completedInstallDir = string.Empty;
 
-    private static readonly Color BgInput = InstallerWizardControls.BgInput;
-    private static readonly Color BorderSubtle = InstallerWizardControls.BorderSubtle;
-    private static readonly Color TextPrimary = InstallerWizardControls.TextPrimary;
-    private static readonly Color TextMuted = InstallerWizardControls.TextMuted;
-    private static readonly Color AccentEmerald = InstallerWizardControls.AccentEmerald;
-    private static readonly Color AccentDanger = InstallerWizardControls.AccentDanger;
+    private static readonly WizardColor BgInput = InstallerWizardControls.BgInput;
+    private static readonly WizardColor BorderSubtle = InstallerWizardControls.BorderSubtle;
+    private static readonly WizardColor TextPrimary = InstallerWizardControls.TextPrimary;
+    private static readonly WizardColor TextMuted = InstallerWizardControls.TextMuted;
+    private static readonly WizardColor AccentEmerald = InstallerWizardControls.AccentEmerald;
+    private static readonly WizardColor AccentDanger = InstallerWizardControls.AccentDanger;
 
     public int ExitCode { get; private set; } = 1;
-    public Panel HeaderPanel => _headerPanel;
-    public Panel FooterPanel => _footerPanel;
-    public Panel OptionsPanel => _optionsPanel;
-    public Button PrimaryButton => _btnPrimary;
-    public new Button CancelButton => _btnCancel;
-    public Button BrowseButton => _btnBrowse;
-    public Button DetailsToggleButton => _btnToggleDetails;
-    public Label ModeBadgeLabel => _lblModeBadge;
-    public Label TitleLabel => _lblTitle;
-    public Label SubtitleLabel => _lblSub;
-    public TextBox InstallDirTextBox => _txtInstallDir;
-    public TextBox LogTextBox => _txtLog;
-    public ProgressBar SetupProgressBar => _progressBar;
-    public Label StatusLabel => _lblStatus;
-    public CheckBox ShortcutsCheckBox => _chkShortcuts;
-    public CheckBox AutoStartCheckBox => _chkAutoStart;
-    public CheckBox LaunchAfterCheckBox => _chkLaunchAfter;
-    public CheckBox MigrateLegacyCheckBox => _chkMigrateLegacy;
-    public RadioButton LightweightProfileRadioButton => _rbProfileLightweight;
-    public RadioButton FullProfileRadioButton => _rbProfileFull;
-    public RadioButton CustomProfileRadioButton => _rbProfileCustom;
-    public TextBox SecondaryDirTextBox => _txtSecondaryDir;
+    public string Text { get => _windowText; set => SetNativeWindowTitle(value); }
+    public WizardSize ClientSize { get => _clientSize; set => SetNativeClientSize(value); }
+    public IReadOnlyList<WizardControl> Controls => _allControls;
+    public WizardPanel HeaderPanel => _headerPanel;
+    public WizardPanel FooterPanel => _footerPanel;
+    public WizardPanel OptionsPanel => _optionsPanel;
+    public WizardButton PrimaryButton => _btnPrimary;
+    public WizardButton CancelButton => _btnCancel;
+    public WizardButton BrowseButton => _btnBrowse;
+    public WizardButton DetailsToggleButton => _btnToggleDetails;
+    public WizardLabel ModeBadgeLabel => _lblModeBadge;
+    public WizardLabel TitleLabel => _lblTitle;
+    public WizardLabel SubtitleLabel => _lblSub;
+    public WizardTextBox InstallDirTextBox => _txtInstallDir;
+    public WizardTextBox LogTextBox => _txtLog;
+    public WizardProgressBar SetupProgressBar => _progressBar;
+    public WizardLabel StatusLabel => _lblStatus;
+    public WizardCheckBox ShortcutsCheckBox => _chkShortcuts;
+    public WizardCheckBox AutoStartCheckBox => _chkAutoStart;
+    public WizardCheckBox LaunchAfterCheckBox => _chkLaunchAfter;
+    public WizardCheckBox MigrateLegacyCheckBox => _chkMigrateLegacy;
+    public WizardRadioButton LightweightProfileRadioButton => _rbProfileLightweight;
+    public WizardRadioButton FullProfileRadioButton => _rbProfileFull;
+    public WizardRadioButton CustomProfileRadioButton => _rbProfileCustom;
+    public WizardTextBox SecondaryDirTextBox => _txtSecondaryDir;
     public string LayoutMode => _layoutMode;
     public IReadOnlyList<string> SupportedProfiles => _supportedProfiles;
-    public string? GetControlTooltip(Control control) => _wizardToolTip?.GetToolTip(control);
+    public string? GetControlTooltip(WizardControl control) => _toolTipMap.TryGetValue(control, out string? tip) ? tip : null;
     public string SelectedProfileId =>
         _rbProfileCustom.Checked ? "custom"
         : (_rbProfileFull.Checked ? "full"
@@ -161,14 +166,13 @@ public sealed partial class InstallerWizardForm : Form
         _version = desc.Version;
         _subtitle = desc.EffectiveSubtitle;
         _allowAutoStart = desc.AllowAutoStart;
-        _accentColor = InstallerWizardControls.ParseHexColor(desc.BrandAccentHex, Color.FromArgb(14, 165, 233));
-        _bgPrimary = InstallerWizardControls.ParseHexColor(desc.SurfaceBackdropHex, Color.FromArgb(14, 17, 23));
-        _bgCard = InstallerWizardControls.ParseHexColor(desc.SurfaceCardHex, Color.FromArgb(22, 27, 36));
+        _accentColor = InstallerWizardControls.ParseHexColor(desc.BrandAccentHex, WizardColor.FromRgb(14, 165, 233));
+        _bgPrimary = InstallerWizardControls.ParseHexColor(desc.SurfaceBackdropHex, WizardColor.FromRgb(14, 17, 23));
+        _bgCard = InstallerWizardControls.ParseHexColor(desc.SurfaceCardHex, WizardColor.FromRgb(22, 27, 36));
         _textPrimary = InstallerWizardControls.ParseHexColor(desc.TextPrimaryHex, TextPrimary);
         _borderSubtle = InstallerWizardControls.ParseHexColor(desc.BorderHex, BorderSubtle);
         _layoutMode = InstallerManifestStore.NormalizeLayoutMode(desc.LayoutMode);
         _supportedProfiles = InstallerManifestStore.NormalizeSupportedProfiles(desc.SupportedProfiles);
-        _logoPath = desc.LogoPath;
         _iconPath = desc.IconPath;
         _buttonOverrides = desc.Buttons;
         _tooltips = desc.Tooltips;
@@ -236,15 +240,14 @@ public sealed partial class InstallerWizardForm : Form
         _version = theme.Version;
         _subtitle = theme.Subtitle;
         _allowAutoStart = theme.AllowAutoStart;
-        _accentColor = InstallerWizardControls.ParseHexColor(theme.BrandAccentHex, Color.FromArgb(14, 165, 233));
-        _bgPrimary = InstallerWizardControls.ParseHexColor(theme.SurfaceBackdropHex, Color.FromArgb(14, 17, 23));
-        _bgCard = InstallerWizardControls.ParseHexColor(theme.SurfaceCardHex, Color.FromArgb(22, 27, 36));
+        _accentColor = InstallerWizardControls.ParseHexColor(theme.BrandAccentHex, WizardColor.FromRgb(14, 165, 233));
+        _bgPrimary = InstallerWizardControls.ParseHexColor(theme.SurfaceBackdropHex, WizardColor.FromRgb(14, 17, 23));
+        _bgCard = InstallerWizardControls.ParseHexColor(theme.SurfaceCardHex, WizardColor.FromRgb(22, 27, 36));
         _textPrimary = InstallerWizardControls.ParseHexColor(theme.TextPrimaryHex, TextPrimary);
         _borderSubtle = InstallerWizardControls.ParseHexColor(theme.BorderHex, BorderSubtle);
         _layoutMode = InstallerManifestStore.NormalizeLayoutMode(theme.LayoutMode);
         _supportedProfiles = InstallerManifestStore.NormalizeSupportedProfiles(
             theme.SupportedProfiles ?? (theme.AvailableProfiles.Count > 0 ? theme.AvailableProfiles.Select(p => p.Id) : null));
-        _logoPath = theme.HeaderLogoResource;
         _iconPath = theme.WindowIconResource;
         _buttonOverrides = theme.Buttons;
         _tooltips = theme.Tooltips;
@@ -277,122 +280,93 @@ public sealed partial class InstallerWizardForm : Form
             initialMigrateLegacy);
     }
 
-    private void InitializeHeaderAndDestinationControls(string defaultDir, string? initialSecondaryDir, Icon? extractedIcon)
+    private void InitializeHeaderAndDestinationControls(string defaultDir, string? initialSecondaryDir)
     {
-        _headerPanel = new Panel
-        {
-            Dock = DockStyle.Top,
-            Size = new Size(DefaultClientWidth, 76),
-            BackColor = _bgCard,
-            Padding = new Padding(22, 14, 22, 12)
-        };
-
-        Image? logoImage = InstallerWizardControls.TryLoadImage(_logoPath, _payloadAssembly)
-            ?? extractedIcon?.ToBitmap();
-        _picAppIcon = new PictureBox
-        {
-            Size = new Size(36, 36),
-            Location = new Point(22, 20),
-            SizeMode = PictureBoxSizeMode.Zoom,
-            BackColor = Color.Transparent,
-            Visible = logoImage != null,
-            Image = logoImage
-        };
-
-        int headerTextLeft = logoImage != null ? 68 : 22;
         bool isMultiLine = string.Equals(_layoutMode, "multi-line", StringComparison.OrdinalIgnoreCase);
-        if (isMultiLine) _headerPanel.Height = 90;
+        _headerPanel = new WizardPanel
+        {
+            Location = new WizardPoint(0, 0),
+            Size = new WizardSize(DefaultClientWidth, isMultiLine ? 90 : 76),
+            BackColor = _bgCard
+        };
 
-        var titleFont = new Font("Segoe UI Semibold", 13.0f, FontStyle.Bold);
-        int titleHeight = Math.Max(28, TextRenderer.MeasureText("Mg", titleFont).Height + 4);
-        _lblTitle = new Label
+        int headerTextLeft = 22;
+        int titleHeight = 28;
+        _lblTitle = new WizardLabel
         {
             Text = _isUninstallMode
                 ? $"{_displayName} — Remove Installation"
                 : $"{_displayName} — Setup Wizard",
-            Font = titleFont,
+            FontFamily = "Segoe UI Semibold",
+            FontSize = 13.0f,
+            Bold = true,
             ForeColor = _textPrimary,
+            BackColor = _bgCard,
             AutoSize = false,
             AutoEllipsis = true,
-            Location = new Point(headerTextLeft, 13),
-            Size = new Size(DefaultClientWidth - headerTextLeft - 150, titleHeight)
+            Location = new WizardPoint(headerTextLeft, 13),
+            Size = new WizardSize(DefaultClientWidth - headerTextLeft - 150, titleHeight)
         };
 
-        var subFont = new Font("Segoe UI", 8.75f, FontStyle.Regular);
-        int baseSubHeight = Math.Max(20, TextRenderer.MeasureText("Mg", subFont).Height + 4);
-        int subHeight = isMultiLine ? baseSubHeight * 2 : baseSubHeight;
-        _lblSub = new Label
+        int subHeight = isMultiLine ? 40 : 20;
+        _lblSub = new WizardLabel
         {
             Text = _isUninstallMode
                 ? $"Version {_version}  •  Preserves data\\, saves\\, and logs\\ unless purged below"
                 : $"Version {_version}  •  {_deliveryLabel}  •  {_subtitle}",
-            Font = subFont,
+            FontFamily = "Segoe UI",
+            FontSize = 8.75f,
             ForeColor = TextMuted,
+            BackColor = _bgCard,
             AutoSize = false,
             AutoEllipsis = !isMultiLine,
-            Location = new Point(headerTextLeft, 43),
-            Size = new Size(DefaultClientWidth - headerTextLeft - 150, subHeight)
+            Location = new WizardPoint(headerTextLeft, 43),
+            Size = new WizardSize(DefaultClientWidth - headerTextLeft - 150, subHeight)
         };
 
-        _lblModeBadge = new Label
+        _lblModeBadge = new WizardLabel
         {
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
+            FontFamily = "Segoe UI Semibold",
+            FontSize = 8.5f,
+            Bold = true,
             ForeColor = _accentColor,
-            Location = new Point(495, 16),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left
+            BackColor = _bgCard,
+            Location = new WizardPoint(495, 16),
+            Size = new WizardSize(128, 20)
         };
 
-        _headerPanel.Controls.Add(_picAppIcon);
-        _headerPanel.Controls.Add(_lblTitle);
-        _headerPanel.Controls.Add(_lblSub);
-        _headerPanel.Controls.Add(_lblModeBadge);
-        _headerPanel.Resize += (_, _) => UpdateLayoutBounds();
+        _headerPanel.AddControl(_lblTitle);
+        _headerPanel.AddControl(_lblSub);
+        _headerPanel.AddControl(_lblModeBadge);
 
-        _bodyPanel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(22, 16, 22, 12),
-            BackColor = _bgPrimary
-        };
+        _lblDirHeader = InstallerWizardControls.CreateSectionLabel(
+            _isUninstallMode ? "Installed Location:" : "Destination Folder:",
+            new WizardPoint(22, 90),
+            _textPrimary);
+        _lblDirHeader.BackColor = _bgPrimary;
 
-        _lblDirHeader = new Label
-        {
-            Text = _isUninstallMode ? "Installed Location:" : "Destination Folder:",
-            Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold),
-            ForeColor = _textPrimary,
-            AutoSize = true,
-            Location = new Point(22, 90)
-        };
-
-        _txtInstallDir = new TextBox
-        {
-            Text = defaultDir,
-            Location = new Point(22, 114),
-            Width = 502,
-            Height = 29,
-            BackColor = BgInput,
-            ForeColor = _textPrimary,
-            BorderStyle = BorderStyle.FixedSingle,
-            Font = new Font("Consolas", 9.5f, FontStyle.Regular),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left
-        };
+        _txtInstallDir = InstallerWizardControls.CreateDarkPathTextBox(defaultDir, new WizardPoint(22, 114), 502);
         _txtInstallDir.TextChanged += (_, _) => UpdateUpgradeDetectionBadge();
 
-        _btnBrowse = new Button
-        {
-            Text = "Change...",
-            Location = new Point(532, 112),
-            Size = new Size(96, 29),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = _bgCard,
-            ForeColor = _textPrimary,
-            Cursor = Cursors.Hand,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left
-        };
-        _btnBrowse.FlatAppearance.BorderColor = _borderSubtle;
+        _btnBrowse = InstallerWizardControls.CreateFlatButton(
+            "Change...",
+            new WizardPoint(532, 112),
+            new WizardSize(96, 29),
+            _bgCard,
+            _textPrimary,
+            _borderSubtle);
         _btnBrowse.Click += OnBrowseClicked;
 
         InitializeSecondaryDestinationControls(initialSecondaryDir);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _cts?.Dispose();
+        _cts = null;
+        DisposeNativeHandles();
     }
 }

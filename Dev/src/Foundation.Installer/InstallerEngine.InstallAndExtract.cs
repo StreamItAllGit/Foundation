@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -170,7 +171,8 @@ public sealed partial class InstallerEngine
 
         string? selfExe = Environment.ProcessPath;
         string uninstallerPath = Path.Combine(metaContainerDir, UninstallerExeName);
-        if (!string.IsNullOrWhiteSpace(selfExe) &&
+        if (!TryExtractEmbeddedUninstallerResource(uninstallerPath, ct) &&
+            !string.IsNullOrWhiteSpace(selfExe) &&
             File.Exists(selfExe) &&
             selfExe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
             !Path.GetFileName(selfExe).Equals("dotnet.exe", StringComparison.OrdinalIgnoreCase) &&
@@ -217,7 +219,7 @@ public sealed partial class InstallerEngine
         string targetManifestPath = Path.Combine(metaContainerDir, InstallManifestFileName);
         await File.WriteAllTextAsync(
             targetManifestPath,
-            JsonSerializer.Serialize(manifest, JsonOpts),
+            JsonSerializer.Serialize(manifest, FoundationInstallerJsonContext.Default.InstallManifest),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             ct).ConfigureAwait(false);
 
@@ -229,6 +231,78 @@ public sealed partial class InstallerEngine
             $"{doneMsg} SHA-256={batch.CombinedSha256} Profile={effectiveProfile} Delivery={Descriptor.InstallerDeliveryKind} ReEngineDir={reEngineDir ?? "none"} SuiteDir={suiteDir ?? "none"} MigrateLegacy={effectiveMigrateLegacy}");
         progress?.Report(doneMsg);
         return new InstallerOperationResult(true, installDir, batch.CombinedSha256, installedRelFiles.Count, doneMsg, wasRunning, backupZipPath);
+    }
+
+    internal bool TryExtractEmbeddedUninstallerResource(string destinationPath, CancellationToken ct)
+    {
+        (Assembly? asm, string? resName, bool isGzip) = FindEmbeddedUninstallerResource();
+        if (asm is null || string.IsNullOrWhiteSpace(resName))
+        {
+            return false;
+        }
+
+        string tempDest = destinationPath + ".tmp_" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            using Stream? rawStream = asm.GetManifestResourceStream(resName);
+            if (rawStream is null)
+            {
+                return false;
+            }
+
+            string? parentDir = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrEmpty(parentDir))
+            {
+                Directory.CreateDirectory(parentDir);
+            }
+
+            using (var outFs = new FileStream(tempDest, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                if (isGzip)
+                {
+                    using var gz = new GZipStream(rawStream, CompressionMode.Decompress);
+                    gz.CopyTo(outFs);
+                }
+                else
+                {
+                    rawStream.CopyTo(outFs);
+                }
+            }
+
+            FileLockRetryHelper.MoveWithOverwrite(tempDest, destinationPath, onRetryLog: msg => _ctx.WriteLog("WARN", msg), ct: ct);
+            _ctx.WriteLog("INFO", $"Extracted embedded slim uninstaller resource '{resName}' -> '{destinationPath}'.");
+            return true;
+        }
+        finally
+        {
+            if (File.Exists(tempDest))
+            {
+                try { File.Delete(tempDest); } catch { }
+            }
+        }
+    }
+
+    private (Assembly? Assembly, string? ResourceName, bool IsGzip) FindEmbeddedUninstallerResource()
+    {
+        Assembly? entryAsm = Assembly.GetEntryAssembly();
+        Assembly?[] candidates = entryAsm is not null && !ReferenceEquals(entryAsm, _payloadAssembly)
+            ? new[] { _payloadAssembly, entryAsm }
+            : new[] { _payloadAssembly };
+
+        foreach (Assembly? asm in candidates)
+        {
+            if (asm is null) continue;
+            string[] names = asm.GetManifestResourceNames();
+            string? gzName = names.FirstOrDefault(n => n.EndsWith(".uninstaller.exe.gz", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(gzName))
+                return (asm, gzName, true);
+
+            string? exeName = names.FirstOrDefault(n => n.EndsWith(".uninstaller.exe", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(exeName))
+                return (asm, exeName, false);
+        }
+
+        return (null, null, false);
     }
 
     private static string? NormalizeOptionalProfile(string? rawProfile) =>

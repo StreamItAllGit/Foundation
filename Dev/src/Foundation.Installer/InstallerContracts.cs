@@ -55,6 +55,8 @@ public sealed record InstallerAppDescriptor(
     public IReadOnlyList<SecondaryPathPickerOptions>? SecondaryPickers { get; init; }
     public string InstallerDeliveryKind { get; init; } = InstallerDeliveryKinds.OfflineSetup;
     public string? PayloadDownloadUrl { get; init; }
+    public IReadOnlyList<string>? PayloadFallbackUrls { get; init; }
+    public string? BetaPin { get; init; }
     public IReadOnlyList<InstallerPayloadAsset>? PayloadAssets { get; init; }
 
     public bool IsOnlineSetup =>

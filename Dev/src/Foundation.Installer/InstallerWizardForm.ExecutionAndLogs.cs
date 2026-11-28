@@ -1,16 +1,14 @@
 // @module: Foundation.Installer.UI.Wizard.ExecutionAndLogs
-// @purpose: Upgrade badge detection, interactive FolderBrowserDialog browse handler, asynchronous install/upgrade/uninstall execution, progress logging, and post-setup launch.
-// @depends-on: System, System.Diagnostics, System.IO, System.IO.Compression, System.Threading, System.Threading.Tasks, System.Windows.Forms, Foundation.Core
+// @purpose: Upgrade badge detection, Win32 IFileOpenDialog browse handler, asynchronous install/upgrade/uninstall execution, progress logging, and post-setup launch.
+// @depends-on: System, System.Diagnostics, System.IO, System.IO.Compression, System.Threading, System.Threading.Tasks, Foundation.Core
 // @exports: InstallerWizardForm (partial: UpdateUpgradeDetectionBadge, OnBrowseClicked, OnPrimaryActionClickedAsync, AppendLogLine)
 
 using System;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using Foundation.Core;
 
 namespace Foundation.Installer;
@@ -27,39 +25,12 @@ public sealed partial class InstallerWizardForm
         string? initialSecondaryDir,
         bool initialMigrateLegacy)
     {
-        Text = _isUninstallMode
+        _windowText = _isUninstallMode
             ? $"{_displayName} Uninstall (v{_version})"
             : $"{_displayName} Setup (v{_version})";
-        ClientSize = new Size(DefaultClientWidth, CollapsedClientHeight);
-        StartPosition = FormStartPosition.CenterScreen;
-        BackColor = _bgPrimary;
-        ForeColor = TextPrimary;
-        Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
+        _clientSize = new WizardSize(DefaultClientWidth, CollapsedClientHeight);
 
-        Icon? extractedIcon = InstallerWizardControls.TryLoadIcon(_iconPath, _payloadAssembly);
-        try
-        {
-            if (extractedIcon == null)
-            {
-                string? selfExe = Environment.ProcessPath;
-                if (!string.IsNullOrWhiteSpace(selfExe) && File.Exists(selfExe))
-                {
-                    extractedIcon = Icon.ExtractAssociatedIcon(selfExe);
-                }
-            }
-            if (extractedIcon != null)
-            {
-                Icon = extractedIcon;
-            }
-        }
-        catch (Exception ex)
-        {
-            _ = ex; // Icon extraction failure is non-fatal in non-GUI test hosts.
-        }
-
-        InitializeHeaderAndDestinationControls(defaultDir, initialSecondaryDir, extractedIcon);
+        InitializeHeaderAndDestinationControls(defaultDir, initialSecondaryDir);
         InitializeOptionsAndFooterControls(
             initialCreateShortcuts,
             initialAutoStart,
@@ -137,36 +108,26 @@ public sealed partial class InstallerWizardForm
     private void OnBrowseClicked(object? sender, EventArgs e)
     {
         SandboxResolution? sandbox = _ctx?.EffectiveSandbox ?? _coreEngine?.EffectiveSandbox;
-        using var dialog = new FolderBrowserDialog
+        string initial = Directory.Exists(_txtInstallDir.Text)
+            ? _txtInstallDir.Text
+            : KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox);
+        string? picked = Win32FolderPicker.PickFolder(_hwnd, $"Select {_displayName} installation directory", initial);
+        if (!string.IsNullOrWhiteSpace(picked))
         {
-            Description = $"Select {_displayName} installation directory",
-            UseDescriptionForTitle = true,
-            SelectedPath = Directory.Exists(_txtInstallDir.Text)
-                ? _txtInstallDir.Text
-                : KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox)
-        };
-
-        if (dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
-        {
-            _txtInstallDir.Text = dialog.SelectedPath;
+            _txtInstallDir.Text = picked;
         }
     }
 
     private void OnSecondaryBrowseClicked(object? sender, EventArgs e)
     {
         SandboxResolution? sandbox = _ctx?.EffectiveSandbox ?? _coreEngine?.EffectiveSandbox;
-        using var dialog = new FolderBrowserDialog
+        string initial = Directory.Exists(_txtSecondaryDir.Text)
+            ? _txtSecondaryDir.Text
+            : KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox);
+        string? picked = Win32FolderPicker.PickFolder(_hwnd, $"Select {_secondaryPickerOptions?.Label ?? "companion directory"}", initial);
+        if (!string.IsNullOrWhiteSpace(picked))
         {
-            Description = $"Select {_secondaryPickerOptions?.Label ?? "companion directory"}",
-            UseDescriptionForTitle = true,
-            SelectedPath = Directory.Exists(_txtSecondaryDir.Text)
-                ? _txtSecondaryDir.Text
-                : KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, sandbox)
-        };
-
-        if (dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
-        {
-            _txtSecondaryDir.Text = dialog.SelectedPath;
+            _txtSecondaryDir.Text = picked;
         }
     }
 
@@ -187,9 +148,9 @@ public sealed partial class InstallerWizardForm
         string targetDir = _txtInstallDir.Text.Trim();
         if (string.IsNullOrWhiteSpace(targetDir))
         {
-            if (!ShouldSuppressModalDialogs)
+            if (!ShouldSuppressModalDialogs && OperatingSystem.IsWindows())
             {
-                MessageBox.Show(this, "Please specify a valid target installation folder.", $"{_displayName} Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _ = Win32Native.MessageBoxW(_hwnd, "Please specify a valid target installation folder.", $"{_displayName} Setup", Win32Native.MB_OK | Win32Native.MB_ICONWARNING);
             }
             return;
         }
@@ -207,7 +168,7 @@ public sealed partial class InstallerWizardForm
         _chkPurgeData.Enabled = false;
         _btnPrimary.Enabled = false;
 
-        _progressBar.Style = ProgressBarStyle.Marquee;
+        SetProgressMarquee(true);
         _cts = new CancellationTokenSource();
 
         var progress = new Progress<string>(msg => RunOnUiThread(() =>
@@ -261,8 +222,8 @@ public sealed partial class InstallerWizardForm
                 {
                     coreRes = await _customInstallAction(_cts.Token, (pct, msg) => RunOnUiThread(() =>
                     {
-                        _progressBar.Style = ProgressBarStyle.Blocks;
-                        _progressBar.Value = Math.Clamp(pct, 0, 100);
+                        SetProgressMarquee(false);
+                        SetProgressValue(Math.Clamp(pct, 0, 100));
                         _lblStatus.Text = msg;
                         AppendLogLine(msg);
                     }));
@@ -283,10 +244,10 @@ public sealed partial class InstallerWizardForm
 
             RunOnUiThread(() =>
             {
-                _progressBar.Style = ProgressBarStyle.Blocks;
+                SetProgressMarquee(false);
                 if (result.Success)
                 {
-                    _progressBar.Value = 100;
+                    SetProgressValue(100);
                     _completedSuccessfully = true;
                     _completedInstallDir = result.InstallDirectory;
                     ExitCode = 0;
@@ -303,14 +264,14 @@ public sealed partial class InstallerWizardForm
                 }
                 else
                 {
-                    _progressBar.Value = 0;
+                    SetProgressValue(0);
                     ExitCode = 1;
                     _lblStatus.Text = "Error: " + result.Message;
                     _lblStatus.ForeColor = AccentDanger;
                     AppendLogLine("ERROR: " + result.Message);
                     SetDetailsExpanded(true);
-                    if (!ShouldSuppressModalDialogs)
-                        MessageBox.Show(this, result.Message, $"{_displayName} Setup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    if (!ShouldSuppressModalDialogs && OperatingSystem.IsWindows())
+                        _ = Win32Native.MessageBoxW(_hwnd, result.Message, $"{_displayName} Setup Error", Win32Native.MB_OK | Win32Native.MB_ICONERROR);
                     ReEnableInputsAfterFailure();
                 }
             });
@@ -319,8 +280,8 @@ public sealed partial class InstallerWizardForm
         {
             RunOnUiThread(() =>
             {
-                _progressBar.Style = ProgressBarStyle.Blocks;
-                _progressBar.Value = 0;
+                SetProgressMarquee(false);
+                SetProgressValue(0);
                 ExitCode = SandboxEnvironmentSeam.IsContainmentViolation(ex)
                     ? SandboxEnvironmentSeam.ContainmentExitCode
                     : 1;
@@ -328,8 +289,8 @@ public sealed partial class InstallerWizardForm
                 _lblStatus.ForeColor = AccentDanger;
                 AppendLogLine("EXCEPTION: " + ex.Message);
                 SetDetailsExpanded(true);
-                if (!ShouldSuppressModalDialogs)
-                    MessageBox.Show(this, ex.Message, $"{_displayName} Setup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (!ShouldSuppressModalDialogs && OperatingSystem.IsWindows())
+                    _ = Win32Native.MessageBoxW(_hwnd, ex.Message, $"{_displayName} Setup Error", Win32Native.MB_OK | Win32Native.MB_ICONERROR);
                 ReEnableInputsAfterFailure();
             });
         }
@@ -370,14 +331,11 @@ public sealed partial class InstallerWizardForm
 
     public void AppendLogLine(string line)
     {
-        if (InvokeRequired)
+        RunOnUiThread(() =>
         {
-            BeginInvoke(new Action<string>(AppendLogLine), line);
-            return;
-        }
-
-        string stamp = DateTime.Now.ToString("HH:mm:ss");
-        _txtLog.AppendText($"[{stamp}] {line}{Environment.NewLine}");
+            string stamp = DateTime.Now.ToString("HH:mm:ss");
+            _txtLog.AppendText($"[{stamp}] {line}{Environment.NewLine}");
+        });
     }
 
     private void TryLaunchInstalledApplication(string installDir)
@@ -405,7 +363,7 @@ public sealed partial class InstallerWizardForm
         }
         catch (Exception ex)
         {
-            _ = ex; // Optional post-install launch failure does not negate completed install.
+            _ = ex;
         }
     }
 }

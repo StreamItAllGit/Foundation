@@ -1,6 +1,6 @@
 // @module: Foundation.Installer.StandardInstallerHost
-// @purpose: Turnkey 4-Pillar Single-EXE setup entry point supporting dark GUI wizard and --silent, --verify, --uninstall, and --dry-run CLI flags with ExitCode=3 containment.
-// @depends-on: System, System.Diagnostics, System.IO, System.Reflection, System.Runtime.InteropServices, System.Threading.Tasks, System.Windows.Forms, Foundation.Core
+// @purpose: Turnkey 4-Pillar Single-EXE setup entry point supporting NativeAOT Win32 dark wizard and --silent, --verify, --uninstall, and --dry-run CLI flags with ExitCode=3 containment.
+// @depends-on: System, System.Diagnostics, System.IO, System.Reflection, System.Runtime.InteropServices, System.Threading, System.Threading.Tasks, Foundation.Core
 // @exports: StandardInstallerHost
 
 using System;
@@ -10,7 +10,6 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using Foundation.Core;
 
 namespace Foundation.Installer;
@@ -18,28 +17,9 @@ namespace Foundation.Installer;
 public static class StandardInstallerHost
 {
     private const int AttachParentProcess = -1;
-    private static bool _winFormsInitialized;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(int dwProcessId);
-
-    private static void InitializeWinFormsHost()
-    {
-        if (_winFormsInitialized)
-            return;
-
-        _winFormsInitialized = true;
-        try
-        {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
-        }
-        catch (InvalidOperationException ex)
-        {
-            _ = ex; // In-process hosts/test runners that already created handles cannot re-run SetCompatibleTextRenderingDefault.
-        }
-    }
 
     public static int Run(InstallerAppDescriptor descriptor, string[] args, Assembly? payloadAssembly = null) =>
         RunWithResult(descriptor, args, payloadAssembly ?? Assembly.GetCallingAssembly()).ExitCode;
@@ -121,7 +101,7 @@ public static class StandardInstallerHost
 
             if (!isNonInteractive && !cli.DryRun && !cli.VerifyOnly && string.IsNullOrWhiteSpace(cli.InstallDir) && OperatingSystem.IsWindows())
             {
-                InitializeWinFormsHost();
+                Win32Native.TryEnablePerMonitorV2DpiAwareness();
                 var guiEngine = new InstallerEngine(effectiveDescriptor, ctx, resolvedAssembly);
                 using var wizard = new InstallerWizardForm(
                     engine: guiEngine,
@@ -140,7 +120,7 @@ public static class StandardInstallerHost
                     showLegacyMigration: showLegacy,
                     payloadAssembly: resolvedAssembly,
                     offlineBundlePath: cli.OfflineBundlePath);
-                Application.Run(wizard);
+                wizard.RunDialog();
                 return new InstallerHostRunResult(wizard.ExitCode, ctx.LogDirectory);
             }
 

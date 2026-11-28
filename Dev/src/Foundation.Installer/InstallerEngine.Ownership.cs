@@ -81,7 +81,7 @@ public sealed partial class InstallerEngine
                 if (!File.Exists(path)) continue;
                 manifestPath = path;
                 string raw = File.ReadAllText(path, Encoding.UTF8);
-                InstallManifest? parsed = JsonSerializer.Deserialize<InstallManifest>(raw, JsonOpts);
+                InstallManifest? parsed = JsonSerializer.Deserialize(raw, FoundationInstallerJsonContext.Default.InstallManifest);
                 if (parsed is not null && !string.IsNullOrWhiteSpace(parsed.ProductName))
                 {
                     return parsed;
@@ -168,7 +168,7 @@ public sealed partial class InstallerEngine
         {
             try
             {
-                var tier2 = JsonSerializer.Deserialize<FoundationInstallManifest>(File.ReadAllText(path, Encoding.UTF8), JsonOpts);
+                var tier2 = JsonSerializer.Deserialize(File.ReadAllText(path, Encoding.UTF8), FoundationInstallerJsonContext.Default.FoundationInstallManifest);
                 if (tier2 is not null && (!string.IsNullOrWhiteSpace(tier2.AppId) || !string.IsNullOrWhiteSpace(tier2.DisplayName)))
                 {
                     if (IsOwnInstallManifest(tier2, appId, displayName)) return false;

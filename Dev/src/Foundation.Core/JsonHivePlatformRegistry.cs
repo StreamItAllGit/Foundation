@@ -28,7 +28,6 @@ public sealed class JsonHivePlatformRegistry : IPlatformRegistry
     public const string SchemaUri = "https://schemas.local/registry-hive.v1.json";
     public const int CurrentSchemaVersion = 1;
     private static readonly string[] HiveCodes = ["HKCU", "HKLM", "HKCR"];
-    private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
 
     public string HiveFilePath { get; }
     public string BackupFilePath { get; }
@@ -37,7 +36,7 @@ public sealed class JsonHivePlatformRegistry : IPlatformRegistry
     public string MutexName { get; }
     private readonly TimeSpan _lockTimeout;
 
-    private sealed class HiveDocumentDto
+    internal sealed class HiveDocumentDto
     {
         [JsonPropertyName("$schema")] public string Schema { get; set; } = SchemaUri;
         [JsonPropertyName("schemaVersion")] public int SchemaVersion { get; set; } = CurrentSchemaVersion;
@@ -46,7 +45,7 @@ public sealed class JsonHivePlatformRegistry : IPlatformRegistry
         [JsonPropertyName("registryHives")] public Dictionary<string, Dictionary<string, Dictionary<string, HiveEntryDto>>> RegistryHives { get; set; } = new();
     }
 
-    private sealed class HiveEntryDto
+    internal sealed class HiveEntryDto
     {
         [JsonPropertyName("registryValueKind")] public string RegistryValueKind { get; set; } = "REG_SZ";
         [JsonPropertyName("registryValueData")] public JsonElement RegistryValueData { get; set; }
@@ -185,7 +184,7 @@ public sealed class JsonHivePlatformRegistry : IPlatformRegistry
         try
         {
             string raw = File.ReadAllText(path, Encoding.UTF8);
-            var dto = string.IsNullOrWhiteSpace(raw) ? null : JsonSerializer.Deserialize<HiveDocumentDto>(raw, JsonOpts);
+            var dto = string.IsNullOrWhiteSpace(raw) ? null : JsonSerializer.Deserialize(raw, FoundationCoreJsonContext.Default.HiveDocumentDto);
             if (dto?.RegistryHives is null) return null;
             HiveTree hives = CreateEmptyHives();
             foreach (string code in HiveCodes)
@@ -221,7 +220,7 @@ public sealed class JsonHivePlatformRegistry : IPlatformRegistry
                     vp => new HiveEntryDto { RegistryValueKind = PlatformRegistryNaming.ToKindCode(vp.Value.Kind), RegistryValueData = ToElement(vp.Value) }));
 
         string tempPath = $"{HiveFilePath}.{Guid.NewGuid():N}.tmp";
-        byte[] payload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(dto, JsonOpts));
+        byte[] payload = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(dto, FoundationCoreJsonContext.Default.HiveDocumentDto));
         try
         {
             using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None)) { fs.Write(payload, 0, payload.Length); fs.Flush(true); }
@@ -237,11 +236,11 @@ public sealed class JsonHivePlatformRegistry : IPlatformRegistry
 
     private static JsonElement ToElement(PlatformRegistryValue val) => val.Kind switch
     {
-        PlatformRegistryValueKind.DWord => JsonSerializer.SerializeToElement(val.AsInt32() ?? 0),
-        PlatformRegistryValueKind.QWord => JsonSerializer.SerializeToElement(val.AsInt64() ?? 0L),
-        PlatformRegistryValueKind.MultiString => JsonSerializer.SerializeToElement(val.AsMultiString() ?? Array.Empty<string>()),
-        PlatformRegistryValueKind.Binary => JsonSerializer.SerializeToElement(Convert.ToHexString(val.AsBinary() ?? Array.Empty<byte>()).ToLowerInvariant()),
-        _ => JsonSerializer.SerializeToElement(val.AsString() ?? string.Empty)
+        PlatformRegistryValueKind.DWord => JsonSerializer.SerializeToElement(val.AsInt32() ?? 0, FoundationCoreJsonContext.Default.Int32),
+        PlatformRegistryValueKind.QWord => JsonSerializer.SerializeToElement(val.AsInt64() ?? 0L, FoundationCoreJsonContext.Default.Int64),
+        PlatformRegistryValueKind.MultiString => JsonSerializer.SerializeToElement(val.AsMultiString() ?? Array.Empty<string>(), FoundationCoreJsonContext.Default.StringArray),
+        PlatformRegistryValueKind.Binary => JsonSerializer.SerializeToElement(Convert.ToHexString(val.AsBinary() ?? Array.Empty<byte>()).ToLowerInvariant(), FoundationCoreJsonContext.Default.String),
+        _ => JsonSerializer.SerializeToElement(val.AsString() ?? string.Empty, FoundationCoreJsonContext.Default.String)
     };
 
     private static object? ParseData(PlatformRegistryValueKind kind, JsonElement el) => el.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? null : kind switch

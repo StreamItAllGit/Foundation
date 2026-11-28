@@ -162,6 +162,18 @@ public static partial class SafeNetworkTransfer
             ValidateRequestUri(currentUri, opts.RequireHttps, opts.AllowLoopbackHttpForTesting);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, currentUri);
+            request.Headers.TryAddWithoutValidation("User-Agent", "FoundationTransfer/1.0");
+            if (opts.RequestHeaders is not null &&
+                string.Equals(currentUri.Host, initialUri.Host, StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var kv in opts.RequestHeaders)
+                {
+                    if (!string.IsNullOrWhiteSpace(kv.Key) && kv.Value is not null)
+                    {
+                        request.Headers.TryAddWithoutValidation(kv.Key, kv.Value);
+                    }
+                }
+            }
             if (existingOffset > 0)
             {
                 request.Headers.Range = new RangeHeaderValue(existingOffset, null);

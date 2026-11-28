@@ -181,8 +181,22 @@ public sealed partial class InstallerEngine
         IProgress<string>? progress,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(Descriptor.PayloadDownloadUrl) ||
-            !Uri.TryCreate(Descriptor.PayloadDownloadUrl.Trim(), UriKind.Absolute, out Uri? baseUri))
+        var candidateBaseUrls = new List<string>();
+        if (!string.IsNullOrWhiteSpace(Descriptor.PayloadDownloadUrl))
+            candidateBaseUrls.Add(Descriptor.PayloadDownloadUrl.Trim());
+        if (Descriptor.PayloadFallbackUrls is { Count: > 0 })
+        {
+            foreach (string fb in Descriptor.PayloadFallbackUrls)
+            {
+                if (!string.IsNullOrWhiteSpace(fb) &&
+                    !candidateBaseUrls.Contains(fb.Trim(), StringComparer.OrdinalIgnoreCase))
+                {
+                    candidateBaseUrls.Add(fb.Trim());
+                }
+            }
+        }
+
+        if (candidateBaseUrls.Count == 0)
         {
             return new ResolvedPayloadBatch
             {
@@ -201,63 +215,97 @@ public sealed partial class InstallerEngine
             };
         }
 
+        string? effectivePin = ReleaseUpdaterClient.ResolveBetaPin(Descriptor.BetaPin, Descriptor.ProductName);
         string tempRoot = _ctx.IsSandboxActive
             ? Path.Combine(KnownFolderPaths.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, _ctx.EffectiveSandbox), "Temp")
             : Path.GetTempPath();
         string stagingDir = Path.Combine(tempRoot, $"FoundationOnline_{Guid.NewGuid().ToString("N")[..8]}");
         Directory.CreateDirectory(stagingDir);
 
-        var items = new List<ResolvedPayloadItem>();
-        try
+        var mirrorErrors = new List<string>();
+        for (int idx = 0; idx < candidateBaseUrls.Count; idx++)
         {
-            foreach (InstallerPayloadAsset asset in selected)
+            string rawBase = candidateBaseUrls[idx];
+            string resolvedBase = string.IsNullOrWhiteSpace(effectivePin)
+                ? rawBase
+                : rawBase.Replace("{pin}", Uri.EscapeDataString(effectivePin), StringComparison.OrdinalIgnoreCase);
+
+            if (!Uri.TryCreate(resolvedBase, UriKind.Absolute, out Uri? baseUri))
             {
-                if (string.IsNullOrWhiteSpace(asset.ExpectedSha256))
-                {
-                    throw new InvalidDataException($"Online Setup asset '{asset.FileName}' is missing required pinned expectedSha256.");
-                }
-
-                string safeFileName = Path.GetFileName(asset.FileName);
-                Uri assetUri = BuildAssetDownloadUri(baseUri, safeFileName);
-                string stagedPath = EnsureWithinDirectory(stagingDir, Path.Combine(stagingDir, safeFileName));
-
-                progress?.Report($"Downloading verified payload '{safeFileName}'...");
-                SafeTransferResult transfer = await SafeNetworkTransfer.DownloadVerifiedAsync(
-                    assetUri,
-                    stagedPath,
-                    expectedSha256Hex: asset.ExpectedSha256,
-                    expectedSizeBytes: asset.ExpectedSizeBytes > 0 ? asset.ExpectedSizeBytes : null,
-                    requireHttps: true,
-                    allowLoopbackHttp: AllowLoopbackHttpForTesting,
-                    onProgress: (done, total) =>
-                    {
-                        if (total is > 0)
-                        {
-                            double pct = Math.Clamp(done * 100.0 / total.Value, 0.0, 100.0);
-                            progress?.Report($"Downloading {safeFileName}: {pct:F0}% ({done / (1024.0 * 1024.0):F1} MB)");
-                        }
-                    },
-                    customHandler: CustomHttpHandler,
-                    cancellationToken: ct).ConfigureAwait(false);
-
-                var check = await VerifySingleZipFileAsync(stagedPath, null, asset.ExpectedSha256, ct).ConfigureAwait(false);
-                if (!check.Valid)
-                {
-                    throw new InvalidDataException(check.Message);
-                }
-
-                items.Add(new ResolvedPayloadItem(safeFileName, transfer.FinalFilePath, asset.RelativeSubdir, check.Sha256, check.SizeBytes, check.EntryCount));
+                mirrorErrors.Add($"Invalid URL '{rawBase}'");
+                continue;
             }
 
-            return BuildBatchSummary(items, stagingDir);
+            bool isGitHub = baseUri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+                            baseUri.Host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase);
+            var headers = (!isGitHub && !string.IsNullOrWhiteSpace(effectivePin))
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["X-Beta-Pin"] = effectivePin }
+                : null;
+
+            var items = new List<ResolvedPayloadItem>();
+            string attemptDir = Path.Combine(stagingDir, $"mirror_{idx}");
+            Directory.CreateDirectory(attemptDir);
+            try
+            {
+                foreach (InstallerPayloadAsset asset in selected)
+                {
+                    if (string.IsNullOrWhiteSpace(asset.ExpectedSha256))
+                    {
+                        throw new InvalidDataException($"Online Setup asset '{asset.FileName}' is missing required pinned expectedSha256.");
+                    }
+
+                    string safeFileName = Path.GetFileName(asset.FileName);
+                    Uri assetUri = BuildAssetDownloadUri(baseUri, safeFileName);
+                    string stagedPath = EnsureWithinDirectory(attemptDir, Path.Combine(attemptDir, safeFileName));
+
+                    progress?.Report($"Downloading verified payload '{safeFileName}' from {baseUri.Host}...");
+                    SafeTransferResult transfer = await SafeNetworkTransfer.DownloadFileAsync(
+                        assetUri,
+                        stagedPath,
+                        new SafeTransferOptions
+                        {
+                            JobId = $"setup_{idx}_{Guid.NewGuid():N}",
+                            ExpectedSha256Hex = asset.ExpectedSha256,
+                            ExpectedSizeBytes = asset.ExpectedSizeBytes > 0 ? asset.ExpectedSizeBytes : null,
+                            RequireHttps = true,
+                            AllowLoopbackHttpForTesting = AllowLoopbackHttpForTesting,
+                            RequestHeaders = headers,
+                            OnBytesProgress = (done, total) =>
+                            {
+                                if (total is > 0)
+                                {
+                                    double pct = Math.Clamp(done * 100.0 / total.Value, 0.0, 100.0);
+                                    progress?.Report($"Downloading {safeFileName}: {pct:F0}% ({done / (1024.0 * 1024.0):F1} MB)");
+                                }
+                            }
+                        },
+                        CustomHttpHandler,
+                        ct).ConfigureAwait(false);
+
+                    var check = await VerifySingleZipFileAsync(stagedPath, null, asset.ExpectedSha256, ct).ConfigureAwait(false);
+                    if (!check.Valid)
+                    {
+                        throw new InvalidDataException(check.Message);
+                    }
+
+                    items.Add(new ResolvedPayloadItem(safeFileName, transfer.FinalFilePath, asset.RelativeSubdir, check.Sha256, check.SizeBytes, check.EntryCount));
+                }
+
+                return BuildBatchSummary(items, stagingDir);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                try { if (Directory.Exists(attemptDir)) Directory.Delete(attemptDir, recursive: true); } catch { }
+                string warn = $"Mirror '{baseUri.Host}' failed ({ex.Message}); trying next fallback if available.";
+                _ctx.WriteLog("WARN", warn);
+                mirrorErrors.Add($"{baseUri.Host}: {ex.Message}");
+            }
         }
-        catch (Exception ex)
-        {
-            try { if (Directory.Exists(stagingDir)) Directory.Delete(stagingDir, recursive: true); } catch { }
-            string msg = BuildOfflineSetupFailureMessage(ex.Message);
-            _ctx.WriteLog("ERROR", msg);
-            return new ResolvedPayloadBatch { Valid = false, Message = msg };
-        }
+
+        try { if (Directory.Exists(stagingDir)) Directory.Delete(stagingDir, recursive: true); } catch { }
+        string finalMsg = BuildOfflineSetupFailureMessage(string.Join(" | ", mirrorErrors));
+        _ctx.WriteLog("ERROR", finalMsg);
+        return new ResolvedPayloadBatch { Valid = false, Message = finalMsg };
     }
 
     private static Uri BuildAssetDownloadUri(Uri baseUri, string fileName)
@@ -293,83 +341,5 @@ public sealed partial class InstallerEngine
             Items = items,
             StagingTempDir = stagingDir
         };
-    }
-
-    internal async Task ExtractPayloadBatchAsync(
-        ResolvedPayloadBatch batch,
-        string? externalPayloadPath,
-        string installDir,
-        List<string> installedRelFiles,
-        HashSet<string> installedTopDirs,
-        IProgress<string>? progress,
-        CancellationToken ct)
-    {
-        long expandedBytes = 0;
-        foreach (ResolvedPayloadItem item in batch.Items)
-        {
-            string? cleanSubdir = InstallerManifestStore.NormalizeRelativeSubdir(item.RelativeSubdir);
-            string extractRoot = string.IsNullOrEmpty(cleanSubdir)
-                ? installDir
-                : EnsureWithinDirectory(installDir, Path.Combine(installDir, cleanSubdir.Replace('/', Path.DirectorySeparatorChar)));
-            if (!string.IsNullOrEmpty(cleanSubdir))
-            {
-                if (HasReparsePointInExistingHierarchy(extractRoot, _ctx.EffectiveSandbox))
-                    throw new InvalidOperationException($"Refusing to extract into reparse point subdirectory '{extractRoot}'.");
-                Directory.CreateDirectory(extractRoot);
-                installedTopDirs.Add(cleanSubdir.Split('/')[0]);
-            }
-
-            await using Stream payloadStream = !string.IsNullOrWhiteSpace(item.LocalZipPath)
-                ? File.OpenRead(item.LocalZipPath)
-                : (OpenPayloadStream(externalPayloadPath) ?? throw new FileNotFoundException("Unable to open installer payload stream."));
-
-            using var zip = new ZipArchive(payloadStream, ZipArchiveMode.Read, leaveOpen: false);
-            int totalEntries = zip.Entries.Count;
-            int currentEntry = 0;
-            foreach (ZipArchiveEntry entry in zip.Entries)
-            {
-                ct.ThrowIfCancellationRequested();
-                currentEntry++;
-                string normalizedRel = entry.FullName.Replace('\\', '/').TrimStart('/');
-                if (string.IsNullOrWhiteSpace(normalizedRel)) continue;
-
-                string manifestRel = string.IsNullOrEmpty(cleanSubdir) ? normalizedRel : $"{cleanSubdir}/{normalizedRel}";
-                string topSegment = manifestRel.Split('/', 2)[0];
-                if (ProtectedRuntimeNames.Contains(topSegment)) continue;
-
-                string destPath = EnsureWithinDirectory(extractRoot, Path.Combine(extractRoot, normalizedRel.Replace('/', Path.DirectorySeparatorChar)));
-                if (normalizedRel.EndsWith("/", StringComparison.Ordinal) || string.IsNullOrEmpty(entry.Name))
-                {
-                    Directory.CreateDirectory(destPath);
-                    if (!string.Equals(topSegment, manifestRel.TrimEnd('/'), StringComparison.OrdinalIgnoreCase) || Directory.Exists(destPath))
-                        installedTopDirs.Add(topSegment);
-                    continue;
-                }
-
-                expandedBytes += entry.Length;
-                if (expandedBytes > MaxArchiveExpandedBytes)
-                    throw new InvalidDataException("Payload archive exceeded 2 GB uncompressed safety cap during extraction.");
-                if (manifestRel.Contains('/')) installedTopDirs.Add(topSegment);
-
-                string? parent = Path.GetDirectoryName(destPath);
-                if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
-                if (currentEntry == 1 || currentEntry % 15 == 0 || currentEntry == totalEntries)
-                    progress?.Report($"Extracting ({currentEntry}/{totalEntries}): {manifestRel}");
-
-                string tempDest = destPath + ".tmp_" + Guid.NewGuid().ToString("N")[..8];
-                try
-                {
-                    await using (Stream entryStream = entry.Open())
-                    await using (var outFs = new FileStream(tempDest, FileMode.Create, FileAccess.Write, FileShare.None))
-                        await entryStream.CopyToAsync(outFs, ct).ConfigureAwait(false);
-                    FileLockRetryHelper.MoveWithOverwrite(tempDest, destPath, onRetryLog: msg => _ctx.WriteLog("WARN", msg), ct: ct);
-                    installedRelFiles.Add(manifestRel);
-                }
-                finally
-                {
-                    if (File.Exists(tempDest)) { try { File.Delete(tempDest); } catch { } }
-                }
-            }
-        }
     }
 }

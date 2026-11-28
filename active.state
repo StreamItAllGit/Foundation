@@ -7,16 +7,16 @@
   "containerTier": "Tier A (4-Folder)",
   "ecosystemTier": "Tier1_Infrastructure",
   "appArchetype": "SDK",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "activeMilestone": "0.6.0",
   "goalMajorVersion": "1.0.0",
   "stateChangedDate": "2026-11-04",
-  "lastVersionDate": "2026-11-22",
+  "lastVersionDate": "2026-11-28",
   "productionSubpath": null,
   "supersededBy": null,
   "tasklistDetailLevel": 3,
   "openTaskCount": 0,
-  "completedTaskCount": 54,
+  "completedTaskCount": 61,
   "openReportCount": 0,
   "isPublicRepo": true,
   "requireHumanReviewBeforePush": false,
@@ -27,7 +27,7 @@
     "isInspecterVerified": true,
     "isTessaSynced": true
   },
-  "notes": "Foundation v0.5.5 CI stability release (tempfile.TemporaryDirectory().resolve() fix in test_std19_31_35_43_and_automation.py for Windows 8.3 short paths; 55/55 .NET + 23/23 Python PASS; immutable v0.5.4 preserved); Root Quartet, Manual Shelf, tasklist, active.state & task_graph synced by @tessa.",
+  "notes": "Foundation v0.5.6 shipped (Beta — Pre-1.0): NativeAOT Win32 Installer, slim embedded uninstaller extraction, Start Menu & single-profile fixes, Python DPAPI & Standard 44 sidecars, lock-free SqliteWalPool WAL init, ReleaseUpdaterClient, WebSocket Test Viewer Hub, and full Phase 3 verification (63/63 C#, 29/29 Python, P0/P1/P3=0, 12/12 Stage 2 sandbox).",
   "discordPost": {
     "isEnabled": true,
     "serverName": null,
@@ -38,5 +38,5 @@
     "secretEnvKey": "DISCORD_WEBHOOK_FOUNDATION",
     "autoPostOnRelease": true
   },
-  "updatedAtUtc": "2026-11-22T11:27:17Z"
+  "updatedAtUtc": "2026-11-28T07:10:00Z"
 }

@@ -269,6 +269,34 @@ public sealed partial class InstallerEngine
         if (createIfMissing)
         {
             Directory.CreateDirectory(desktopDir);
+            if (File.Exists(startMenuDir))
+            {
+                bool deletedStray = false;
+                try
+                {
+                    if (new FileInfo(startMenuDir).Length == 0)
+                    {
+                        File.Delete(startMenuDir);
+                        deletedStray = true;
+                        _ctx.WriteLog("WARN", $"Removed stray 0-byte file blocking Start Menu directory '{startMenuDir}'.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _ctx.WriteLog("WARN", $"Could not remove stray file blocking Start Menu directory '{startMenuDir}': {ex.Message}");
+                }
+
+                if (!deletedStray)
+                {
+                    string? parentPrograms = Path.GetDirectoryName(startMenuDir);
+                    if (!string.IsNullOrWhiteSpace(parentPrograms))
+                    {
+                        _ctx.WriteLog("WARN", $"Start Menu path '{startMenuDir}' is occupied by a non-empty file; falling back to '{parentPrograms}'.");
+                        startMenuDir = parentPrograms;
+                    }
+                }
+            }
+
             Directory.CreateDirectory(startMenuDir);
         }
 

@@ -141,7 +141,7 @@ def _handle_remove_readonly(func, path, exc_info):
     func(path)
 
 
-def stage_clean_release_bundle(version: str = "0.5.5", sdk_dir: Path | None = None) -> Path:
+def stage_clean_release_bundle(version: str = "0.5.6", sdk_dir: Path | None = None) -> Path:
     latest_dir = FOUNDATION_ROOT / "Releases" / "Latest"
     latest_dir.mkdir(parents=True, exist_ok=True)
 
@@ -161,7 +161,7 @@ def stage_clean_release_bundle(version: str = "0.5.5", sdk_dir: Path | None = No
     return latest_dir
 
 
-def publish_sdk(version: str = "0.5.5", ui_version: str = "0.5.5", configuration: str = "Release") -> dict[str, object]:
+def publish_sdk(version: str = "0.5.6", ui_version: str = "0.5.6", configuration: str = "Release") -> dict[str, object]:
     clean_ver = version.lstrip("v")
     ver_tag = f"v{clean_ver}"
     ui_dir = DEV_ROOT / "src" / "Foundation.UI"
@@ -221,8 +221,8 @@ def sync_consumer(consumer_root: Path, source_version: str = "Latest", web_dir: 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Foundation SDK Publisher & Consumer Sync Tool")
-    parser.add_argument("--version", default="0.5.5", help="Foundation SDK SemVer (default: 0.5.5)")
-    parser.add_argument("--ui-version", default="0.5.5", help="Foundation.UI SemVer (default: 0.5.5)")
+    parser.add_argument("--version", default="0.5.6", help="Foundation SDK SemVer (default: 0.5.6)")
+    parser.add_argument("--ui-version", default="0.5.6", help="Foundation.UI SemVer (default: 0.5.6)")
     parser.add_argument("--configuration", default="Release", help="Build configuration (Release/Debug)")
     parser.add_argument("--publish", action="store_true", help="Publish SDK to SharedLibs and Builds")
     parser.add_argument("--sync-consumer", type=Path, help="Consumer project root to sync from SharedLibs")

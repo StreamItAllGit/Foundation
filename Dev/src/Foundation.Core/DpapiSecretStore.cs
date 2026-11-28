@@ -109,7 +109,7 @@ public sealed class DpapiSecretStore
 
             byte[] plainBytes = UnprotectBytes(cipherBytes);
             string json = Encoding.UTF8.GetString(plainBytes);
-            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            var parsed = JsonSerializer.Deserialize(json, FoundationCoreJsonContext.Default.DictionaryStringString);
             return parsed is not null
                 ? new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -122,7 +122,7 @@ public sealed class DpapiSecretStore
 
     private void SaveSecretsDictionaryUnsynchronized(Dictionary<string, string> secrets)
     {
-        string json = JsonSerializer.Serialize(secrets);
+        string json = JsonSerializer.Serialize(secrets, FoundationCoreJsonContext.Default.DictionaryStringString);
         byte[] plainBytes = Encoding.UTF8.GetBytes(json);
         byte[] cipherBytes = ProtectBytes(plainBytes);
 

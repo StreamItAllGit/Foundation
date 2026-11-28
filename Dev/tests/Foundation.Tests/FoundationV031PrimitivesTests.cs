@@ -1,6 +1,6 @@
 // @module: Foundation.Tests.V031Primitives
 // @purpose: Unit tests for Foundation Core timing/audio/PNG/environment primitives, Retro MediaContainerExtractor/RecompContracts, and Installer security/layout features.
-// @depends-on: System, System.Buffers.Binary, System.Collections.Generic, System.IO, System.IO.Compression, System.Security.Cryptography, System.Text, System.Threading, System.Threading.Tasks, System.Windows.Forms, Foundation.Core, Foundation.Retro, Foundation.Installer, Xunit
+// @depends-on: System, System.Buffers.Binary, System.Collections.Generic, System.IO, System.IO.Compression, System.Security.Cryptography, System.Text, System.Threading, System.Threading.Tasks, Foundation.Core, Foundation.Retro, Foundation.Installer, Xunit
 // @exports: FoundationV031PrimitivesTests
 
 using System;
@@ -12,7 +12,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using Foundation.Core;
 using Foundation.Installer;
 using Foundation.Retro;

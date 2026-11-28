@@ -125,11 +125,89 @@ public sealed class FoundationSettingsAndInstallerTests : IDisposable
         Assert.Equal(570, wizard.ClientSize.Height);
 
         var branding = new ShellBrandingOptions { AppId = "shadowlibrary", DisplayName = "ShadowLibrary" };
-        Assert.Equal("0.5.5", branding.SdkVersion);
+        Assert.Equal("0.5.6", branding.SdkVersion);
 
         FoundationInstallResult uninstallRes = engine.Uninstall(purgeUserData: false);
         Assert.True(uninstallRes.Success);
         Assert.True(File.Exists(userDbPath));
+    }
+
+    [Fact]
+    public async Task InstallerEngine_UnwrapsSingleTopLevelWrapperFolder_AndPreservesFlatOrReservedLayout()
+    {
+        string wrappedZipPath = Path.Combine(_tempDir, "wrapped-portable.zip");
+        using (var zip = ZipFile.Open(wrappedZipPath, ZipArchiveMode.Create))
+        {
+            static void WriteEntry(ZipArchive archive, string entryName, string content)
+            {
+                ZipArchiveEntry entry = archive.CreateEntry(entryName);
+                using var sw = new StreamWriter(entry.Open(), Encoding.UTF8);
+                sw.Write(content);
+            }
+
+            WriteEntry(zip, "PaperGrid-v0.1.0-alpha.1-win-x64/PaperGrid.exe", "MZ_LAUNCHER");
+            WriteEntry(zip, "PaperGrid-v0.1.0-alpha.1-win-x64/app/PaperGrid.exe", "MZ_APP");
+            WriteEntry(zip, "PaperGrid-v0.1.0-alpha.1-win-x64/app/LICENSE", "LICENSE_TEXT");
+            WriteEntry(zip, "PaperGrid-v0.1.0-alpha.1-win-x64/README.md", "# PaperGrid");
+        }
+
+        string wrappedInstallDir = Path.Combine(_tempDir, "wrapped-install");
+        var descriptor = new InstallerAppDescriptor(
+            ProductName: "PaperGrid",
+            DisplayName: "PaperGrid",
+            Publisher: "Oddlot Software",
+            Version: "0.1.0-alpha.1",
+            MainExecutableRelativePath: "PaperGrid.exe",
+            AllowAutoStart: false);
+        var wrappedCtx = new InstallerRuntimeContext(cliDataDir: Path.Combine(_tempDir, "wrapped-ctx"), envPrefix: descriptor.EnvPrefix);
+        var wrappedEngine = new InstallerEngine(descriptor, wrappedCtx);
+
+        var wrappedRes = await wrappedEngine.InstallAsync(
+            explicitInstallDir: wrappedInstallDir,
+            createShortcuts: false,
+            registerAutoStart: false,
+            externalPayloadPath: wrappedZipPath);
+        Assert.True(wrappedRes.Success, wrappedRes.Message);
+        Assert.True(File.Exists(Path.Combine(wrappedInstallDir, "PaperGrid.exe")));
+        Assert.True(File.Exists(Path.Combine(wrappedInstallDir, "app", "PaperGrid.exe")));
+        Assert.True(File.Exists(Path.Combine(wrappedInstallDir, "app", "LICENSE")));
+        Assert.False(Directory.Exists(Path.Combine(wrappedInstallDir, "PaperGrid-v0.1.0-alpha.1-win-x64")));
+
+        InstallManifest? wrappedManifest = InstallerEngine.TryReadInstallManifest(wrappedInstallDir);
+        Assert.NotNull(wrappedManifest);
+        Assert.Contains("PaperGrid.exe", wrappedManifest!.InstalledRelativeFiles);
+        Assert.Contains("app/PaperGrid.exe", wrappedManifest.InstalledRelativeFiles);
+
+        string flatZipPath = Path.Combine(_tempDir, "flat-payload.zip");
+        using (var flatMs = BuildSamplePayloadZip("flat"))
+        {
+            await File.WriteAllBytesAsync(flatZipPath, flatMs.ToArray());
+        }
+        string flatInstallDir = Path.Combine(_tempDir, "flat-install");
+        var flatRes = await wrappedEngine.InstallAsync(
+            explicitInstallDir: flatInstallDir,
+            createShortcuts: false,
+            registerAutoStart: false,
+            externalPayloadPath: flatZipPath);
+        Assert.True(flatRes.Success, flatRes.Message);
+        Assert.True(File.Exists(Path.Combine(flatInstallDir, "ShadowLibrary.exe")));
+        Assert.True(File.Exists(Path.Combine(flatInstallDir, "app", "suite.manifest.json")));
+
+        string reservedZipPath = Path.Combine(_tempDir, "reserved-only.zip");
+        using (var zip = ZipFile.Open(reservedZipPath, ZipArchiveMode.Create))
+        {
+            ZipArchiveEntry entry = zip.CreateEntry("app/PaperGrid.exe");
+            using var sw = new StreamWriter(entry.Open(), Encoding.UTF8);
+            sw.Write("MZ_APP");
+        }
+        string reservedInstallDir = Path.Combine(_tempDir, "reserved-install");
+        var reservedRes = await wrappedEngine.InstallAsync(
+            explicitInstallDir: reservedInstallDir,
+            createShortcuts: false,
+            registerAutoStart: false,
+            externalPayloadPath: reservedZipPath);
+        Assert.True(reservedRes.Success, reservedRes.Message);
+        Assert.True(File.Exists(Path.Combine(reservedInstallDir, "app", "PaperGrid.exe")));
     }
 
     [Fact]

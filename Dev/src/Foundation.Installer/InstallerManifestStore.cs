@@ -45,6 +45,8 @@ public sealed record InstallerMarkupManifest
     [JsonPropertyName("allowLegacyMigration")] public bool? AllowLegacyMigration { get; init; }
     [JsonPropertyName("installerDeliveryKind")] public string InstallerDeliveryKind { get; init; } = InstallerDeliveryKinds.OfflineSetup;
     [JsonPropertyName("payloadDownloadUrl")] public string? PayloadDownloadUrl { get; init; }
+    [JsonPropertyName("payloadFallbackUrls")] public List<string>? PayloadFallbackUrls { get; init; }
+    [JsonPropertyName("betaPin")] public string? BetaPin { get; init; }
     [JsonPropertyName("payloadAssets")] public List<InstallerPayloadAsset>? PayloadAssets { get; init; }
 
     [JsonIgnore]
@@ -56,6 +58,17 @@ public sealed record InstallerMarkupManifest
 
     public string? ResolveEffectiveSuiteId() => FirstNonEmpty(SuiteId, SuiteName);
 
+    private static List<string>? NormalizeFallbackUrls(List<string>? raw)
+    {
+        if (raw is null || raw.Count == 0) return null;
+        var list = raw
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => u.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return list.Count > 0 ? list : null;
+    }
+
     private static string? FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();
 }
@@ -65,13 +78,6 @@ public static class InstallerManifestStore
     public const string DefaultManifestFileName = "installer.manifest.json";
     public const string CanonicalManifestType = "installer-manifest";
 
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
-    };
-
     private static readonly HashSet<string> AllowedProfiles = new(StringComparer.OrdinalIgnoreCase)
     {
         "lightweight", "full", "custom"
@@ -80,7 +86,7 @@ public static class InstallerManifestStore
     public static InstallerMarkupManifest LoadFromJson(string json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
-        InstallerMarkupManifest manifest = JsonSerializer.Deserialize<InstallerMarkupManifest>(json, JsonOpts)
+        InstallerMarkupManifest manifest = JsonSerializer.Deserialize(json, FoundationInstallerJsonContext.Default.InstallerMarkupManifest)
             ?? throw new InvalidDataException("installer.manifest.json deserialized to null.");
 
         if (manifest.SchemaVersion != 2)
@@ -105,6 +111,8 @@ public static class InstallerManifestStore
             DefaultProfile = defProfile,
             InstallerDeliveryKind = deliveryKind,
             PayloadDownloadUrl = FirstNonEmpty(manifest.PayloadDownloadUrl),
+            PayloadFallbackUrls = NormalizeFallbackUrls(manifest.PayloadFallbackUrls),
+            BetaPin = FirstNonEmpty(manifest.BetaPin),
             PayloadAssets = payloadAssets
         };
     }
@@ -185,6 +193,8 @@ public static class InstallerManifestStore
             SecondaryPickers = pickers is { Count: > 0 } ? pickers : baseDescriptor.SecondaryPickers,
             InstallerDeliveryKind = NormalizeDeliveryKind(manifest.InstallerDeliveryKind),
             PayloadDownloadUrl = FirstNonEmpty(manifest.PayloadDownloadUrl) ?? baseDescriptor.PayloadDownloadUrl,
+            PayloadFallbackUrls = manifest.PayloadFallbackUrls is { Count: > 0 } ? manifest.PayloadFallbackUrls : baseDescriptor.PayloadFallbackUrls,
+            BetaPin = FirstNonEmpty(manifest.BetaPin) ?? baseDescriptor.BetaPin,
             PayloadAssets = manifest.PayloadAssets is { Count: > 0 } ? manifest.PayloadAssets : baseDescriptor.PayloadAssets
         };
     }
@@ -336,6 +346,17 @@ public static class InstallerManifestStore
             }
         }
         return segs.Length == 0 ? null : string.Join('/', segs);
+    }
+
+    private static List<string>? NormalizeFallbackUrls(List<string>? raw)
+    {
+        if (raw is null || raw.Count == 0) return null;
+        var list = raw
+            .Where(u => !string.IsNullOrWhiteSpace(u))
+            .Select(u => u.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return list.Count > 0 ? list : null;
     }
 
     private static string? FirstNonEmpty(params string?[] values) =>

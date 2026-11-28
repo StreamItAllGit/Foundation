@@ -6,7 +6,7 @@ Thank you for contributing to **Foundation** (`Beta`). All active `0.x` releases
 
 ## Clean-Room & Security Ground Rules
 
-1. **Zero Proprietary Assets or Secrets:** Never commit copyrighted assets, BIOS dumps, private keys, API tokens, webhook URLs, or personal workstation file paths (`C:\Users\...`).
+1. **Zero Proprietary Assets or Secrets:** Never commit copyrighted assets, BIOS dumps, private keys, API tokens, webhook URLs, or personal workstation file paths (`<USER_HOME>\...`).
 2. **Confidential Vulnerability Reports:** Do not open public issues for security vulnerabilities. Follow [SECURITY.md](SECURITY.md).
 3. **Zero-Warning Policy:** C# changes must compile cleanly with `-p:TreatWarningsAsErrors=true`.
 4. **Isolated Tests Only:** Automated tests must execute strictly in temporary directories (`APP_ISOLATED_TEST=1` / `--data-dir`) and never mutate live user installations or host Windows Registry hives.

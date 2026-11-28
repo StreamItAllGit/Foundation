@@ -28,12 +28,6 @@ public sealed partial class InstallerEngine
         "logs"
     };
 
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true
-    };
-
     private readonly InstallerRuntimeContext _ctx;
     private readonly Assembly _payloadAssembly;
 

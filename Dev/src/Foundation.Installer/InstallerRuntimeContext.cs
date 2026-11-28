@@ -93,10 +93,7 @@ public sealed class InstallerRuntimeContext
         if (!string.IsNullOrWhiteSpace(ConfigFilePath) && File.Exists(ConfigFilePath))
         {
             string json = File.ReadAllText(ConfigFilePath, Encoding.UTF8);
-            ConfigOverride = JsonSerializer.Deserialize<InstallerConfigOverride>(json, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            ConfigOverride = JsonSerializer.Deserialize(json, FoundationInstallerJsonContext.Default.InstallerConfigOverride);
         }
     }
 

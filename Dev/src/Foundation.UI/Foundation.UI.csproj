@@ -23,6 +23,6 @@
   </ItemGroup>
 
   <Target Name="SyncFoundationWebAndSharedLibs" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' And '$(PublishFoundationSdk)' == 'true'">
-    <Exec Command="python &quot;$(MSBuildProjectDirectory)\..\..\tools\sync_foundation_sdk.py&quot; --version 0.5.5 --ui-version 0.5.5 --configuration $(Configuration) --publish" />
+    <Exec Command="python &quot;$(MSBuildProjectDirectory)\..\..\tools\sync_foundation_sdk.py&quot; --version 0.5.6 --ui-version 0.5.6 --configuration $(Configuration) --publish" />
   </Target>
 </Project>

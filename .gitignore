@@ -81,3 +81,7 @@ Thumbs.db
 ehthumbs.db
 .DS_Store
 ._*
+.beta.manifest.local.json
+*.local.json
+*.local.env
+.beta.env

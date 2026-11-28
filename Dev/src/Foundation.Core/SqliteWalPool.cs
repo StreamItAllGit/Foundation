@@ -17,6 +17,20 @@ namespace Foundation.Core;
 /// </summary>
 public sealed class SqliteWalPool
 {
+    private const string DefaultStaticPragmaSql = """
+        PRAGMA journal_mode = WAL;
+        PRAGMA busy_timeout = 15000;
+        PRAGMA synchronous = NORMAL;
+        PRAGMA foreign_keys = ON;
+        PRAGMA temp_store = MEMORY;
+        PRAGMA cache_size = -65536;
+        """;
+
+    private readonly string _walPragmaSql;
+    private readonly string _fastPragmaSql;
+    private readonly object _walInitGate = new();
+    private long _walInitializedCreationTicksUtc;
+
     public string DatabasePath { get; }
     public string ConnectionString { get; }
     public int BusyTimeoutMs { get; }
@@ -33,6 +47,9 @@ public sealed class SqliteWalPool
             Directory.CreateDirectory(parentDir);
         }
 
+        _walPragmaSql = BuildPragmaSql(BusyTimeoutMs, includeJournalModeWal: true);
+        _fastPragmaSql = BuildPragmaSql(BusyTimeoutMs, includeJournalModeWal: false);
+
         var builder = new SqliteConnectionStringBuilder
         {
             DataSource = DatabasePath,
@@ -44,11 +61,16 @@ public sealed class SqliteWalPool
         ConnectionString = builder.ToString();
     }
 
+    /// <summary>
+    /// Clears the cached WAL initialization state so the next connection re-enforces PRAGMA journal_mode = WAL.
+    /// </summary>
+    public void ResetJournalModeCache() => Volatile.Write(ref _walInitializedCreationTicksUtc, 0);
+
     public SqliteConnection OpenConnection()
     {
         var conn = new SqliteConnection(ConnectionString);
         conn.Open();
-        ApplyStandardPragmas(conn, BusyTimeoutMs);
+        ApplyPoolPragmas(conn);
         return conn;
     }
 
@@ -56,22 +78,77 @@ public sealed class SqliteWalPool
     {
         var conn = new SqliteConnection(ConnectionString);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
-        ApplyStandardPragmas(conn, BusyTimeoutMs);
+        ApplyPoolPragmas(conn);
         return conn;
+    }
+
+    private void ApplyPoolPragmas(SqliteConnection connection)
+    {
+        long cachedTicks = Volatile.Read(ref _walInitializedCreationTicksUtc);
+        bool skipJournalPragma = cachedTicks != 0 &&
+                                 TryGetNonEmptyCreationTicksUtc(DatabasePath, out long currentTicks) &&
+                                 currentTicks == cachedTicks;
+
+        using var cmd = connection.CreateCommand();
+        if (skipJournalPragma)
+        {
+            cmd.CommandText = _fastPragmaSql;
+            cmd.ExecuteNonQuery();
+            return;
+        }
+
+        cmd.CommandText = _walPragmaSql;
+        cmd.ExecuteNonQuery();
+
+        lock (_walInitGate)
+        {
+            if (TryGetNonEmptyCreationTicksUtc(DatabasePath, out long verifiedTicks))
+            {
+                Volatile.Write(ref _walInitializedCreationTicksUtc, verifiedTicks);
+            }
+        }
+    }
+
+    private static bool TryGetNonEmptyCreationTicksUtc(string path, out long creationTicksUtc)
+    {
+        try
+        {
+            var fi = new FileInfo(path);
+            if (fi.Exists && fi.Length > 0)
+            {
+                creationTicksUtc = fi.CreationTimeUtc.Ticks;
+                return creationTicksUtc != 0;
+            }
+        }
+        catch
+        {
+            // Fall through to full WAL pragma enforcement.
+        }
+
+        creationTicksUtc = 0;
+        return false;
+    }
+
+    private static string BuildPragmaSql(int busyTimeoutMs, bool includeJournalModeWal)
+    {
+        int clamped = Math.Max(1000, busyTimeoutMs);
+        if (includeJournalModeWal && clamped == 15000)
+        {
+            return DefaultStaticPragmaSql;
+        }
+
+        return includeJournalModeWal
+            ? $"PRAGMA journal_mode = WAL;\nPRAGMA busy_timeout = {clamped};\nPRAGMA synchronous = NORMAL;\nPRAGMA foreign_keys = ON;\nPRAGMA temp_store = MEMORY;\nPRAGMA cache_size = -65536;"
+            : $"PRAGMA busy_timeout = {clamped};\nPRAGMA synchronous = NORMAL;\nPRAGMA foreign_keys = ON;\nPRAGMA temp_store = MEMORY;\nPRAGMA cache_size = -65536;";
     }
 
     public static void ApplyStandardPragmas(SqliteConnection connection, int busyTimeoutMs = 15000)
     {
         ArgumentNullException.ThrowIfNull(connection);
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"""
-            PRAGMA journal_mode = WAL;
-            PRAGMA busy_timeout = {Math.Max(1000, busyTimeoutMs)};
-            PRAGMA synchronous = NORMAL;
-            PRAGMA foreign_keys = ON;
-            PRAGMA temp_store = MEMORY;
-            PRAGMA cache_size = -65536;
-            """;
+        cmd.CommandText = busyTimeoutMs == 15000
+            ? DefaultStaticPragmaSql
+            : BuildPragmaSql(busyTimeoutMs, includeJournalModeWal: true);
         cmd.ExecuteNonQuery();
     }
 

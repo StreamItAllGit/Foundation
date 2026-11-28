@@ -30,6 +30,7 @@ public sealed record SafeTransferOptions
     public long MaxBytesPerSecond { get; init; } = 0;
     public long MinFreeSpaceReserveBytes { get; init; } = 512L * 1024 * 1024;
     public Action<long, long?>? OnBytesProgress { get; init; }
+    public System.Collections.Generic.IReadOnlyDictionary<string, string>? RequestHeaders { get; init; }
 }
 
 public sealed record SafeTransferResult(
