@@ -116,3 +116,9 @@ v0.5.6 (Beta) --> v0.6.0 (TrayDaemonHost + Python foundation_core.server + Self-
 - **NativeAOT Win32 `Foundation.Installer` & Ergonomics:** Replaced WinForms with pure Win32 P/Invoke UI (`IsAotCompatible=true`, `FoundationInstallerJsonContext`, `Win32Native`, `Win32FolderPicker`, `~7.04 MB` standalone binary with zero `.NET` runtime dependency), extracted slim embedded `.uninstaller.exe.gz` resources, guarded Start Menu file collisions, collapsed single-profile radio rows (`Top == 34`), and added `payloadFallbackUrls` + `betaPin` + single-wrapper unwrapping (`InstallerEngine.OnlinePayload.Extraction.cs`).
 - **Core & Python Parity (`Foundation.Core`, `foundation_core`):** Added `FoundationCoreJsonContext`, GitHub-first + R2-fallback `ReleaseUpdaterClient`, lock-free DB-recreation-safe `SqliteWalPool` WAL init + `ResetJournalModeCache()` (superseding PR #1), pure-stdlib `foundation_core.secrets` (`DpapiSecretStore` wire-compatible with C#) and `foundation_core.sidecars` (`HashFilePlacement`, `compute_crc32_hex`, `compute_file_hashes`, `.hash` v1, `.archive_hashes.json`, `.hklock`), plus WebSocket Test Viewer Hub streaming (`http://127.0.0.1:5005`) and `README.md` SEO/onboarding examples.
 - **Verification & Compliance:** `63/63` C# Release tests (`0` warnings), `29/29` Python `unittest` (`0` warnings), zero critical/high static findings, NativeAOT PE dependency + visual PNG verification, and `run_sandbox_e2e.py --no-subst` (`12/12`, `hostDiffCount=0`).
+
+---
+
+## 5. Icebox & Cutting-Room Floor
+
+_No concepts are currently parked here. Ideas cut from a milestone are recorded in this section._
